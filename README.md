@@ -1,5 +1,7 @@
 # Extra Duty
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=JonGaydos_extra-duty&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=JonGaydos_extra-duty)
+
 Extra Duty schedules and bills off-duty details for a law enforcement agency. Vendors (businesses, churches,
 schools and event organizers) request officers for an event or a job site. Deputies sign up first come, first
 served under the agency's rank, hour-cap and billing rules. After the detail, the deputy bills the vendor with an
