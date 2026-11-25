@@ -1,0 +1,1 @@
+CREATE INDEX "invoices_payee_idx" ON "invoices" USING btree ("payee_user_id");

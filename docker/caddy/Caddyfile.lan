@@ -1,0 +1,10 @@
+# Used only when SITE_DOMAIN is empty: plain HTTP on port 80, for an install with no domain name, reachable only on
+# the local network. Passwords and sign-in codes cross the network unencrypted; prefer a domain (Caddyfile.https).
+:80 {
+	encode zstd gzip
+
+	reverse_proxy web:3000 {
+		# The one client address the app believes (web trusts this header only from Caddy's network).
+		header_up X-Forwarded-For {remote_host}
+	}
+}

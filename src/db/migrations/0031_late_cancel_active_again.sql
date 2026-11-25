@@ -1,0 +1,2 @@
+DROP INDEX "assignments_job_user_active_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "assignments_job_user_active_uq" ON "assignments" USING btree ("job_id","user_id") WHERE "assignments"."status" not in ('canceled', 'removed');

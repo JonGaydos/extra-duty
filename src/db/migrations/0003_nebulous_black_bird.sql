@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "w9s_one_current_per_user" ON "w9s" USING btree ("user_id") WHERE "w9s"."current";

@@ -1,0 +1,191 @@
+/*
+ * Extra Duty design tokens. DESIGN.md at the repo root explains each one.
+ *
+ * Every color is light-dark(day, night). The root's color-scheme picks the
+ * side: "light dark" follows the device, and [data-theme="day"|"night"] (set
+ * on <html> from the theme cookie or the profile) forces one. Components use
+ * the semantic utilities these generate (bg-surface, text-muted, border-line)
+ * and never a hex value. Tailwind's default palette, type scale, radii and
+ * shadows are cleared so only these exist.
+ */
+@theme {
+  --color-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --font-weight-*: initial;
+
+  /* Surfaces and text */
+  --color-canvas: light-dark(#f4f6f8, #0f1318);
+  --color-surface: light-dark(#ffffff, #171c23);
+  --color-subtle: light-dark(#f7f8fa, #1b2129);
+  --color-sunken: light-dark(#eef0f3, #232a33);
+  --color-line: light-dark(#e3e6eb, #2a313b);
+  --color-divider: light-dark(#eef0f3, #232a33);
+  --color-field: light-dark(#838c9a, #687283);
+  --color-ink: light-dark(#14181f, #e8ecf1);
+  --color-muted: light-dark(#5b6472, #9aa4b2);
+  /* Behind the agency logo: white by day, a light plate at night for logos with no transparency (JPG, white-backed PNG) */
+  --color-logo-plate: light-dark(#ffffff, #eef0f3);
+  /* Behind a transparent logo: white by day, nothing at night so it sits on the dark header */
+  --color-logo-clear: light-dark(#ffffff, transparent);
+
+  /* Accent: one blue for actions, selection and links */
+  --color-accent: light-dark(#2147c2, #3d6bf0);
+  --color-accent-hover: light-dark(#16328c, #3260e0);
+  --color-on-accent: #ffffff;
+  --color-link: light-dark(#2147c2, #8fb0ff);
+  --color-link-hover: light-dark(#16328c, #b9ccff);
+  --color-accent-soft: light-dark(#e8eefc, #1e2a4a);
+  --color-accent-muted: light-dark(#9db3ee, #3a4f8f);
+  --color-accent-outline: light-dark(#6886dc, #56709f);
+  --color-focus: light-dark(#2147c2, #8fb0ff);
+
+  /* Status: soft fill, ink for text on it, line for its border */
+  --color-success-soft: light-dark(#e7f5ec, #12291c);
+  --color-success-ink: light-dark(#146c3a, #7fd69f);
+  --color-success-line: light-dark(#b7e1c6, #25553a);
+  --color-warning-soft: light-dark(#fff4e5, #33240f);
+  --color-warning-ink: light-dark(#8a4b00, #f5b86b);
+  --color-warning-line: light-dark(#f5d3a3, #5c4220);
+  --color-warning-strong: #c26a00;
+  --color-danger-soft: light-dark(#fdecec, #3a1e1e);
+  --color-danger-ink: light-dark(#8c1414, #ff9b9b);
+  --color-danger-line: light-dark(#f2b8b8, #6b2b2b);
+  --color-danger: light-dark(#b42318, #c2362b);
+  --color-on-danger: #ffffff;
+  --color-attention-soft: light-dark(#fdeee6, #3a2010);
+  --color-attention-ink: light-dark(#b33a06, #ff9466);
+  --color-attention-dot: light-dark(#d9480f, #ff7a45);
+  --color-coordinator-soft: light-dark(#f1ecfb, #2a2140);
+  --color-coordinator-ink: light-dark(#5b3ba8, #c3aef5);
+  /* Calendar status stripes: 3:1 or better on surfaces in both themes, always beside a status word */
+  --color-cal-open: light-dark(#15803d, #4fc77f);
+  --color-cal-filled: light-dark(#c42a2a, #f07171);
+  --color-cal-past: light-dark(#4a5a70, #8a9ab0);
+  --color-cal-unreleased: light-dark(#b45f00, #f0a64a);
+
+  /* Type: Inter, one family, a tight product scale */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --text-micro: 11px;
+  --text-micro--line-height: 1.3;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.45;
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-title: 15px;
+  --text-title--line-height: 1.35;
+  --text-base: 16px;
+  --text-base--line-height: 1.4;
+  --text-lg: 17px;
+  --text-lg--line-height: 1.35;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.25;
+  --text-stat: 21px;
+  --text-stat--line-height: 1.2;
+  --text-2xl: 23px;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 28px;
+  --text-3xl--line-height: 1.15;
+
+  /* Shape */
+  --radius-xs: 5px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-tile: 16px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-3xl: 22px;
+
+  /* Depth: only floating chrome casts a shadow */
+  --shadow-float: 0 6px 20px light-dark(rgb(20 24 31 / 0.08), rgb(0 0 0 / 0.4));
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+  :root[data-theme="day"] {
+    color-scheme: light;
+  }
+  :root[data-theme="night"] {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+   * Every text link is underlined at rest, in day and night, so a link never relies on color alone: 1 px at a
+   * 3 px offset in the link's own color at half strength, full strength and 2 px on hover and focus. Button-styled
+   * links, nav items and card links opt out with no-underline (see DESIGN.md, Links).
+   */
+  a {
+    color: var(--color-link);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+    transition-property: color, text-decoration-color;
+    transition-duration: 150ms;
+  }
+  a:hover,
+  a:focus-visible {
+    color: var(--color-link-hover);
+    text-decoration-thickness: 2px;
+    text-decoration-color: currentColor;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* The phone app shell: the document is fixed to the viewport and never scrolls; main scrolls inside it. */
+  @media (width < 48rem) {
+    body:has([data-shell="app"]) {
+      height: 100dvh;
+      overflow: hidden;
+    }
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

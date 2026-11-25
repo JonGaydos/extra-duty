@@ -1,0 +1,20 @@
+# Only what the build needs goes into the image context.
+node_modules
+.next
+.next-e2e
+.git
+.env
+.env.*
+!.env.example
+app.env
+.local-preview
+.superpowers
+.impeccable
+var
+test-results
+playwright-report
+coverage
+*.tsbuildinfo
+docs
+!docs/manuals
+docs/manuals/pdf

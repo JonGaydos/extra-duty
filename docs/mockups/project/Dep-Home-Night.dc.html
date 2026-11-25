@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deputy home, night mode</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#8FB0FF;text-decoration:none}a:hover{color:#B9CCFF}
+.card{background:#171C23;border:1px solid #2A313B;border-radius:18px}
+.muted{color:#9AA4B2}
+.btn{height:46px;border-radius:14px;border:none;background:#3D6BF0;color:#FFFFFF;font-weight:600;font-size:15px;font-family:inherit;cursor:pointer;padding:0 18px}
+.ibtn{position:relative;width:44px;height:44px;border-radius:22px;border:1px solid #2A313B;background:#171C23;color:#E8ECF1;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ico{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;padding:6px 0;border-radius:14px;color:#9AA4B2;font-size:11px;font-weight:500}
+.on{background:#1E2A4A;color:#8FB0FF;font-weight:600}
+.pill{padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 390px; height: 1100px; box-sizing: border-box; background: #0F1318; color: #E8ECF1; font-family: 'Inter', system-ui, sans-serif; position: relative; overflow: hidden">
+<div style="display: flex; flex-direction: column; gap: 18px; padding: 20px 20px 110px">
+
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 44px; height: 44px; border-radius: 22px; background: #24335C; color: #B9CCFF; display: flex; align-items: center; justify-content: center; font-weight: 700">SW</div>
+<div style="display: flex; flex-direction: column"><span class="muted" style="font-size: 13px">Thursday, December 3</span><span style="font-size: 20px; font-weight: 700">Hi, Sam</span></div>
+</div>
+<div style="display: flex; gap: 8px">
+<a href="#" class="ibtn" aria-label="Messages"><svg class="ico" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg></a>
+<a href="#" class="ibtn" aria-label="Alerts, 1 new"><svg class="ico" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><span style="position: absolute; top: 9px; right: 9px; width: 9px; height: 9px; border-radius: 5px; background: #FF7A45; border: 2px solid #171C23"></span></a>
+</div>
+</div>
+
+<section style="background: #3A1E1E; border: 1px solid #6B2B2B; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px; color: #FF9B9B"><svg class="ico" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg><b style="font-size: 15px">Sign-ups locked</b></div>
+<span style="font-size: 14px; line-height: 1.45; color: #F3D6D6">Confirm payment on 1 invoice to sign up again. Lantern Events LLC reported paying ED-000412 on Nov 3.</span>
+<div style="display: flex; gap: 8px"><button class="btn" style="flex: 1">Mark received</button><a href="#" style="height: 46px; padding: 0 14px; border-radius: 14px; border: 1px solid #6B2B2B; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: #FFB3B3">Never arrived</a></div>
+</section>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<div class="card" style="padding: 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 2px"><span class="muted" style="font-size: 12px">Any 24 hours</span><span style="font-size: 21px; font-weight: 700">0<span class="muted" style="font-size: 13px; font-weight: 500"> / 16 h</span></span></div>
+<div class="card" style="padding: 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 2px"><span class="muted" style="font-size: 12px">This week</span><span style="font-size: 21px; font-weight: 700">8<span class="muted" style="font-size: 13px; font-weight: 500"> / 24 h</span></span></div>
+<div class="card" style="padding: 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 2px"><span class="muted" style="font-size: 12px">December</span><span style="font-size: 21px; font-weight: 700">8<span class="muted" style="font-size: 13px; font-weight: 500"> / 90 h</span></span></div>
+</div>
+
+<section class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 15px; font-weight: 600">December goal</h2><span style="font-size: 15px; font-weight: 700">$800</span></div>
+<div style="display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #232A33"><span style="width: 0%; background: #6E93FF"></span><span style="width: 70%; background: #3A4F8F"></span></div>
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span><b>$0</b> <span class="muted">earned</span></span><span><b>$560</b> <span class="muted">signed up</span></span><span><b>$240</b> <span class="muted">to go</span></span></div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Up next</h2>
+<a href="#" class="card" style="padding: 14px 16px; display: flex; align-items: center; gap: 14px; color: #E8ECF1">
+<div style="width: 50px; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 12px; background: #1E2A4A; color: #8FB0FF"><span style="font-size: 11px; font-weight: 700">SAT</span><span style="font-size: 20px; font-weight: 700">5</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">Right-of-way clearing</span><span class="muted" style="font-size: 13px">7:00 AM to 3:00 PM, Coastal Line Clearing</span><span class="pill" style="align-self: flex-start; background: #3A1E1E; color: #FF9B9B; margin-top: 3px">Officer safety info</span></div>
+</a>
+<a href="#" class="card" style="padding: 14px 16px; display: flex; align-items: center; gap: 14px; color: #E8ECF1">
+<div style="width: 50px; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 12px; background: #232A33; color: #9AA4B2"><span style="font-size: 11px; font-weight: 700">TUE</span><span style="font-size: 20px; font-weight: 700">8</span></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 15px; font-weight: 600">Harborfront Arts and Entertainment</span><span class="muted" style="font-size: 13px">4:00 to 8:00 PM</span><span class="pill" style="align-self: flex-start; background: #33240F; color: #F5B86B; margin-top: 3px">Vendor on hold: do not work this detail</span></div>
+</a>
+</section>
+
+</div>
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 14px; height: 66px; background: #171C23; border: 1px solid #2A313B; border-radius: 22px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); display: flex; justify-content: space-around; align-items: center">
+<a href="#" class="tab on"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Home</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Details</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path></svg>Map</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path><path d="M9 8h6M9 12h6"></path></svg>Billing</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Profile</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

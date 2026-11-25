@@ -1,0 +1,1 @@
+ALTER TABLE "invoice_events" ADD COLUMN "vendor_visible" boolean DEFAULT true NOT NULL;

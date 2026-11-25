@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reports</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#2147C2;text-decoration:none}a:hover{color:#16328C}
+.card{background:#FFFFFF;border:1px solid #E3E6EB;border-radius:20px}
+.muted{color:#5B6472}
+.nav{padding:8px 12px;border-radius:10px;color:#5B6472;font-size:14px;font-weight:500}
+.navon{color:#2147C2;background:#E8EEFC;font-weight:600}
+.lbl{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5B6472;font-weight:500}
+.inp{height:40px;border:1px solid #D5DAE1;border-radius:10px;padding:0 10px;font:inherit;font-size:14px;background:#FFFFFF;color:#14181F;box-sizing:border-box;width:100%}
+.chipb{height:32px;padding:0 12px;border-radius:16px;border:1px solid #E3E6EB;background:#FFFFFF;color:#14181F;font-size:13px;font-family:inherit}
+.sel{background:#14181F;color:#FFFFFF;border-color:#14181F;font-weight:600}
+.btn2{height:38px;border-radius:10px;border:1px solid #E3E6EB;background:#FFFFFF;color:#14181F;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;padding:0 12px}
+.rep{display:block;padding:9px 12px;border-radius:10px;font-size:14px;color:#14181F}
+.td{padding:10px 14px;border-top:1px solid #EEF0F3;text-align:right}
+.col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}
+.bars{display:flex;align-items:flex-end;gap:4px;height:150px}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #F4F6F8; color: #14181F; font-family: 'Inter', system-ui, sans-serif">
+
+<header style="background: #FFFFFF; border-bottom: 1px solid #E3E6EB">
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 24px; min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<div style="display: flex; align-items: center; gap: 22px; flex-wrap: wrap"><span style="font-weight: 700; font-size: 17px">Extra Duty</span>
+<nav aria-label="Main" style="display: flex; gap: 2px; flex-wrap: wrap"><a href="#" class="nav">To-do</a><a href="#" class="nav">Details</a><a href="#" class="nav">Calendar</a><a href="#" class="nav">Vendors</a><a href="#" class="nav">Payments</a><a href="#" class="nav navon">Reports</a><a href="#" class="nav">Messages</a><a href="#" class="nav">Management</a></nav></div>
+<div style="width: 36px; height: 36px; border-radius: 18px; background: #F1ECFB; color: #5B3BA8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">QO</div>
+</div>
+</header>
+
+<main style="max-width: 1240px; margin: 0 auto; padding: 26px 24px 48px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<aside class="card" style="flex: 1 1 240px; min-width: 0; padding: 14px; display: flex; flex-direction: column; gap: 2px">
+<span class="muted" style="font-size: 12px; font-weight: 600; padding: 6px 12px">BUILT-IN</span>
+<a href="#" class="rep" style="background: #E8EEFC; color: #2147C2; font-weight: 600">Agency billed and paid by month</a>
+<a href="#" class="rep">Earnings by deputy</a>
+<a href="#" class="rep">Billing by vendor</a>
+<a href="#" class="rep">Unpaid by whose turn and age</a>
+<a href="#" class="rep">Cancellations and no shows</a>
+<a href="#" class="rep">Fill rate by month</a>
+<a href="#" class="rep">Hours against caps</a>
+<a href="#" class="rep">Ops plans by status</a>
+<a href="#" class="rep">Full audit log</a>
+<span class="muted" style="font-size: 12px; font-weight: 600; padding: 14px 12px 6px">SAVED</span>
+<a href="#" class="rep">Spring break staffing 2026</a>
+<a href="#" class="rep">Church traffic details by deputy</a>
+<a href="#" class="rep">Deputy tax summary lookup</a>
+</aside>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px"><h1 style="margin: 0; font-size: 24px; font-weight: 700">Agency billed and paid by month</h1><div style="display: flex; gap: 8px"><button class="btn2">Save as</button><button class="btn2">CSV</button><button class="btn2">PDF</button></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px">
+<label class="lbl">Data<select class="inp"><option>Invoices</option></select></label>
+<label class="lbl">From<input class="inp" value="Jun 1, 2026"></label>
+<label class="lbl">To<input class="inp" value="Nov 30, 2026"></label>
+<label class="lbl">Deputies<select class="inp"><option>All deputies</option></select></label>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center"><span class="muted" style="font-size: 13px">Group by</span><button class="chipb">Day</button><button class="chipb">Week</button><button class="chipb sel">Month</button><button class="chipb">Year</button><button class="chipb">Deputy</button><button class="chipb">Vendor</button><button class="chipb">Job type</button></div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center"><span class="muted" style="font-size: 13px">Show</span><button class="chipb sel">Details</button><button class="chipb sel">Hours</button><button class="chipb sel">Billed</button><button class="chipb sel">Paid</button><button class="chipb sel">Outstanding</button></div>
+</section>
+
+<section class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div role="img" aria-label="Billed and paid by month, June to November 2026" style="display: flex; gap: 14px; align-items: flex-end">
+<div class="col"><div class="bars"><span style="width: 22px; height: 104px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 102px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Jun</span></div>
+<div class="col"><div class="bars"><span style="width: 22px; height: 140px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 136px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Jul</span></div>
+<div class="col"><div class="bars"><span style="width: 22px; height: 96px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 93px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Aug</span></div>
+<div class="col"><div class="bars"><span style="width: 22px; height: 88px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 84px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Sep</span></div>
+<div class="col"><div class="bars"><span style="width: 22px; height: 118px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 106px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Oct</span></div>
+<div class="col"><div class="bars"><span style="width: 22px; height: 110px; background: #2147C2; border-radius: 4px 4px 0 0"></span><span style="width: 22px; height: 62px; background: #9DB3EE; border-radius: 4px 4px 0 0"></span></div><span class="muted" style="font-size: 12px">Nov</span></div>
+</div>
+<div style="display: flex; gap: 16px; font-size: 12px" class="muted"><span><span style="display: inline-block; width: 10px; height: 10px; background: #2147C2; border-radius: 2px"></span> Billed</span><span><span style="display: inline-block; width: 10px; height: 10px; background: #9DB3EE; border-radius: 2px"></span> Paid</span></div>
+<div style="overflow-x: auto">
+<table style="width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px">
+<thead><tr class="muted" style="font-size: 12px; background: #F7F8FA"><th style="padding: 10px 14px; text-align: left; font-weight: 600">Month</th><th style="padding: 10px 14px; text-align: right; font-weight: 600">Details</th><th style="padding: 10px 14px; text-align: right; font-weight: 600">Hours</th><th style="padding: 10px 14px; text-align: right; font-weight: 600">Billed</th><th style="padding: 10px 14px; text-align: right; font-weight: 600">Paid</th><th style="padding: 10px 14px; text-align: right; font-weight: 600">Outstanding</th></tr></thead>
+<tbody>
+<tr><td class="td" style="text-align: left">June</td><td class="td">212</td><td class="td">1,060</td><td class="td">$74,200</td><td class="td">$72,900</td><td class="td">$1,300</td></tr>
+<tr><td class="td" style="text-align: left">July</td><td class="td">286</td><td class="td">1,430</td><td class="td">$100,100</td><td class="td">$97,400</td><td class="td">$2,700</td></tr>
+<tr><td class="td" style="text-align: left">August</td><td class="td">198</td><td class="td">980</td><td class="td">$68,600</td><td class="td">$66,500</td><td class="td">$2,100</td></tr>
+<tr><td class="td" style="text-align: left">September</td><td class="td">181</td><td class="td">900</td><td class="td">$63,000</td><td class="td">$60,200</td><td class="td">$2,800</td></tr>
+<tr><td class="td" style="text-align: left">October</td><td class="td">241</td><td class="td">1,205</td><td class="td">$84,350</td><td class="td">$75,900</td><td class="td">$8,450</td></tr>
+<tr><td class="td" style="text-align: left">November</td><td class="td">227</td><td class="td">1,120</td><td class="td">$78,400</td><td class="td">$44,100</td><td class="td">$34,300</td></tr>
+<tr style="font-weight: 700"><td class="td" style="text-align: left">Total</td><td class="td">1,345</td><td class="td">6,695</td><td class="td">$468,650</td><td class="td">$417,000</td><td class="td">$51,650</td></tr>
+</tbody>
+</table>
+</div>
+<span class="muted" style="font-size: 12px">Sample data. Grouped in Central time.</span>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1100}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

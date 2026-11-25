@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.next-e2e/
+.env
+app.env
+.env.local
+coverage/
+playwright-report/
+test-results/
+.superpowers/
+.env.*.local
+next-env.d.ts
+*.tsbuildinfo
+var/
+.local-preview/
+# Built by scripts/build-manuals.ts; not committed.
+docs/manuals/pdf/

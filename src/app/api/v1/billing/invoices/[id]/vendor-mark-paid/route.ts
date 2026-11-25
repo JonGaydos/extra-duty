@@ -1,0 +1,8 @@
+import { vendorMarkPaid } from "@/domain/billing/payments";
+import { apiHandler } from "@/lib/api/handler";
+import { routes } from "@/lib/api/registry";
+
+/** A date-only paid date is agency midnight. */
+export const POST = apiHandler(routes["POST /billing/invoices/{id}/vendor-mark-paid"], async ({ actor, params, body, run }) =>
+  run((tx) => vendorMarkPaid(actor, tx, params.id, body)),
+);

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Profile: schedule and calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2147C2;text-decoration:none}a:hover{color:#16328C}
+.card{background:#FFFFFF;border:1px solid #E3E6EB;border-radius:18px}
+.muted{color:#5B6472}
+.ico{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;padding:6px 0;border-radius:14px;color:#5B6472;font-size:11px;font-weight:500}
+.on{background:#E8EEFC;color:#2147C2;font-weight:600}
+.chipb{height:34px;padding:0 12px;border-radius:17px;border:1px solid #E3E6EB;background:#FFFFFF;color:#14181F;font-size:13px;font-weight:500;font-family:inherit}
+.sel{background:#14181F;color:#FFFFFF;border-color:#14181F;font-weight:600}
+.inp{height:42px;border:1px solid #D5DAE1;border-radius:12px;padding:0 10px;font:inherit;font-size:14px;background:#FFFFFF;color:#14181F;width:100%;box-sizing:border-box}
+.d{height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+.w{background:#2147C2;color:#FFFFFF}
+.f{background:#F4F6F8;color:#5B6472}
+.l{background:#FFF4E5;color:#8A4B00;border:1px dashed #C26A00}
+h2{margin:0;font-size:15px;font-weight:600}
+</style>
+</helmet>
+<div style="width: 390px; height: 1300px; box-sizing: border-box; background: #F4F6F8; color: #14181F; font-family: 'Inter', system-ui, sans-serif; position: relative; overflow: hidden">
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 20px 20px 110px">
+
+<div style="display: flex; flex-direction: column; gap: 4px"><h1 style="margin: 0; font-size: 24px; font-weight: 700">My schedule</h1><span class="muted" style="font-size: 13px">Private to you. Used to show only details you can work.</span></div>
+
+<section class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2>Primary duty schedule</h2>
+<div style="display: flex; gap: 6px"><button class="chipb">Weekly</button><button class="chipb sel">Rotation</button></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<label class="muted" style="display: flex; flex-direction: column; gap: 5px; font-size: 13px">Pattern<select class="inp"><option>2-2-3 (14 days)</option></select></label>
+<label class="muted" style="display: flex; flex-direction: column; gap: 5px; font-size: 13px">First work day<input class="inp" value="Mon, Nov 2, 2026"></label>
+<label class="muted" style="display: flex; flex-direction: column; gap: 5px; font-size: 13px">Shift start<input class="inp" value="6:00 PM"></label>
+<label class="muted" style="display: flex; flex-direction: column; gap: 5px; font-size: 13px">Shift end<input class="inp" value="6:00 AM"></label>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="muted" style="font-size: 13px">Travel buffer before and after shifts</span>
+<div style="display: flex; gap: 6px; flex-wrap: wrap"><button class="chipb">None</button><button class="chipb">15 min</button><button class="chipb sel">30 min</button><button class="chipb">45 min</button><button class="chipb">1 hour</button></div></div>
+</section>
+
+<section class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><h2>Next 4 weeks</h2><span class="muted" style="font-size: 12px">Nov 22 to Dec 19</span></div>
+<div role="img" aria-label="Four week preview of the 2-2-3 schedule with leave on December 10" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px">
+<span class="d muted" style="height: 18px">S</span><span class="d muted" style="height: 18px">M</span><span class="d muted" style="height: 18px">T</span><span class="d muted" style="height: 18px">W</span><span class="d muted" style="height: 18px">T</span><span class="d muted" style="height: 18px">F</span><span class="d muted" style="height: 18px">S</span>
+<span class="d w">22</span><span class="d f">23</span><span class="d f">24</span><span class="d w">25</span><span class="d w">26</span><span class="d f">27</span><span class="d f">28</span>
+<span class="d f">29</span><span class="d w">30</span><span class="d w">1</span><span class="d f">2</span><span class="d f">3</span><span class="d w">4</span><span class="d w">5</span>
+<span class="d w">6</span><span class="d f">7</span><span class="d f">8</span><span class="d w">9</span><span class="d l">10</span><span class="d f">11</span><span class="d f">12</span>
+<span class="d f">13</span><span class="d w">14</span><span class="d w">15</span><span class="d f">16</span><span class="d f">17</span><span class="d w">18</span><span class="d w">19</span>
+</div>
+<div style="display: flex; gap: 12px; font-size: 12px" class="muted"><span><span class="d w" style="display: inline-block; width: 12px; height: 12px; vertical-align: middle"></span> On duty 6 PM to 6 AM</span><span><span class="d l" style="display: inline-block; width: 12px; height: 12px; vertical-align: middle; box-sizing: border-box"></span> Leave</span></div>
+<a href="#" style="font-size: 14px; font-weight: 600">Add a one-off change (extra shift, swap, leave)</a>
+</section>
+
+<section class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2>Outlook calendar</h2>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px"><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">outlook.office365.com/owa/calendar/...ics</span><span style="font-size: 12px; color: #146C3A">Synced today at 5:02 AM, 14 busy events</span></div><button class="chipb">Sync now</button></div>
+<span class="muted" style="font-size: 12px">Busy events and their titles are kept so you can see conflicts. Events marked Free are ignored.</span>
+</section>
+
+<section class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2>Goal and preferences</h2>
+<label style="display: flex; justify-content: space-between; align-items: center; font-size: 14px">Monthly earnings goal<input class="inp" value="$800" style="width: 110px; text-align: right"></label>
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; border-top: 1px solid #EEF0F3; padding-top: 10px"><span>Hidden vendors</span><a href="#" style="font-weight: 600">1 hidden</a></div>
+<label style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; border-top: 1px solid #EEF0F3; padding-top: 10px">Email me copies of messages<input type="checkbox" style="width: 20px; height: 20px"></label>
+<div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; border-top: 1px solid #EEF0F3; padding-top: 10px"><span>Theme</span><div style="display: flex; gap: 6px"><button class="chipb sel">Device</button><button class="chipb">Day</button><button class="chipb">Night</button></div></div>
+</section>
+
+</div>
+<nav aria-label="Main" style="position: absolute; left: 12px; right: 12px; bottom: 14px; height: 66px; background: #FFFFFF; border: 1px solid #E3E6EB; border-radius: 22px; box-shadow: 0 6px 20px rgba(20, 24, 31, 0.08); display: flex; justify-content: space-around; align-items: center">
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Home</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Details</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path></svg>Map</a>
+<a href="#" class="tab"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"></path><path d="M9 8h6M9 12h6"></path></svg>Billing</a>
+<a href="#" class="tab on"><svg class="ico" aria-hidden="true" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Profile</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1300}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Used when SITE_DOMAIN is set: the domain gets a certificate and HTTPS automatically.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# HTTPS only: browsers then refuse plain HTTP for this domain for a year. Never in Caddyfile.lan.
+	header Strict-Transport-Security "max-age=31536000"
+
+	reverse_proxy web:3000 {
+		# The one client address the app believes (web trusts this header only from Caddy's network).
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+# Every other plain-HTTP request, including one made to this machine's IP address, is sent to the HTTPS site.
+# Signing in over plain HTTP would expose passwords and sign-in codes to anyone on the network.
+http:// {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}

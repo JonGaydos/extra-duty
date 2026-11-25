@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T00:00:00Z",
+  "title": "Design System: Extra Duty",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Duty Blue"
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Duty Blue Ink"
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Duty Blue Wash"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted"
+      },
+      "success-ink": {
+        "role": "tertiary",
+        "displayName": "Open Green"
+      },
+      "warning-ink": {
+        "role": "tertiary",
+        "displayName": "Caution Amber"
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Stop Red"
+      },
+      "attention-ink": {
+        "role": "tertiary",
+        "displayName": "Your Turn Orange"
+      },
+      "coordinator-ink": {
+        "role": "tertiary",
+        "displayName": "Coordinator Purple"
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 6px 20px rgb(20 24 31 / 0.08)",
+        "purpose": "Phone tab bar only; night uses rgb(0 0 0 / 0.4)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "150ms ease",
+        "purpose": "Color and background changes on hover and selection; off under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "md",
+        "value": "768px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The action on a card or form.",
+      "html": "<button class=\"ds-btn-primary\">Review and send invoice</button>",
+      "css": ".ds-btn-primary{height:44px;padding:0 18px;border:none;border-radius:12px;background:var(--color-accent,#2147c2);color:#fff;font:600 14px/1 Inter,system-ui,sans-serif;cursor:pointer;transition:background-color .15s}.ds-btn-primary:hover{background:var(--color-accent-hover,#16328c)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-focus,#2147c2);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action beside a primary.",
+      "html": "<button class=\"ds-btn-secondary\">Send back</button>",
+      "css": ".ds-btn-secondary{height:44px;padding:0 16px;border:1px solid var(--color-line,#e3e6eb);border-radius:12px;background:var(--color-surface,#fff);color:var(--color-ink,#14181f);font:600 14px/1 Inter,system-ui,sans-serif;cursor:pointer}.ds-btn-secondary:hover{background:var(--color-subtle,#f7f8fa)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-focus,#2147c2);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Label above, 44 px control, hint below.",
+      "html": "<label class=\"ds-field\"><span>Start</span><input class=\"ds-input\" value=\"7:00 AM\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:6px;font:500 13px/1.45 Inter,system-ui,sans-serif;color:var(--color-muted,#5b6472)}.ds-input{height:44px;padding:0 12px;border:1px solid var(--color-field,#838c9a);border-radius:10px;background:var(--color-surface,#fff);color:var(--color-ink,#14181f);font:400 14px Inter,system-ui,sans-serif}.ds-input:focus-visible{border-color:var(--color-focus,#2147c2);outline:2px solid var(--color-focus,#2147c2)}"
+    },
+    {
+      "name": "Pay Pill",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "PayLabel pill: total and rate together.",
+      "html": "<span class=\"ds-pay\">$280<span> at $70/hr</span></span>",
+      "css": ".ds-pay{display:inline-flex;align-items:baseline;padding:3px 9px;border-radius:999px;background:var(--color-success-soft,#e7f5ec);color:var(--color-success-ink,#146c3a);font:600 14px Inter,system-ui,sans-serif}.ds-pay span{font-size:12px;font-weight:500;white-space:pre}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The one container: white, 1 px line, no shadow.",
+      "html": "<section class=\"ds-card\"><h2>Ready to bill</h2><p>Gulfway RV, today 6:00 AM to 12:00 PM</p></section>",
+      "css": ".ds-card{background:var(--color-surface,#fff);border:1px solid var(--color-line,#e3e6eb);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;font:400 14px/1.5 Inter,system-ui,sans-serif;color:var(--color-ink,#14181f)}.ds-card h2{margin:0;font-size:15px;font-weight:600}.ds-card p{margin:0;color:var(--color-muted,#5b6472);font-size:13px}"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "Phone navigation under 768 px.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Main\"><a aria-current=\"page\">Home</a><a>Details</a><a>Map</a><a>Billing</a><a>Profile</a></nav>",
+      "css": ".ds-tabs{display:flex;justify-content:space-around;align-items:center;height:66px;width:366px;background:var(--color-surface,#fff);border:1px solid var(--color-line,#e3e6eb);border-radius:22px;box-shadow:0 6px 20px rgb(20 24 31/.08);font:500 11px Inter,system-ui,sans-serif}.ds-tabs a{min-width:58px;padding:22px 0 6px;text-align:center;border-radius:14px;color:var(--color-muted,#5b6472);cursor:pointer}.ds-tabs a[aria-current]{background:var(--color-accent-soft,#e8eefc);color:var(--color-link,#2147c2);font-weight:600}"
+    },
+    {
+      "name": "Staffing Grid",
+      "kind": "custom",
+      "description": "Solid filled, outlined open, dashed backup.",
+      "html": "<div class=\"ds-grid\" role=\"img\" aria-label=\"1 of 3 spots filled, 1 backup waiting\"><span>Deputy Sheriff</span><i class=\"f\"></i><i class=\"o\"></i><i class=\"b\"></i></div>",
+      "css": ".ds-grid{display:flex;align-items:center;gap:6px;font:400 13px Inter,system-ui,sans-serif;color:var(--color-muted,#5b6472)}.ds-grid span{width:110px}.ds-grid i{width:22px;height:22px;border-radius:5px;box-sizing:border-box}.ds-grid .f{background:var(--color-accent,#2147c2)}.ds-grid .o{border:2px solid var(--color-accent-outline,#6886dc)}.ds-grid .b{border:2px dashed var(--color-warning-strong,#c26a00)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Duty Board",
+    "overview": "Extra Duty is the board a deputy checks between shifts and a coordinator keeps on a second monitor: a calm, daylight surface of white cards on a cool gray canvas, one confident blue for everything you can act on, and status color only where a rule or a deadline needs attention. Night mode is the same board in low light.",
+    "keyCharacteristics": [
+      "Flat white cards with a 1 px line, no shadows except the floating tab bar.",
+      "One accent blue for buttons, the active tab, links and filled staffing squares.",
+      "Status in soft pills and tinted cards: green open, amber warning, red danger, orange attention, blue info, purple coordinator.",
+      "Inter throughout, 400 to 700, a tight product scale from 11 to 28 px.",
+      "Line icons on a 24 px grid with a 1.8 stroke.",
+      "Day and night themes from the same tokens; the device decides until the person chooses."
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "Blue means \"you can act on this\" or \"you are here\". Never use it for decoration, headings or icons at rest.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Means Something Rule",
+        "body": "A status color always names a state in words beside it. Color never carries a meaning alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Hex Rule",
+        "body": "Components use semantic utilities. Tailwind's own palette is switched off; a hex value in a component is a bug.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed Scale Rule",
+        "body": "Only the eleven sizes exist. No fluid type.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Money Rule",
+        "body": "Money, hours and counts use tabular figures so columns line up.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Float Rule",
+        "body": "Only chrome that floats above scrolling content casts a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the semantic utilities from src/ui/tokens.css and the components in src/ui/components/.",
+      "Do show pay only through PayLabel.",
+      "Do keep one primary button per card on phones, 50 px tall and full width when it is the screen's main action.",
+      "Do pair every status color with words.",
+      "Do check every screen at 390 by 844 and 1280 by 900 in day and night, with an axe pass and no serious violations."
+    ],
+    "donts": [
+      "Don't hard-code a hex value or use a Tailwind palette color in a component.",
+      "Don't add shadows to cards, tiles or buttons.",
+      "Don't add a second accent color or use blue for decoration.",
+      "Don't use a colored left or right border stripe on cards or alerts.",
+      "Don't use a modal where an inline section or a page works.",
+      "Don't add a kicker or eyebrow label above a heading."
+    ]
+  }
+}

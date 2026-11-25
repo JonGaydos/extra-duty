@@ -1,0 +1,1 @@
+ALTER TABLE "job_safety_addresses" ADD COLUMN "geocode_source" "geocode_source" DEFAULT 'auto' NOT NULL;

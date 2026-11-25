@@ -1,0 +1,169 @@
+# Extra Duty on one Linux machine: Caddy (HTTPS) in front of one web container, the worker, PostgreSQL and MinIO.
+# Settings: .env holds Compose's own secrets (copy .env.example); app.env holds the app's settings (copy
+# app.env.example). Guide: docs/self-hosting.md.
+#
+#   docker compose up -d --build
+#
+# The migrate service runs the release step once (migrations, queue schema, built-in seed, demo data for training)
+# and exits; web and the worker start only after it succeeded. Compose runs one web instance on purpose: the API key
+# rate limit is kept per process.
+name: extra-duty
+
+x-app: &app
+  image: extra-duty:${EXTRA_DUTY_TAG:-latest}
+  build: .
+  # The app's own settings only. Compose reads .env (database owner and MinIO root passwords) for interpolation;
+  # those never reach web or the worker.
+  env_file: app.env
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+# What web and the worker see besides app.env: the app's database role (rows only, never the owner) and the app's
+# own MinIO account (the two app buckets only, never the root login).
+x-app-env: &app-env
+  DATABASE_URL: postgres://extra_duty_app:${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}@postgres:5432/extra_duty
+  TRAINING_DATABASE_URL: postgres://extra_duty_app:${APP_DB_PASSWORD}@postgres:5432/extra_duty_training
+  STORAGE_DRIVER: s3
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: extra-duty
+  TRAINING_BUCKET: extra-duty-training
+  S3_ACCESS_KEY_ID: extra-duty-app
+  S3_SECRET_ACCESS_KEY: ${MINIO_APP_PASSWORD:?Set MINIO_APP_PASSWORD in .env}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: extra_duty_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: extra_duty
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on the first start with an empty volume: the app role and the training database.
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/10-extra-duty.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U extra_duty_owner -d extra_duty"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+
+  # Creates the live and training buckets and the app's limited MinIO account, then exits. The only user of the
+  # MinIO root login besides MinIO itself.
+  buckets:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD}
+    volumes:
+      - ./docker/minio/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+    networks: [backend]
+
+  # The release step: exactly once per deploy, before web and the worker serve.
+  migrate:
+    <<: *app
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      buckets:
+        condition: service_completed_successfully
+    # The one app container with the owner role: the release step changes the schema. It still uses the app's
+    # MinIO account.
+    environment:
+      <<: *app-env
+      ROLE: migrate
+      DATABASE_URL: postgres://extra_duty_owner:${POSTGRES_PASSWORD}@postgres:5432/extra_duty
+      TRAINING_DATABASE_URL: postgres://extra_duty_owner:${POSTGRES_PASSWORD}@postgres:5432/extra_duty_training
+    networks: [backend]
+
+  web:
+    <<: *app
+    environment:
+      <<: *app-env
+      ROLE: web
+      PORT: "3000"
+      # Only Caddy's network may set the client address (sign-in throttling keys on it).
+      TRUSTED_PROXY: 172.30.27.0/29
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks: [backend, edge]
+
+  worker:
+    <<: *app
+    environment:
+      <<: *app-env
+      ROLE: worker
+    networks: [backend]
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      # Healthy, not just started: the first requests would otherwise get 502 while Next prepares.
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # A domain name: HTTPS, and every plain-HTTP request (by IP address too) redirects to it. Empty: plain HTTP on
+      # the local network only (see docs/self-hosting.md for why a domain is better).
+      SITE_DOMAIN: ${SITE_DOMAIN:-}
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -n "$$SITE_DOMAIN" ]; then exec caddy run --config /etc/caddy/Caddyfile.https --adapter caddyfile;
+        else exec caddy run --config /etc/caddy/Caddyfile.lan --adapter caddyfile; fi
+    volumes:
+      - ./docker/caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+
+networks:
+  backend: {}
+  # Caddy and web only. Its range is TRUSTED_PROXY above; change both together if it clashes with your network.
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.27.0/29
+
+volumes:
+  postgres-data: {}
+  minio-data: {}
+  caddy-data: {}
+  caddy-config: {}

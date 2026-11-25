@@ -1,0 +1,1563 @@
+{
+  "capturedAt": "2026-11-25",
+  "source": "staging",
+  "shots": [
+    {
+      "file": "coordinator-admin/01-to-do-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/01-to-do-2-phone.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 730
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 688
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-4-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 335
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-5-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 453
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-6-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 325
+    },
+    {
+      "file": "coordinator-admin/02-creating-details-7-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/03-position-rate-differentials-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/positions",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/03-position-rate-differentials-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/positions",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/04-rate-range-and-exceptions-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/settings/billing",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/05-address-field-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors/01a2149f-0462-7c6c-9bfa-5a6fd8d8e181",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/06-site-contacts-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors/01a2149f-0462-7c6c-9bfa-5a6fd8d8e181",
+      "size": "desktop",
+      "width": 808,
+      "height": 241
+    },
+    {
+      "file": "coordinator-admin/06-site-contacts-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/new",
+      "size": "desktop",
+      "width": 828,
+      "height": 455
+    },
+    {
+      "file": "coordinator-admin/07-attach-contract-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 782,
+      "height": 269
+    },
+    {
+      "file": "coordinator-admin/08-quick-and-bulk-edit-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 340,
+      "height": 609
+    },
+    {
+      "file": "coordinator-admin/08-quick-and-bulk-edit-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/08-quick-and-bulk-edit-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/10-hold-and-release-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e38a037634f",
+      "size": "desktop",
+      "width": 340,
+      "height": 461
+    },
+    {
+      "file": "coordinator-admin/11-canceling-and-reactivating-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/11-canceling-and-reactivating-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0474-73fe-accc-2f3a9401061e",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/11-canceling-and-reactivating-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0475-78db-a4ff-cb66a1b5f5e8",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/12-vendor-requests-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/12-vendor-requests-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e3a675eb616",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/13-assigning-and-removing-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 828,
+      "height": 288
+    },
+    {
+      "file": "coordinator-admin/14-sign-up-history-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0473-7e2d-972b-9e3cf03bd6a1",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/15-no-shows-and-suspensions-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/details/01a2149f-0472-7235-b823-6a68e0c406b5",
+      "size": "desktop",
+      "width": 828,
+      "height": 288
+    },
+    {
+      "file": "coordinator-admin/15-no-shows-and-suspensions-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/users/01a2149f-0462-7c6c-9bfa-5a5edce5036c",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/16-vendors-and-payment-holds-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/16-vendors-and-payment-holds-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors/01a2149f-0462-7c6c-9bfa-5a6fd8d8e181",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/17-locations-and-pins-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors/01a2149f-0462-7c6c-9bfa-5a6fd8d8e181",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/18-invoice-review-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate",
+      "size": "desktop",
+      "width": 1192,
+      "height": 105
+    },
+    {
+      "file": "coordinator-admin/18-invoice-review-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/invoices/01a2149f-0472-7235-b823-6a6b4e9df7a7",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/18-invoice-review-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/invoices/01a2149f-0464-757d-a8cb-3e75f9b9d954",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/19-sending-invoices-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/send-invoices",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/19-sending-invoices-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/vendors/01a2149f-0462-7c6c-9bfa-5a6fd8d8e181",
+      "size": "desktop",
+      "width": 1192,
+      "height": 574
+    },
+    {
+      "file": "coordinator-admin/20-payment-responsibility-and-issues-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/payments",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/20-payment-responsibility-and-issues-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/payments",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/21-ops-plan-review-and-library-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/ops-plans",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/22-reports-and-exports-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/reports",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/23-personnel-activity-report-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/reports/activity",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/24-users-and-ranks-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/users",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/24-users-and-ranks-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/ranks",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/24-users-and-ranks-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/users/01a2149f-0462-7c6c-9bfa-5a44233d6091",
+      "size": "desktop",
+      "width": 511,
+      "height": 1006
+    },
+    {
+      "file": "coordinator-admin/25-settings-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/25-settings-2-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/seasons",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/26-agency-notification-settings-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/settings/notifications",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/27-agency-logo-1-desktop.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/admin/agency",
+      "size": "desktop",
+      "width": 490,
+      "height": 348
+    },
+    {
+      "file": "coordinator-admin/27-agency-logo-2-desktop.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/coordinate",
+      "size": "desktop",
+      "width": 1280,
+      "height": 100
+    },
+    {
+      "file": "coordinator-admin/27-agency-logo-3-phone.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/coordinate",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "coordinator-admin/28-training-mode-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate",
+      "size": "desktop",
+      "width": 1280,
+      "height": 100
+    },
+    {
+      "file": "coordinator-admin/28-training-mode-2-phone.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/more",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "coordinator-admin/28-training-mode-3-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/home",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/28-training-mode-3-phone.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/home",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "coordinator-admin/29-email-outbox-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/coordinate/outbox",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/30-api-keys-and-data-export-1-desktop.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/admin/api",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/31-email-server-and-security-1-desktop.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/admin/system",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "coordinator-admin/31-email-server-and-security-2-desktop.webp",
+      "source": "staging",
+      "role": "admin",
+      "path": "/admin/system/security",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/01-signing-in-1-desktop.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/sign-in",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/01-signing-in-1-phone.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/sign-in",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/01-signing-in-2-desktop.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/two-factor",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/01-signing-in-2-phone.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/two-factor",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/02-phone-and-desktop-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/02-phone-and-desktop-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/02-phone-and-desktop-3-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/03-profile-and-w9-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 260
+    },
+    {
+      "file": "deputy/03-profile-and-w9-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 564
+    },
+    {
+      "file": "deputy/04-mailing-address-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 432
+    },
+    {
+      "file": "deputy/04-mailing-address-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 870
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 465
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 1246
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 277
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 558
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-3-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "desktop",
+      "width": 896,
+      "height": 225
+    },
+    {
+      "file": "deputy/05-work-schedule-and-calendar-link-3-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "phone",
+      "width": 700,
+      "height": 496
+    },
+    {
+      "file": "deputy/06-hidden-vendors-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs",
+      "size": "desktop",
+      "width": 894,
+      "height": 145
+    },
+    {
+      "file": "deputy/06-hidden-vendors-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs",
+      "size": "phone",
+      "width": 696,
+      "height": 384
+    },
+    {
+      "file": "deputy/06-hidden-vendors-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 296
+    },
+    {
+      "file": "deputy/06-hidden-vendors-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 600
+    },
+    {
+      "file": "deputy/07-finding-and-sorting-details-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/07-finding-and-sorting-details-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/07-finding-and-sorting-details-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/07-finding-and-sorting-details-3-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "desktop",
+      "width": 487,
+      "height": 655
+    },
+    {
+      "file": "deputy/07-finding-and-sorting-details-3-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "phone",
+      "width": 700,
+      "height": 1674
+    },
+    {
+      "file": "deputy/08-calendar-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/08-calendar-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/08-calendar-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "desktop",
+      "width": 896,
+      "height": 17
+    },
+    {
+      "file": "deputy/08-calendar-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/calendar",
+      "size": "phone",
+      "width": 700,
+      "height": 80
+    },
+    {
+      "file": "deputy/09-map-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/map",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/09-map-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/map",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/09-map-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/map",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/09-map-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/map",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/10-open-in-maps-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/10-open-in-maps-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/11-signing-up-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 468,
+      "height": 330
+    },
+    {
+      "file": "deputy/11-signing-up-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "phone",
+      "width": 700,
+      "height": 656
+    },
+    {
+      "file": "deputy/11-signing-up-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e2b662abc67",
+      "size": "desktop",
+      "width": 468,
+      "height": 454
+    },
+    {
+      "file": "deputy/11-signing-up-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e2b662abc67",
+      "size": "phone",
+      "width": 740,
+      "height": 938
+    },
+    {
+      "file": "deputy/11-signing-up-3-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e227927497f",
+      "size": "desktop",
+      "width": 468,
+      "height": 330
+    },
+    {
+      "file": "deputy/11-signing-up-3-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e227927497f",
+      "size": "phone",
+      "width": 700,
+      "height": 656
+    },
+    {
+      "file": "deputy/12-canceling-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "desktop",
+      "width": 468,
+      "height": 302
+    },
+    {
+      "file": "deputy/12-canceling-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "phone",
+      "width": 700,
+      "height": 574
+    },
+    {
+      "file": "deputy/13-reactivated-details-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e3cf03bd6a1",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/13-reactivated-details-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e3cf03bd6a1",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/14-billing-a-detail-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/14-billing-a-detail-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/14-billing-a-detail-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/bill/01a2149f-0472-7235-b823-6a824bd9bc7a",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/14-billing-a-detail-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/bill/01a2149f-0472-7235-b823-6a824bd9bc7a",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/14-billing-a-detail-3-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/bill/01a2149f-0472-7235-b823-6a824bd9bc7a",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/14-billing-a-detail-3-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/bill/01a2149f-0472-7235-b823-6a824bd9bc7a",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/14-billing-a-detail-4-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/14-billing-a-detail-4-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/15-late-cancel-pay-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/invoices/01a2149f-0472-7235-b823-6a917c108d3f",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/15-late-cancel-pay-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/invoices/01a2149f-0472-7235-b823-6a917c108d3f",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/16-marking-paid-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "desktop",
+      "width": 590,
+      "height": 295
+    },
+    {
+      "file": "deputy/16-marking-paid-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "phone",
+      "width": 700,
+      "height": 604
+    },
+    {
+      "file": "deputy/16-marking-paid-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "desktop",
+      "width": 590,
+      "height": 479
+    },
+    {
+      "file": "deputy/16-marking-paid-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "phone",
+      "width": 700,
+      "height": 1342
+    },
+    {
+      "file": "deputy/17-reporting-non-payment-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "desktop",
+      "width": 590,
+      "height": 439
+    },
+    {
+      "file": "deputy/17-reporting-non-payment-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing",
+      "size": "phone",
+      "width": 700,
+      "height": 930
+    },
+    {
+      "file": "deputy/18-locks-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/18-locks-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/18-locks-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "desktop",
+      "width": 468,
+      "height": 360
+    },
+    {
+      "file": "deputy/18-locks-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0473-7e2d-972b-9e32a2242712",
+      "size": "phone",
+      "width": 700,
+      "height": 716
+    },
+    {
+      "file": "deputy/19-earnings-and-tax-summary-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/earnings",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/19-earnings-and-tax-summary-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/earnings",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/19-earnings-and-tax-summary-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/earnings",
+      "size": "desktop",
+      "width": 584,
+      "height": 514
+    },
+    {
+      "file": "deputy/19-earnings-and-tax-summary-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/billing/earnings",
+      "size": "phone",
+      "width": 700,
+      "height": 1140
+    },
+    {
+      "file": "deputy/20-ops-plans-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0474-73fe-accc-2f3e1d5ccd47",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/20-ops-plans-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0474-73fe-accc-2f3e1d5ccd47",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/20-ops-plans-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0474-73fe-accc-2f3e1d5ccd47",
+      "size": "desktop",
+      "width": 701,
+      "height": 260
+    },
+    {
+      "file": "deputy/20-ops-plans-2-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/01a2149f-0474-73fe-accc-2f3e1d5ccd47",
+      "size": "phone",
+      "width": 728,
+      "height": 524
+    },
+    {
+      "file": "deputy/21-alerts-and-notification-preferences-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/alerts",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "deputy/21-alerts-and-notification-preferences-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/alerts",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/21-alerts-and-notification-preferences-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 1218
+    },
+    {
+      "file": "deputy/22-theme-1-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "desktop",
+      "width": 584,
+      "height": 161
+    },
+    {
+      "file": "deputy/22-theme-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/profile",
+      "size": "phone",
+      "width": 700,
+      "height": 342
+    },
+    {
+      "file": "deputy/22-theme-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/home",
+      "size": "desktop",
+      "width": 1280,
+      "height": 65
+    },
+    {
+      "file": "vendor/01-signing-in-1-desktop.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/sign-in",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/01-signing-in-1-phone.webp",
+      "source": "staging",
+      "role": "signed-out",
+      "path": "/sign-in",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "desktop",
+      "width": 828,
+      "height": 693
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "phone",
+      "width": 700,
+      "height": 2054
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-3-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "desktop",
+      "width": 828,
+      "height": 235
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-3-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "phone",
+      "width": 700,
+      "height": 474
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-4-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "desktop",
+      "width": 828,
+      "height": 734
+    },
+    {
+      "file": "vendor/02-requesting-a-detail-4-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "phone",
+      "width": 700,
+      "height": 1552
+    },
+    {
+      "file": "vendor/03-site-contacts-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "desktop",
+      "width": 1192,
+      "height": 416
+    },
+    {
+      "file": "vendor/03-site-contacts-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "phone",
+      "width": 700,
+      "height": 1098
+    },
+    {
+      "file": "vendor/03-site-contacts-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "desktop",
+      "width": 828,
+      "height": 181
+    },
+    {
+      "file": "vendor/03-site-contacts-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/request",
+      "size": "phone",
+      "width": 700,
+      "height": 372
+    },
+    {
+      "file": "vendor/04-locations-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/04-locations-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/04-locations-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/04-locations-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/locations",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/05-your-details-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/05-your-details-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/05-your-details-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/05-your-details-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/06-editing-and-canceling-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "desktop",
+      "width": 468,
+      "height": 268
+    },
+    {
+      "file": "vendor/06-editing-and-canceling-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0473-7e2d-972b-9e1f4c077eba",
+      "size": "phone",
+      "width": 700,
+      "height": 510
+    },
+    {
+      "file": "vendor/06-editing-and-canceling-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0475-78db-a4ff-cb66a1b5f5e8",
+      "size": "desktop",
+      "width": 468,
+      "height": 597
+    },
+    {
+      "file": "vendor/06-editing-and-canceling-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/details/01a2149f-0475-78db-a4ff-cb66a1b5f5e8",
+      "size": "phone",
+      "width": 700,
+      "height": 1528
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-2-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "desktop",
+      "width": 1192,
+      "height": 477
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-2-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "phone",
+      "width": 700,
+      "height": 1438
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-3-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "desktop",
+      "width": 1192,
+      "height": 299
+    },
+    {
+      "file": "vendor/07-invoices-and-marking-paid-3-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/invoices",
+      "size": "phone",
+      "width": 700,
+      "height": 810
+    },
+    {
+      "file": "vendor/08-downloading-contracts-and-invoices-1-desktop.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/contracts",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "file": "vendor/08-downloading-contracts-and-invoices-1-phone.webp",
+      "source": "staging",
+      "role": "vendor",
+      "path": "/vendor/contracts",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    }
+  ]
+}
