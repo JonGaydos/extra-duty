@@ -7,7 +7,7 @@ import { addDeputyNoteAction } from "../../_personnel/actions";
 import { ActionStatus, useAction } from "../../_personnel/use-action";
 
 /** "Add a note for future deputies": opens an inline form; a coordinator reviews the note before others see it. */
-export function DeputyNoteForm({ jobId, hasLocation, max }: { jobId: string; hasLocation: boolean; max: number }) {
+export function DeputyNoteForm({ jobId, hasLocation, max }: Readonly<{ jobId: string; hasLocation: boolean; max: number }>) {
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
   const [scope, setScope] = useState<"vendor" | "location">(hasLocation ? "location" : "vendor");

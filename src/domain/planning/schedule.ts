@@ -18,7 +18,7 @@ export type WorkSchedule = Pick<typeof workSchedules.$inferSelect, "kind" | "wee
 export type ScheduleException = Pick<typeof scheduleExceptions.$inferSelect, "date" | "kind" | "shiftStart" | "shiftEnd">;
 export type PlannedJob = { startAt: Date; endAt: Date; flex?: { earliestStartAt: Date; latestEndAt: Date; allowShorter: boolean } | null };
 
-export const BUFFER_CHOICES = [0, 15, 30, 45, 60] as const;
+const BUFFER_CHOICES = [0, 15, 30, 45, 60] as const;
 const MINUTE = 60_000;
 const STEP = 15 * MINUTE;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -53,6 +53,30 @@ function shiftOn(y: number, m: number, d: number, start: string, end: string): I
   return { startAt, endAt };
 }
 
+/** Whether a pattern works the agency date `d` (UTC-day number `day`): its weekday, or its rotation day since the anchor. */
+function worksOn(s: WorkSchedule, day: number, d: Date, anchor: [number, number, number] | null): boolean {
+  if (s.kind === "weekly") return (s.weekdays ?? []).includes(d.getUTCDay());
+  if (!s.cycle || !anchor) return false;
+  const n = s.cycle.length;
+  const idx = (((day - utcDay(...anchor)) % n) + n) % n;
+  return s.cycle[idx] === "1";
+}
+
+type DateParts = { year: number; month: number; day: number };
+
+/** Each shift a pattern works on the agency dates from `first` to `last`, except days off. */
+function patternShifts(s: WorkSchedule, first: DateParts, last: DateParts, offDays: Set<string>, push: (i: Interval) => void): void {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const anchor = s.kind === "rotation" ? dateParts(s.anchorDate) : null;
+  // Walk agency dates by UTC-day arithmetic, so DST never shifts a rotation day.
+  for (let day = utcDay(first.year, first.month, first.day); day <= utcDay(last.year, last.month, last.day); day++) {
+    const d = new Date(day * 86_400_000);
+    const [y, m, dd] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
+    if (offDays.has(`${y}-${pad(m)}-${pad(dd)}`)) continue;
+    if (worksOn(s, day, d, anchor)) push(shiftOn(y, m, dd, s.shiftStart, s.shiftEnd));
+  }
+}
+
 /**
  * On-duty intervals overlapping [from, to), in agency time, each widened by the buffer on both sides.
  * Weekly schedules run on chosen weekdays; rotations on the days whose cycle character is '1'
@@ -63,7 +87,6 @@ export function dutyIntervals(schedules: WorkSchedule[], exceptions: ScheduleExc
   const out: Interval[] = [];
   const first = agencyDateParts(new Date(from.getTime() - 2 * 86_400_000));
   const last = agencyDateParts(new Date(to.getTime() + 86_400_000));
-  const pad = (n: number) => String(n).padStart(2, "0");
   const offDays = new Set(exceptions.filter((e) => e.kind === "off").map((e) => e.date));
   const pusher = (bufferMinutes: number) => (i: Interval) => {
     const startAt = new Date(i.startAt.getTime() - bufferMinutes * MINUTE);
@@ -71,23 +94,7 @@ export function dutyIntervals(schedules: WorkSchedule[], exceptions: ScheduleExc
     if (startAt.getTime() < to.getTime() && endAt.getTime() > from.getTime()) out.push({ startAt, endAt });
   };
   for (const s of schedules) {
-    if (!s.active) continue;
-    const push = pusher(s.bufferMinutes);
-    const anchor = s.kind === "rotation" ? dateParts(s.anchorDate) : null;
-    // Walk agency dates by UTC-day arithmetic, so DST never shifts a rotation day.
-    for (let day = utcDay(first.year, first.month, first.day); day <= utcDay(last.year, last.month, last.day); day++) {
-      const d = new Date(day * 86_400_000);
-      const [y, m, dd] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()];
-      if (offDays.has(`${y}-${pad(m)}-${pad(dd)}`)) continue;
-      let works = false;
-      if (s.kind === "weekly") works = (s.weekdays ?? []).includes(d.getUTCDay());
-      else if (s.cycle && anchor) {
-        const n = s.cycle.length;
-        const idx = (((day - utcDay(...anchor)) % n) + n) % n;
-        works = s.cycle[idx] === "1";
-      }
-      if (works) push(shiftOn(y, m, dd, s.shiftStart, s.shiftEnd));
-    }
+    if (s.active) patternShifts(s, first, last, offDays, pusher(s.bufferMinutes));
   }
   // Extra shifts stand on their own: they apply even with no active pattern (buffer from the person's schedule, else none).
   const push = pusher(schedules[0]?.bufferMinutes ?? 0);
@@ -128,8 +135,8 @@ type Busy = Interval & { title: string };
 
 /** Hard bounds on one calendar file, so a crafted feed cannot burn CPU or fill the database. */
 export const MAX_BUSY_ROWS = 5000;
-export const MAX_ITERATIONS = 100_000;
-export const PARSE_BUDGET_MS = 2000;
+const MAX_ITERATIONS = 100_000;
+const PARSE_BUDGET_MS = 2000;
 
 /** The file is valid but too big or too expensive to expand. */
 export class CalendarLimitError extends ValidationError {}
@@ -138,7 +145,7 @@ export const MAX_TITLE_LENGTH = 200;
 
 /** Titles are private; strip NULs (Postgres rejects them) and cap the length. */
 function cleanTitle(title: string | null): string {
-  return (title ?? "").replace(/\u0000/g, "").trim().slice(0, MAX_TITLE_LENGTH) || "Busy";
+  return (title ?? "").split(String.fromCodePoint(0)).join("").trim().slice(0, MAX_TITLE_LENGTH) || "Busy";
 }
 
 function propText(c: IcsComponent, name: string): string | null {
@@ -181,14 +188,8 @@ const tzidOf = (c: IcsComponent, prop: "dtstart" | "dtend"): string | null => {
   return typeof v === "string" ? v : null;
 };
 
-/**
- * Busy blocks from an ICS file inside [from, to): recurring events expanded, time zones honored, events marked
- * Free (TRANSP:TRANSPARENT) or cancelled skipped, and all-day events blocking the whole agency day. An event
- * that cannot be read (no start) is skipped. The whole file shares one iteration budget, a time budget and a
- * row cap; past them it throws CalendarLimitError. Titles are kept so the deputy can see what conflicts; they
- * stay private to the deputy.
- */
-export function parseIcsBusy(ics: string, from: Date, to: Date): Busy[] {
+/** The parsed calendar, or a ValidationError when it is not one. */
+function readCalendar(ics: string): IcsComponent {
   let root: IcsComponent;
   try {
     root = new ICAL.Component(ICAL.parse(ics));
@@ -196,18 +197,11 @@ export function parseIcsBusy(ics: string, from: Date, to: Date): Busy[] {
     throw new ValidationError("That file is not a valid calendar.");
   }
   if (root.name !== "vcalendar") throw new ValidationError("That file is not a valid calendar.");
-  ICAL.TimezoneService.reset();
-  for (const z of root.getAllSubcomponents("vtimezone")) ICAL.TimezoneService.register(z);
+  return root;
+}
 
-  const startedAt = performance.now();
-  let iterations = 0;
-  const spend = () => {
-    iterations++;
-    if (iterations > MAX_ITERATIONS || (iterations % 64 === 0 && performance.now() - startedAt > PARSE_BUDGET_MS)) {
-      throw new CalendarLimitError("That calendar is too large.");
-    }
-  };
-
+/** One-off events and recurring masters (with their exceptions related by UID). Unreadable events are skipped. */
+function sortEvents(root: IcsComponent, spend: () => void): { singles: IcsEvent[]; masters: Map<string, IcsEvent> } {
   const masters = new Map<string, IcsEvent>();
   const singles: IcsEvent[] = [];
   const exceptions: IcsEvent[] = [];
@@ -226,50 +220,88 @@ export function parseIcsBusy(ics: string, from: Date, to: Date): Busy[] {
     else singles.push(ev);
   }
   for (const ex of exceptions) masters.get(ex.uid)?.relateException(ex);
+  return { singles, masters };
+}
+
+/** When an entry ends: its own end, else (no end) the end of its all-day date or its start. An all-day entry never ends before its day does. */
+function busyEnd(c: IcsComponent, start: IcsTime, startAt: Date, startTz: string | null, end: IcsTime | null): Date {
+  const allDayEnd = () => agencyInstant(start.year, start.month, start.day + 1, 0, 0);
+  let endAt: Date;
+  if (end) endAt = instant(end, tzidOf(c, "dtend") ?? startTz);
+  else endAt = start.isDate ? allDayEnd() : startAt;
+  if (endAt.getTime() <= startAt.getTime() && start.isDate) endAt = allDayEnd();
+  return endAt;
+}
+
+/** Runs `fn`, skipping an entry that cannot be read; only the file's limits stop the parse. */
+function safely(fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    if (err instanceof CalendarLimitError) throw err;
+    // An event that cannot be read is skipped, never fatal.
+  }
+}
+
+/** Adds each occurrence of a recurring event before `to`. Occurrences before the window cost iterations but never rows. */
+function expandMaster(ev: IcsEvent, to: Date, spend: () => void, add: (c: IcsComponent, title: string | null, start: IcsTime, end: IcsTime | null) => void): void {
+  try {
+    const it = ev.iterator();
+    for (;;) {
+      spend();
+      const next = it.next();
+      if (!next) break;
+      if (instant(next, tzidOf(ev.component, "dtstart")).getTime() >= to.getTime()) break;
+      safely(() => {
+        const d = ev.getOccurrenceDetails(next);
+        add(d.item.component, d.item.summary, d.startDate, d.endDate);
+      });
+    }
+  } catch (err) {
+    if (err instanceof CalendarLimitError) throw err;
+  }
+}
+
+/**
+ * Busy blocks from an ICS file inside [from, to): recurring events expanded, time zones honored, events marked
+ * Free (TRANSP:TRANSPARENT) or cancelled skipped, and all-day events blocking the whole agency day. An event
+ * that cannot be read (no start) is skipped. The whole file shares one iteration budget, a time budget and a
+ * row cap; past them it throws CalendarLimitError. Titles are kept so the deputy can see what conflicts; they
+ * stay private to the deputy.
+ */
+export function parseIcsBusy(ics: string, from: Date, to: Date): Busy[] {
+  const root = readCalendar(ics);
+  ICAL.TimezoneService.reset();
+  for (const z of root.getAllSubcomponents("vtimezone")) ICAL.TimezoneService.register(z);
+
+  const startedAt = performance.now();
+  let iterations = 0;
+  const spend = () => {
+    iterations++;
+    if (iterations > MAX_ITERATIONS || (iterations % 64 === 0 && performance.now() - startedAt > PARSE_BUDGET_MS)) {
+      throw new CalendarLimitError("That calendar is too large.");
+    }
+  };
+
+  const { singles, masters } = sortEvents(root, spend);
 
   const out: Busy[] = [];
   const add = (c: IcsComponent, title: string | null, start: IcsTime, end: IcsTime | null) => {
     if (isFree(c)) return;
     const startTz = tzidOf(c, "dtstart");
     const startAt = instant(start, startTz);
-    let endAt = end ? instant(end, tzidOf(c, "dtend") ?? startTz) : start.isDate ? agencyInstant(start.year, start.month, start.day + 1, 0, 0) : startAt;
-    if (endAt.getTime() <= startAt.getTime() && start.isDate) endAt = agencyInstant(start.year, start.month, start.day + 1, 0, 0);
+    const endAt = busyEnd(c, start, startAt, startTz, end);
     if (endAt.getTime() <= startAt.getTime()) return;
     if (startAt.getTime() >= to.getTime() || endAt.getTime() <= from.getTime()) return;
     if (out.length >= MAX_BUSY_ROWS) throw new CalendarLimitError("That calendar is too large.");
     out.push({ startAt, endAt, title: cleanTitle(title) });
-  };
-  const safely = (fn: () => void) => {
-    try {
-      fn();
-    } catch (err) {
-      if (err instanceof CalendarLimitError) throw err;
-      // An event that cannot be read is skipped, never fatal.
-    }
   };
 
   for (const ev of singles) {
     spend();
     safely(() => add(ev.component, ev.summary, ev.startDate, ev.endDate));
   }
-  for (const ev of masters.values()) {
-    try {
-      const it = ev.iterator();
-      // Occurrences before the window cost iterations (the rule must be walked from its start) but never rows.
-      for (;;) {
-        spend();
-        const next = it.next();
-        if (!next) break;
-        if (instant(next, tzidOf(ev.component, "dtstart")).getTime() >= to.getTime()) break;
-        safely(() => {
-          const d = ev.getOccurrenceDetails(next);
-          add(d.item.component, d.item.summary, d.startDate, d.endDate);
-        });
-      }
-    } catch (err) {
-      if (err instanceof CalendarLimitError) throw err;
-    }
-  }
+  for (const ev of masters.values()) expandMaster(ev, to, spend, add);
   return out.sort((a, b) => a.startAt.getTime() - b.startAt.getTime() || a.endAt.getTime() - b.endAt.getTime());
 }
 
@@ -303,7 +335,7 @@ function validateSchedule(input: WorkScheduleInput): Pick<StoredSchedule, "kind"
     if (days.length === 0 || days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
       throw new ValidationError("Choose at least one weekday, from Sunday (0) to Saturday (6).");
     }
-    return { kind: "weekly", weekdays: days.sort((a, b) => a - b), cycle: null, anchorDate: input.anchorDate ?? "2026-01-01", shiftStart: input.shiftStart, shiftEnd: input.shiftEnd, bufferMinutes: input.bufferMinutes, active: input.active ?? true };
+    return { kind: "weekly", weekdays: days.toSorted((a, b) => a - b), cycle: null, anchorDate: input.anchorDate ?? "2026-01-01", shiftStart: input.shiftStart, shiftEnd: input.shiftEnd, bufferMinutes: input.bufferMinutes, active: input.active ?? true };
   }
   if (input.kind !== "rotation") throw new ValidationError("The schedule must be weekly or a rotation.");
   const cycle = input.cycle ?? "";
@@ -379,7 +411,7 @@ async function loadScheduleRows(tx: Tx, userId: string) {
 }
 
 /** Calendar busy blocks overlapping [from, to) for the person's feed. */
-export async function loadCalendarBusy(tx: Tx, userId: string, from: Date, to: Date): Promise<Busy[]> {
+async function loadCalendarBusy(tx: Tx, userId: string, from: Date, to: Date): Promise<Busy[]> {
   const rows = await tx
     .select({ startAt: calendarBusy.startAt, endAt: calendarBusy.endAt, title: calendarBusy.title })
     .from(calendarBusy)

@@ -20,6 +20,9 @@ import { handleInvoiceEmailJob } from "@/jobs/email-worker";
 import { smtpSender } from "@/lib/email/adapters";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
+
+// Fake email senders and transports are async to match the real ones; they answer at once.
 
 const W9_PDF = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from("w9 form body ".repeat(20))]);
 const GOOD_EMAIL = { provider: "smtp" as const, from: "Sheriff <no-reply@sheriff.example>", smtp: { host: "smtp.test" } };
@@ -121,9 +124,9 @@ describe("invoice email delivery", () => {
     let attempts = 0;
     // The real SMTP adapter over a transport that throws.
     const down = {
-      async sendMail() {
+      sendMail() {
         attempts++;
-        throw new Error("smtp connect refused: 10.0.0.5 secret-host");
+        return Promise.reject(new Error("smtp connect refused: 10.0.0.5 secret-host"));
       },
     };
     setEmailSender(smtpSender("a@b.test", { host: "x", port: 25, secure: false, user: "", password: "" }, down));
@@ -145,7 +148,7 @@ describe("invoice email delivery", () => {
     expect(await status(inv.id)).toBe("failed");
     const alerts = await db.select().from(notifications).where(eq(notifications.type, "invoice.email_failed"));
     const staff = await db.select({ id: users.id }).from(users).where(sql`${users.role} in ('coordinator', 'admin') and ${users.active}`);
-    expect(alerts.map((n) => n.userId).sort()).toEqual([person.userId, ...staff.map((s) => s.id)].sort());
+    expect(alerts.map((n) => n.userId).sort(byText)).toEqual([person.userId, ...staff.map((s) => s.id)].sort(byText));
     // Recipients get a plain summary; the detailed reason is only in the audit row.
     for (const n of alerts) expect(n.body).not.toContain("secret-host");
     const audit = await db.execute(sql`select after from audit_log where action = 'invoice.email_failed' and entity_id = ${inv.id}`);
@@ -155,7 +158,7 @@ describe("invoice email delivery", () => {
   test("a payee with no W-9 on file fails at once, without retrying, and alerts", async () => {
     const { db } = get();
     let attempts = 0;
-    setEmailSender({ async send() { attempts++; } });
+    setEmailSender({ send() { attempts++; return Promise.resolve(); } });
     const { inv } = await mkInvoice(true);
     await db.transaction((tx) => queueInvoiceEmail(tx, inv.id));
     await drain();
@@ -179,7 +182,7 @@ describe("invoice email delivery", () => {
     expect(err.message).toBe("Set the billing reply-to address in Settings before sending invoices.");
     expect((await jobRows(INVOICE_EMAIL_QUEUE)).filter((r) => r.state === "created")).toHaveLength(0);
     const staff = await staffIds();
-    expect((await unreadAlerts()).map((n) => n.userId).sort()).toEqual(staff.sort());
+    expect((await unreadAlerts()).map((n) => n.userId).sort(byText)).toEqual(staff.toSorted(byText));
     // A second failure does not stack another unread alert.
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toBeInstanceOf(ValidationError);
     expect(await unreadAlerts()).toHaveLength(staff.length);
@@ -193,7 +196,7 @@ describe("invoice email delivery", () => {
     const msgText = "Ask an admin to set the email provider API key in Settings before sending invoices.";
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toThrow(msgText);
     const alerts = await unreadAlerts();
-    expect(alerts.map((n) => n.userId).sort()).toEqual((await staffIds()).sort());
+    expect(alerts.map((n) => n.userId).sort(byText)).toEqual((await staffIds()).sort(byText));
     expect(alerts[0].body).toBe(msgText);
     await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "smtp", from: "" } }));
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toThrow(

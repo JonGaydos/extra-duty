@@ -4,11 +4,13 @@
 # Any arguments replace the capture command (for example a one-off script). E2E_REUSE_BUILD=1 skips the rebuild.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+tsx="$PWD/node_modules/.bin/tsx"
+[[ -x "$tsx" ]] || { echo "tsx is not installed; run npm install first." >&2; exit 1; }
 . scripts/e2e-env.sh
 export E2E_DEMO=staging
 url="http://localhost:${E2E_PORT}"
 
-node_modules/.bin/tsx tests/e2e/server.ts &
+"$tsx" tests/e2e/server.ts &
 server=$!
 stop() { kill -TERM "$server" 2>/dev/null || true; wait "$server" 2>/dev/null || true; }
 trap stop EXIT
@@ -20,6 +22,9 @@ for _ in $(seq 1 600); do
 done
 
 export CAPTURE_BASE_URL="$url"
-export CAPTURE_DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${E2E_DB_PORT}/test"
-export BETTER_AUTH_SECRET="e2e-only-better-auth-secret-0123456789abcdef"
-if [ "$#" -gt 0 ]; then "$@"; else npx tsx scripts/capture-screenshots.ts; fi
+# The database and signing secret are the e2e server's own, read from tests/e2e/env.ts so they are kept in one place.
+e2e_value() { "$tsx" -e "import { E2E } from './tests/e2e/env.ts'; process.stdout.write($1);"; }
+CAPTURE_DATABASE_URL="$(e2e_value E2E.databaseURL)"
+BETTER_AUTH_SECRET="$(e2e_value E2E.appEnv.BETTER_AUTH_SECRET)"
+export CAPTURE_DATABASE_URL BETTER_AUTH_SECRET
+if [[ "$#" -gt 0 ]]; then "$@"; else "$tsx" scripts/capture-screenshots.ts; fi

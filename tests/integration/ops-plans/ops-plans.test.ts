@@ -313,6 +313,21 @@ describe("ops plans", () => {
       expect(await inbox(ic.userId, "ops_plan.due_soon", link)).toHaveLength(1);
     });
 
+    test("the due alerts name the job and say when no Incident Commander is set", async () => {
+      const withIc = await mkOpsJob({ startAt: START });
+      const { ic } = await mkIc(withIc);
+      const without = await mkOpsJob({ startAt: START });
+      await opsPlanRemindersTick(new Date(DUE.getTime() - 23 * HOUR));
+      await opsPlanRemindersTick(new Date(DUE.getTime() + HOUR));
+      const text = async (type: string, job: typeof withIc) =>
+        (await inbox(fx.coord.userId, type, `/jobs/${job.job.id}`)).map((n) => [n.title, n.body]);
+      expect(await text("ops_plan.due_soon", withIc)).toEqual([[`Ops plan due soon: job #${withIc.job.number}`, `${withIc.job.title}: the ops plan is due soon.`]]);
+      expect(await text("ops_plan.overdue", withIc)).toEqual([[`Ops plan overdue: job #${withIc.job.number}`, `${withIc.job.title}: the ops plan is overdue.`]]);
+      expect(await inbox(ic.userId, "ops_plan.overdue", `/jobs/${withIc.job.id}`)).toHaveLength(1);
+      expect(await text("ops_plan.due_soon", without)).toEqual([[`Ops plan due soon: job #${without.job.number}`, `${without.job.title}: the ops plan is due soon and the detail has no Incident Commander.`]]);
+      expect(await text("ops_plan.overdue", without)).toEqual([[`Ops plan overdue: job #${without.job.number}`, `${without.job.title}: the ops plan is overdue and the detail has no Incident Commander.`]]);
+    });
+
     test("a submitted plan sends no due alerts", async () => {
       const m = await mkOpsJob({ startAt: START });
       const { ic } = await mkIc(m);
@@ -460,8 +475,8 @@ describe("ops plans", () => {
       const row = all.find((r) => r.jobTitle === "Library parade")!;
       expect(row).toMatchObject({ jobId: a.job.id, vendorName: "ops Vendor", year: 2020, icName: expect.stringContaining("ops"), filename: "Library parade.pdf" });
       expect(row.startAt).toEqual(a.job.startAt);
-      expect((await run((tx) => searchLibrary(fx.coord, tx, {}, 1))).length).toBe(all.length);
-      expect((await run((tx) => searchLibrary(admin, tx, {}, 1))).length).toBe(all.length);
+      expect(await run((tx) => searchLibrary(fx.coord, tx, {}, 1))).toHaveLength(all.length);
+      expect(await run((tx) => searchLibrary(admin, tx, {}, 1))).toHaveLength(all.length);
       expect((await run((tx) => searchLibrary(person, tx, { year: 2021 }, 1))).map((r) => r.jobTitle)).toEqual(["Library regatta"]);
       expect((await run((tx) => searchLibrary(person, tx, { text: "harbor" }, 1))).map((r) => r.jobTitle)).toEqual(["Library regatta"]);
       expect((await run((tx) => searchLibrary(person, tx, { text: "PARADE" }, 1))).map((r) => r.jobTitle)).toEqual(["Library parade"]);

@@ -29,7 +29,7 @@ export function releaseAt(detailStart: Date, s: ReleaseSettings): Date {
  */
 export const APPROVED_STATES = ["scheduled", "active"] as const satisfies readonly JobState[];
 
-export function isApproved(state: JobState): boolean {
+function isApproved(state: JobState): boolean {
   return (APPROVED_STATES as readonly JobState[]).includes(state);
 }
 
@@ -69,9 +69,10 @@ export async function recomputeReleaseDates(
       ),
     );
   let changed = 0;
+  // Sequential: writes in this transaction.
   for (const r of rows) {
     const next = releaseAt(r.startAt, settings);
-    if (r.releaseAt && r.releaseAt.getTime() === next.getTime()) continue;
+    if (r.releaseAt?.getTime() === next.getTime()) continue;
     await tx.update(jobs).set({ releaseAt: next }).where(eq(jobs.id, r.id));
     changed++;
   }

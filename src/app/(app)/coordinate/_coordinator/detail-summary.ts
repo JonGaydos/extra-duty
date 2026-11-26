@@ -5,7 +5,7 @@ import type { Cents, Minutes } from "@/domain/types";
 
 export type TimeOverride = { startTime?: string; endTime?: string };
 export type SummaryPosition = { positionTypeId: string; count: number; differentialCents: Cents };
-export type Pay = { totalCents: Cents; rateCents: Cents };
+type Pay = { totalCents: Cents; rateCents: Cents };
 
 const minutesOf = (t: string) => (/^\d{2}:\d{2}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : null);
 

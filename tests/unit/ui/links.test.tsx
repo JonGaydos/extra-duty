@@ -10,12 +10,12 @@ const tokens = readFileSync(join(process.cwd(), "src/ui/tokens.css"), "utf8");
 
 describe("link rules (Task 39c)", () => {
   test("every text link is underlined at rest, 1 px at 3 px offset in half-strength currentColor, full and 2 px on hover and focus", () => {
-    const base = /\n  a \{([^}]*)\}/.exec(tokens)?.[1] ?? "";
+    const base = /\n {2}a \{([^}]*)\}/.exec(tokens)?.[1] ?? "";
     expect(base).toMatch(/text-decoration-line: underline;/);
     expect(base).toMatch(/text-decoration-thickness: 1px;/);
     expect(base).toMatch(/text-underline-offset: 3px;/);
     expect(base).toMatch(/text-decoration-color: color-mix\(in srgb, currentColor 50%, transparent\);/);
-    const hover = /\n  a:hover,\n  a:focus-visible \{([^}]*)\}/.exec(tokens)?.[1] ?? "";
+    const hover = /\n {2}a:hover,\n {2}a:focus-visible \{([^}]*)\}/.exec(tokens)?.[1] ?? "";
     expect(hover).toMatch(/text-decoration-thickness: 2px;/);
     expect(hover).toMatch(/text-decoration-color: currentColor;/);
   });

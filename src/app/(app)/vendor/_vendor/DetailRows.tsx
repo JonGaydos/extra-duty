@@ -4,7 +4,7 @@ import { Card } from "@/ui/components/Card";
 import { Chip, type ChipTone } from "@/ui/components/Chip";
 import { dayLabel, timeRange } from "../../_personnel/format";
 
-export const STATUS_TONE: Record<VendorDetailStatus, ChipTone> = {
+const STATUS_TONE: Record<VendorDetailStatus, ChipTone> = {
   requested: "coordinator",
   scheduled: "info",
   filled: "success",
@@ -13,18 +13,18 @@ export const STATUS_TONE: Record<VendorDetailStatus, ChipTone> = {
   declined: "danger",
 };
 
-export function StatusChip({ status }: { status: VendorDetailStatus }) {
+export function StatusChip({ status }: Readonly<{ status: VendorDetailStatus }>) {
   return <Chip tone={STATUS_TONE[status]}>{VENDOR_STATUS_LABEL[status]}</Chip>;
 }
 
 /** "1 of 2 filled", while spots are still open. */
-export function staffingText(d: Pick<VendorDetailRow, "status" | "needed" | "filled">): string | null {
+function staffingText(d: Pick<VendorDetailRow, "status" | "needed" | "filled">): string | null {
   if (d.status !== "scheduled") return null;
   return `${Math.min(d.filled, d.needed)} of ${d.needed} filled`;
 }
 
 /** A card of detail rows; each row opens the detail and underlines its title. */
-export function DetailRows({ rows }: { rows: VendorDetailRow[] }) {
+export function DetailRows({ rows }: Readonly<{ rows: VendorDetailRow[] }>) {
   return (
     <Card pad={false} as="div">
       <ul className="m-0 list-none divide-y divide-divider p-0">

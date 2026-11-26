@@ -49,7 +49,7 @@ function access(op: Op): string {
   return `${scopes.join(" and ")} scope${scopes.length > 1 ? "s" : ""}`;
 }
 
-function Fields({ title, rows }: { title: string; rows: Array<{ name: string; type: string; required: boolean }> }) {
+function Fields({ title, rows }: Readonly<{ title: string; rows: Array<{ name: string; type: string; required: boolean }> }>) {
   if (rows.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
@@ -69,7 +69,7 @@ function Fields({ title, rows }: { title: string; rows: Array<{ name: string; ty
   );
 }
 
-function Endpoint({ method, path, op }: { method: string; path: string; op: Op }) {
+function Endpoint({ method, path, op }: Readonly<{ method: string; path: string; op: Op }>) {
   const query = op.parameters.filter((p) => p.in === "query").map((p) => ({ name: p.name, type: typeOf(p.schema), required: p.required }));
   const bodyType = op.requestBody ? Object.keys(op.requestBody.content)[0] : null;
   const body = bodyType ? op.requestBody!.content[bodyType].schema : null;

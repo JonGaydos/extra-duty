@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import { and, eq, like } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createElement } from "react";
@@ -20,9 +21,10 @@ import { useEmailQueue } from "../../setup/email-queue";
 import SignInPage from "@/app/(auth)/sign-in/page";
 import { TwoFactorForm } from "@/app/(auth)/two-factor/two-factor-form";
 import { GET as listJobsRoute } from "@/app/api/v1/jobs/route";
+import { byText } from "@/lib/sort";
 
 const BASE = process.env.BETTER_AUTH_URL!;
-const PASSWORD = "correct horse battery";
+const PASSWORD = randomBytes(18).toString("base64url");
 const DAY = 86_400_000;
 
 /** Minimal cookie jar: applies Set-Cookie headers and replays them as a Cookie header. */
@@ -430,7 +432,7 @@ describe("authentication", () => {
         await drain();
         expect(mailTo(email)).toHaveLength(sentBefore);
         expect(mailTo("stage3@example.test")).toHaveLength(0);
-        expect((await outboxTo(email)).map((m) => m.subject).sort()).toEqual(["Reset your password", "Your sign-in code"]);
+        expect((await outboxTo(email)).map((m) => m.subject).sort(byText)).toEqual(["Reset your password", "Your sign-in code"]);
         expect(await outboxTo("stage3@example.test")).toHaveLength(1);
       });
     });
@@ -550,7 +552,7 @@ describe("authentication", () => {
       // Self-service unlock: the UI requests the reset link for the same email.
       await auth.api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } });
       const resetMail = lastMailTo(email)!;
-      const m = resetMail.text.match(/\/api\/auth\/reset-password\/([A-Za-z0-9_-]+)\?callbackURL=/);
+      const m = /\/api\/auth\/reset-password\/([A-Za-z0-9_-]+)\?callbackURL=/.exec(resetMail.text);
       expect(m).not.toBeNull();
       await auth.api.resetPassword({ body: { newPassword: "a brand new password", token: m![1] } });
 
@@ -579,7 +581,7 @@ describe("authentication", () => {
 
   describe("sign-in page", () => {
     test("shows the inactivity notice beside Forgot password?, following the setting", async () => {
-      const paragraph = (html: string) => html.match(/<p[^>]*>(?:(?!<\/p>).)*Forgot password\?(?:(?!<\/p>).)*<\/p>/)?.[0] ?? "";
+      const paragraph = (html: string) => /<p[^>]*>(?:(?!<\/p>).)*Forgot password\?(?:(?!<\/p>).)*<\/p>/.exec(html)?.[0] ?? "";
       const html90 = renderToStaticMarkup(await SignInPage());
       expect(paragraph(html90)).toContain("Accounts not signed in within the past 3 months require a password reset.");
 

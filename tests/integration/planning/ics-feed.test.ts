@@ -77,6 +77,16 @@ describe("personal calendar feed", () => {
     expect(text).toContain("LOCATION:Main gate\\, 100 Example St\\, Pine Harbor\\, FL");
     expect(text).toContain("Backup");
     expect(text).toMatch(/DTSTART:\d{8}T\d{6}Z/);
+    // A signed-up event has no status in its summary; a backup names its place in line.
+    const lines = text.replace(/\r\n /g, "").split("\r\n");
+    expect(lines.filter((l) => l.startsWith("SUMMARY:") || l.startsWith("DESCRIPTION:") || l.startsWith("STATUS:"))).toEqual([
+      "SUMMARY:ics Vendor: Stadium\\; gate\\, east",
+      "DESCRIPTION:Job #1. Signed up.",
+      "STATUS:CONFIRMED",
+      "SUMMARY:ics Vendor: Stadium security (Backup #1)",
+      "DESCRIPTION:Job #2. Backup #1.",
+      "STATUS:TENTATIVE",
+    ]);
     // No other person's data.
     const otherUser = await get().db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, other.userId) });
     expect(text).not.toContain(otherUser!.name);

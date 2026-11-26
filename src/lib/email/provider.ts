@@ -100,7 +100,7 @@ export function createSettingsSender(load: () => Promise<EmailSettings>): EmailS
       if (keepInOutbox(msg)) return outboxSender.send(msg);
       const settings = await load();
       const key = JSON.stringify(settings);
-      if (!cached || cached.key !== key) cached = { key, sender: senderFromSettings(settings) };
+      if (cached?.key !== key) cached = { key, sender: senderFromSettings(settings) };
       await cached.sender.send(msg);
     },
   };

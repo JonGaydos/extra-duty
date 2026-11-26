@@ -16,6 +16,7 @@ import { getSettings } from "@/domain/settings/settings";
 import { minutesBetween } from "@/domain/time/agency-time";
 import { currentW9 } from "@/domain/w9/w9";
 import type { Cents, Minutes } from "@/domain/types";
+import { isEmail } from "@/lib/is-email";
 
 export type EditInvoiceInput = {
   startAt?: Date;
@@ -166,8 +167,6 @@ export async function sendApprovedInvoice(actor: Actor, tx: Tx, id: string, now:
   return after;
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /**
  * Emails an invoice already sent again, as it stands (a paid one as its paid version): to the vendor's billing
  * emails and, optionally, one extra address that is not saved anywhere. The revision, the sent date and the
@@ -179,7 +178,7 @@ export async function resendInvoice(actor: Actor, tx: Tx, id: string, input: { a
   if (!inv.sentAt || inv.status === "returned") throw violation("not_sent", "Only an invoice that has been sent can be resent.");
   const raw = typeof input.alsoTo === "string" ? input.alsoTo.trim() : "";
   const extra = raw ? normalizeEmail(raw) : null;
-  if (raw && (!extra || !EMAIL.test(extra))) throw new ValidationError(`"${raw}" is not a valid email address.`);
+  if (raw && (!extra || !isEmail(extra))) throw new ValidationError(`"${raw}" is not a valid email address.`);
   const [vendor] = await tx.select({ billingEmails: vendors.billingEmails }).from(vendors).where(eq(vendors.id, inv.vendorId));
   const billing = vendor?.billingEmails ?? [];
   const to = [...new Set([...billing, ...(extra ? [extra] : [])])];
@@ -203,6 +202,18 @@ export async function resendInvoice(actor: Actor, tx: Tx, id: string, input: { a
   return { to };
 }
 
+const isWholeNonNegative = (n: number | undefined) => n === undefined || (Number.isInteger(n) && n >= 0);
+
+/** Refuses a correction the invoice's status or kind does not allow, or a rate or minimum that is not a whole, non-negative number. */
+function assertEditable(inv: Invoice, input: EditInvoiceInput): void {
+  if (inv.status !== "pending_review" && inv.status !== "ready_to_send" && inv.status !== "approved_unsent" && inv.status !== "sent") {
+    throw violation("not_editable", "Only an invoice waiting for review, approved, ready to send or already sent can be edited.");
+  }
+  if (inv.kind === "late_cancel" && (input.startAt || input.endAt)) throw new ValidationError("A late cancellation has fixed times.");
+  if (!isWholeNonNegative(input.rateCents)) throw new ValidationError("Rate must be a non-negative integer number of cents.");
+  if (!isWholeNonNegative(input.minimumBillableMinutes)) throw new ValidationError("Minimum must be a non-negative integer number of minutes.");
+}
+
 /**
  * Corrects a pending or sent invoice and recomputes it. A pending invoice stays pending (approve it
  * separately). A sent invoice gets the next revision and is emailed again as Revised.
@@ -212,17 +223,8 @@ export async function editInvoice(actor: Actor, tx: Tx, id: string, input: EditI
   const reason = input.reason?.trim();
   if (!reason) throw new ValidationError("Give a reason for the change");
   const inv = await lockInvoice(tx, id);
-  if (inv.status !== "pending_review" && inv.status !== "ready_to_send" && inv.status !== "approved_unsent" && inv.status !== "sent") {
-    throw violation("not_editable", "Only an invoice waiting for review, approved, ready to send or already sent can be edited.");
-  }
+  assertEditable(inv, input);
   const lateCancel = inv.kind === "late_cancel";
-  if (lateCancel && (input.startAt || input.endAt)) throw new ValidationError("A late cancellation has fixed times.");
-  if (input.rateCents !== undefined && (!Number.isInteger(input.rateCents) || input.rateCents < 0)) {
-    throw new ValidationError("Rate must be a non-negative integer number of cents.");
-  }
-  if (input.minimumBillableMinutes !== undefined && (!Number.isInteger(input.minimumBillableMinutes) || input.minimumBillableMinutes < 0)) {
-    throw new ValidationError("Minimum must be a non-negative integer number of minutes.");
-  }
 
   const [row] = await tx
     .select({ a: assignments, job: jobs, vendor: vendors })
@@ -236,7 +238,9 @@ export async function editInvoice(actor: Actor, tx: Tx, id: string, input: EditI
 
   const startAt = input.startAt ?? a.actualStartAt ?? a.plannedStartAt ?? job.startAt;
   const endAt = input.endAt ?? a.actualEndAt ?? a.plannedEndAt ?? job.endAt;
-  if (!lateCancel && !(endAt.getTime() > startAt.getTime())) throw new ValidationError("End must be after start");
+  // A plain > is false for an invalid date too, so a bad time is refused as well.
+  const endsAfterStart = endAt.getTime() > startAt.getTime();
+  if (!lateCancel && !endsAfterStart) throw new ValidationError("End must be after start");
 
   const settings = await getSettings(tx);
   const overrideMinutes = input.minimumBillableMinutes ?? inv.minimumOverrideMinutes;
@@ -249,11 +253,12 @@ export async function editInvoice(actor: Actor, tx: Tx, id: string, input: EditI
   const minimumChanged = overrideMinutes !== inv.minimumOverrideMinutes;
   // Minutes are recomputed only when the times or this invoice's minimum change. Otherwise they stay as billed:
   // a rate-only correction never picks up rounding or a minimum that changed in the settings since billing.
-  const minutes = !timesChanged && !minimumChanged
-    ? inv.minutes
-    : lateCancel
+  let minutes = inv.minutes;
+  if (timesChanged || minimumChanged) {
+    minutes = lateCancel
       ? lateCancelMinutes({ startAt: job.startAt, endAt: job.endAt }, { ...rules, lateCancelPayBasis: settings.lateCancelPayBasis })
       : billableMinutes(minutesBetween(startAt, endAt), rules);
+  }
   const rateCents = input.rateCents ?? inv.rateCents;
   const resend = inv.status === "sent";
   if (rateCents === inv.rateCents && !minimumChanged && !timesChanged) throw new ValidationError("Nothing changed");
@@ -318,19 +323,18 @@ export async function sendBackInvoice(actor: Actor, tx: Tx, id: string, comment?
   // A late cancellation re-bills as one: it goes back to late_canceled, a worked detail to signed_up.
   const restored = inv.kind === "late_cancel" ? "late_canceled" : "signed_up";
 
-  let [updated] = await tx
+  await tx
     .update(invoices)
     // Clearing the batch keeps a later retry of that batch's email from picking this invoice up again.
     .set({ status: "returned", emailStatus: "not_queued", batchId: null, readyAt: null, paidSendQueued: false })
-    .where(eq(invoices.id, id))
-    .returning();
+    .where(eq(invoices.id, id));
   await tx
     .update(assignments)
     .set({ status: restored, actualStartAt: null, actualEndAt: null, billedAt: null })
     .where(eq(assignments.id, a.id));
   await applyResponsibility(tx, id, now, actor);
   await tx.insert(invoiceEvents).values({ invoiceId: id, actorUserId: actor.userId, event: "returned", note, at: now });
-  [updated] = await tx.select().from(invoices).where(eq(invoices.id, id));
+  const [updated] = await tx.select().from(invoices).where(eq(invoices.id, id));
   await recordAudit(tx, {
     actor,
     action: "invoice.send_back",

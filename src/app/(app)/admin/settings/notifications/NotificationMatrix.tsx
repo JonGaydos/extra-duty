@@ -15,7 +15,7 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z]+/g, "-");
 const shown = (Object.entries(CATALOG) as Array<[CatalogKey, CatalogEntry]>).filter(([, e]) => !e.unused);
 
 /** A 44 px switch; the visible track is the design system's 30 by 18 px one. */
-function ChannelSwitch({ on, label, disabled, onToggle, children }: { on: boolean; label: string; disabled: boolean; onToggle: () => void; children?: React.ReactNode }) {
+function ChannelSwitch({ on, label, disabled, onToggle, children }: Readonly<{ on: boolean; label: string; disabled: boolean; onToggle: () => void; children?: React.ReactNode }>) {
   return (
     <button
       type="button"
@@ -54,7 +54,7 @@ function NotSent() {
   );
 }
 
-function TypeText({ entry }: { entry: CatalogEntry }) {
+function TypeText({ entry }: Readonly<{ entry: CatalogEntry }>) {
   return (
     <span className="flex flex-col gap-0.5">
       <span className="font-semibold">{entry.label}</span>
@@ -70,7 +70,7 @@ function TypeText({ entry }: { entry: CatalogEntry }) {
  * Management > Notifications: Email and Push per notification type and recipient group. A table on desktop (type
  * rows, group columns); one card per type on a phone. Each switch saves on its own and goes back if the save fails.
  */
-export function NotificationMatrix({ initial }: { initial: AgencyChannels }) {
+export function NotificationMatrix({ initial }: Readonly<{ initial: AgencyChannels }>) {
   const [channels, setChannels] = useState<AgencyChannels>(initial);
   const [pending, setPending] = useState<string | null>(null);
   const { run } = useCoordAction();

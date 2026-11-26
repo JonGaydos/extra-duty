@@ -97,6 +97,17 @@ describe("files and W-9", () => {
     expect(ok.encrypted).toBe(false);
   });
 
+  test("a refused type names the types the caller accepts", async () => {
+    const { db } = get();
+    const input = { kind: "attachment" as const, ownerUserId: owner.userId, filename: "a.doc", contentType: "application/msword", body: Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) };
+    const store = (only?: "pdf" | Array<"pdf" | "docx" | "doc">) => db.transaction((tx) => storeFile(coordinator, tx, input, { only }, storage));
+    await expect(store()).rejects.toThrow(new ValidationError("Only PDF, DOCX, JPG and PNG files are allowed."));
+    await expect(store("pdf")).rejects.toThrow(new ValidationError("Only PDF files are allowed."));
+    await expect(store(["pdf"])).rejects.toThrow(new ValidationError("Only PDF files are allowed."));
+    await expect(store(["pdf", "docx"])).rejects.toThrow(new ValidationError("Only PDF, DOCX files are allowed."));
+    expect((await store(["pdf", "docx", "doc"])).contentType).toBe("application/msword");
+  });
+
   test("the generic reader refuses a W-9 file id", async () => {
     const { db } = get();
     const w9 = (await db.transaction((tx) => currentW9(tx, owner.userId)))!;
@@ -130,10 +141,11 @@ describe("files and W-9", () => {
     await putStarted;
     try {
       // A foreign key check takes FOR KEY SHARE on the user row; FOR UPDATE held across the put would block it.
-      await db.transaction(async (tx) => {
+      const inserted = await db.transaction(async (tx) => {
         await tx.execute(sql`set local lock_timeout = '2s'`);
-        await tx.insert(w9s).values({ userId: owner.userId, fileId: (await currentW9(tx, owner.userId))!.fileId, current: false });
+        return tx.insert(w9s).values({ userId: owner.userId, fileId: (await currentW9(tx, owner.userId))!.fileId, current: false }).returning({ userId: w9s.userId });
       });
+      expect(inserted).toEqual([{ userId: owner.userId }]);
     } finally {
       release();
       await upload;
@@ -151,7 +163,7 @@ describe("files and W-9", () => {
     const long = await db.transaction((tx) =>
       uploadFile(coordinator, tx, { kind: "attachment", filename: "a".repeat(400) + ".pdf", contentType: "application/pdf", body: PDF }, storage),
     );
-    expect(long.filename.length).toBe(255);
+    expect(long.filename).toHaveLength(255);
   });
 
   test("concurrent W-9 uploads leave exactly one current row", async () => {

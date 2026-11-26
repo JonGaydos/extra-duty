@@ -15,14 +15,14 @@ export function Disclosure({
   className,
   open: controlled,
   onOpenChange,
-}: {
+}: Readonly<{
   label: ReactNode;
   openLabel?: ReactNode;
   children: ReactNode;
   className?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-}) {
+}>) {
   const [own, setOwn] = useState(false);
   const open = controlled ?? own;
   const setOpen = (v: boolean) => {

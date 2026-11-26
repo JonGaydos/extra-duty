@@ -17,6 +17,7 @@ import { agencyInstant } from "@/domain/time/agency-time";
 import { uploadW9 } from "@/domain/w9/w9";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
 
 const GOOD_EMAIL = { provider: "smtp" as const, from: "Sheriff <no-reply@sheriff.example>", smtp: { host: "smtp.test" } };
 const BILL = agencyInstant(2035, 12, 31, 9, 0);
@@ -135,7 +136,7 @@ describe("resend an invoice", () => {
     await db.transaction((tx) => resendInvoice(admin, tx, inv.id, { alsoTo: "owner@vendor.example" }, LATER));
     await drain();
     const byTo = Object.fromEntries(mail.sent.map((m) => [m.to.join(","), m.attachments!.map((x) => x.filename)]));
-    expect(Object.keys(byTo).sort()).toEqual(["ap@vendor.example,books@vendor.example", "owner@vendor.example"]);
+    expect(Object.keys(byTo).sort(byText)).toEqual(["ap@vendor.example,books@vendor.example", "owner@vendor.example"]);
     expect(byTo["ap@vendor.example,books@vendor.example"].some((f) => f.startsWith("W-9"))).toBe(true);
     expect(byTo["owner@vendor.example"].some((f) => f.startsWith("W-9"))).toBe(false);
     const reads = (await db.select().from(auditLog).where(eq(auditLog.action, "w9.read"))).filter((r) => r.at >= since);

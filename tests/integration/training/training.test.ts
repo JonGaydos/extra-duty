@@ -33,6 +33,8 @@ import { getEmailSender, setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 import { renderInvoicePdf } from "@/lib/pdf/invoice-pdf";
 
+// Test jobs are async to match the job runner; they answer at once.
+
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const W9 = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from("w9 ".repeat(40))]);
@@ -339,7 +341,15 @@ describe("training mode", () => {
 
   test("the worker runs each tick against both databases, and the nightly reset against training only", async () => {
     const seen: string[] = [];
-    await runTick({ name: "probe", cron: "* * * * *", tz: "America/Chicago", run: async () => void seen.push(currentMode()) });
+    await runTick({
+      name: "probe",
+      cron: "* * * * *",
+      tz: "America/Chicago",
+      run: () => {
+        seen.push(currentMode());
+        return Promise.resolve();
+      },
+    });
     expect(seen).toEqual(["live", "training"]);
     const reset = SCHEDULE.find((t) => t.name === "training-reset")!;
     expect(reset).toMatchObject({ cron: "0 2 * * *", tz: "America/Chicago", modes: ["training"] });

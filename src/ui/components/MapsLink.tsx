@@ -4,22 +4,23 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import { MAPS_APPS, mapsUrls, type MapsApp, type Place } from "@/lib/maps";
 import { Icon } from "../icons";
 import { ACTION_LINK } from "./Button";
+import { withClass } from "./with-class";
 
 type Pref = { app: MapsApp | null; setApp: (app: MapsApp | null) => void };
 const MapsPreference = createContext<Pref | null>(null);
 
 /** Holds the signed-in person's maps app for every MapsLink on the page, so a remembered choice applies at once. */
-export function MapsPreferenceProvider({ initial, children }: { initial: MapsApp | null; children: React.ReactNode }) {
+export function MapsPreferenceProvider({ initial, children }: Readonly<{ initial: MapsApp | null; children: React.ReactNode }>) {
   const [app, setApp] = useState<MapsApp | null>(initial);
   return <MapsPreference.Provider value={{ app, setApp }}>{children}</MapsPreference.Provider>;
 }
 
-export function useMapsPreference(): Pref {
+function useMapsPreference(): Pref {
   return useContext(MapsPreference) ?? { app: null, setApp: () => undefined };
 }
 
 /** Saves the choice to the profile. Returns false when the save failed. */
-export async function saveMapsApp(app: MapsApp | null): Promise<boolean> {
+async function saveMapsApp(app: MapsApp | null): Promise<boolean> {
   try {
     const res = await fetch("/api/v1/me/maps-app", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ app: app ?? "ask" }), keepalive: true });
     return res.ok;
@@ -42,7 +43,7 @@ export function MapsLink({ label = "Open in Maps", className, ...place }: Place 
   const [alignEnd, setAlignEnd] = useState(false);
   const [note, setNote] = useState("");
   const box = useRef<HTMLSpanElement>(null);
-  const menu = useRef<HTMLSpanElement>(null);
+  const menu = useRef<HTMLFieldSetElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const menuId = useId();
   const urls = mapsUrls(place);
@@ -95,7 +96,7 @@ export function MapsLink({ label = "Open in Maps", className, ...place }: Place 
   return (
     <span
       ref={box}
-      className={`relative inline-flex flex-wrap items-center gap-x-4${className ? ` ${className}` : ""}`}
+      className={withClass("relative inline-flex flex-wrap items-center gap-x-4", className)}
       onKeyDown={(e) => {
         if (e.key === "Escape" && open) {
           setOpen(false);
@@ -116,12 +117,11 @@ export function MapsLink({ label = "Open in Maps", className, ...place }: Place 
         opener(label)
       )}
       {open ? (
-        <span
+        <fieldset
           ref={menu}
           id={menuId}
-          role="group"
           aria-label="Open with"
-          className={`absolute top-full z-30 mt-1 flex w-64 max-w-[calc(100vw-2.5rem)] flex-col rounded-md border border-line bg-surface p-1.5 shadow-float ${alignEnd ? "right-0" : "left-0"}`}
+          className={`min-w-0 absolute top-full z-30 mt-1 flex w-64 max-w-[calc(100vw-2.5rem)] flex-col rounded-md border border-line bg-surface p-1.5 shadow-float ${alignEnd ? "right-0" : "left-0"}`}
         >
           {MAPS_APPS.map((a) => (
             <a
@@ -138,14 +138,13 @@ export function MapsLink({ label = "Open in Maps", className, ...place }: Place 
             </a>
           ))}
           <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-2.5 border-t border-divider px-3 pt-1 text-sm text-ink">
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="size-4.5 accent-accent" />
-            Remember my choice
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="size-4.5 accent-accent" />Remember my choice
           </label>
-        </span>
+        </fieldset>
       ) : null}
-      <span role="status" className="basis-full text-xs font-medium text-danger-ink empty:hidden">
+      <output className="basis-full text-xs font-medium text-danger-ink empty:hidden">
         {note}
-      </span>
+      </output>
     </span>
   );
 }
@@ -178,9 +177,9 @@ export function MapsPreferenceControl() {
           {o.name}
         </label>
       ))}
-      <p role="status" className="m-0 text-xs font-medium text-danger-ink empty:hidden">
+      <output className="block m-0 text-xs font-medium text-danger-ink empty:hidden">
         {error ? "Your maps app could not be saved. Check your connection and try again." : ""}
-      </p>
+      </output>
     </fieldset>
   );
 }

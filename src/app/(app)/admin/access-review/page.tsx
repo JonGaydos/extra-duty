@@ -19,6 +19,8 @@ import { DecideItem, StartReview } from "./ReviewActions";
 
 export const metadata: Metadata = { title: "Access review" };
 
+const lastSignIn = (at: Date | null) => (at ? `Last signed in ${dateLabel(at)}` : "Never signed in");
+
 /** The yearly check that every account should still exist: decide each one, then keep the report. */
 export default async function AccessReviewPage() {
   const actor = await managementActor();
@@ -53,7 +55,7 @@ export default async function AccessReviewPage() {
                   key={p.itemId}
                   title={p.name}
                   href={p.role === "vendor" ? undefined : `/admin/users/${p.userId}`}
-                  meta={`${p.email}. ${ROLE_LABEL[p.role]}. ${p.lastSignInAt ? `Last signed in ${dateLabel(p.lastSignInAt)}` : "Never signed in"}`}
+                  meta={`${p.email}. ${ROLE_LABEL[p.role]}. ${lastSignIn(p.lastSignInAt)}`}
                   actions={<DecideItem itemId={p.itemId} name={p.name} canDeactivate={p.role !== "admin" || actor.role === "admin"} today={agencyDayKey(now)} />}
                 />
               ))}

@@ -10,7 +10,7 @@ import { getJob, JOBS_PAGE_SIZE, listJobs } from "@/domain/jobs/jobs";
 import { eligibilityFor, watchJob } from "@/domain/assignments/signup";
 import { NotFoundError } from "@/domain/errors";
 import { eq } from "drizzle-orm";
-import { jobs, vendorLocations } from "@/db/schema";
+import { assignments, jobs, vendorLocations } from "@/db/schema";
 
 const SIGNUP_AT = new Date("2035-01-01T12:00:00Z");
 
@@ -45,6 +45,41 @@ describe("personnel views", () => {
     const later = new Date(canceled.job.startAt.getTime() + 32 * 24 * HOUR);
     const afterwards = await f.run((tx) => myDetails(me, tx, later));
     expect(afterwards.find((d) => d.job.id === canceled.job.id)).toBeUndefined();
+  });
+
+  test("a canceled or removed sign-up reads its own reason, or says who ended it", async () => {
+    const who = await f.person();
+    const put = async (status: "canceled" | "removed", removalReason: string | null) => {
+      const { job, positionId } = await f.mkJob();
+      await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: who.userId, status, removalReason });
+      return job.id;
+    };
+    const mine = await put("canceled", null);
+    const removed = await put("removed", null);
+    const withReason = await put("removed", "Out of uniform");
+    const list = await f.run((tx) => myDetails(who, tx, SIGNUP_AT));
+    const reason = (id: string) => list.find((d) => d.job.id === id)?.reason;
+    expect([reason(mine), reason(removed), reason(withReason)]).toEqual(["You canceled this sign-up", "Removed by a coordinator", "Out of uniform"]);
+  });
+
+  test("a card is canceled, started, not released, open or full", async () => {
+    const card = async (job: { id: string }, now = SIGNUP_AT) => {
+      const [row] = await get().db.select().from(jobs).where(eq(jobs.id, job.id));
+      return (await f.run((tx) => loadJobCards(me, tx, [row], now)))[0].availability;
+    };
+    const open = await f.mkJob();
+    const full = await f.mkJob();
+    await get().db.insert(assignments).values({ jobId: full.job.id, jobPositionId: full.positionId, userId: (await f.person()).userId, status: "signed_up" });
+    const held = await f.mkJob();
+    await get().db.update(jobs).set({ held: true }).where(eq(jobs.id, held.job.id));
+    const declined = await f.mkJob();
+    await get().db.update(jobs).set({ state: "declined" }).where(eq(jobs.id, declined.job.id));
+    expect(await card(open.job)).toBe("open");
+    expect(await card(full.job)).toBe("full");
+    expect(await card(held.job)).toBe("not_released");
+    expect(await card(canceled.job)).toBe("canceled");
+    expect(await card(declined.job)).toBe("canceled");
+    expect(await card(open.job, open.job.startAt)).toBe("started");
   });
 
   test("my details never include another person's assignments", async () => {
@@ -113,8 +148,8 @@ describe("personnel views", () => {
     for (let i = 0; i < JOBS_PAGE_SIZE + 5; i++) await f.mkJob();
     const all = await f.run((tx) => listAllJobs(me, tx, WIDE));
     expect(all.truncated).toBe(false);
-    expect(all.jobs.length).toBe(before + JOBS_PAGE_SIZE + 5);
+    expect(all.jobs).toHaveLength(before + JOBS_PAGE_SIZE + 5);
     expect(new Set(all.jobs.map((j) => j.id)).size).toBe(all.jobs.length);
-    expect((await f.run((tx) => listJobs(me, tx, WIDE, 1))).length).toBe(JOBS_PAGE_SIZE);
+    expect(await f.run((tx) => listJobs(me, tx, WIDE, 1))).toHaveLength(JOBS_PAGE_SIZE);
   });
 });

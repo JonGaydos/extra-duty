@@ -37,7 +37,7 @@ import { clearsConflicts, useConflictGuard } from "../../_coordinator/conflict-g
 
 const check = "size-4.5 accent-accent";
 
-export function RequestDecision({ jobId, dates }: { jobId: string; dates: number }) {
+export function RequestDecision({ jobId, dates }: Readonly<{ jobId: string; dates: number }>) {
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();
@@ -79,7 +79,7 @@ export function RequestDecision({ jobId, dates }: { jobId: string; dates: number
 }
 
 /** Approve or decline a vendor's change. A time change that double-books or overloads a deputy lists the conflicts and needs a resolve or an override. */
-export function ChangeDecision({ requestId, jobId }: { requestId: string; jobId: string }) {
+export function ChangeDecision({ requestId, jobId }: Readonly<{ requestId: string; jobId: string }>) {
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy, error } = useCoordAction();
@@ -130,7 +130,7 @@ export function ChangeDecision({ requestId, jobId }: { requestId: string; jobId:
 }
 
 /** The editor, behind "Edit detail". On a series, Apply to chooses this detail or this and the later ones. */
-export function EditDetail({ jobId, initial, date, options, seriesLater, started, approved = false }: { jobId: string; initial: DetailWire; date: string; options: DetailFormOptions; seriesLater: number; started: boolean; approved?: boolean }) {
+export function EditDetail({ jobId, initial, date, options, seriesLater, started, approved = false }: Readonly<{ jobId: string; initial: DetailWire; date: string; options: DetailFormOptions; seriesLater: number; started: boolean; approved?: boolean }>) {
   const [open, setOpen] = useState(false);
   const [d, setD] = useState(initial);
   const [day, setDay] = useState(date);
@@ -172,8 +172,7 @@ export function EditDetail({ jobId, initial, date, options, seriesLater, started
               <input type="radio" name="scope" checked={scope === "one"} onChange={() => {
                 setScope("one");
                 guard.touch();
-              }} className={check} />
-              This detail only
+              }} className={check} />This detail only
             </label>
             <label className="flex min-h-11 items-center gap-2">
               <input type="radio" name="scope" checked={scope === "series"} onChange={() => {
@@ -249,8 +248,7 @@ export function EditDetail({ jobId, initial, date, options, seriesLater, started
           onChange={(c) => setD((x) => ({ ...x, ...c }))}
         />
         <label className="flex min-h-11 items-center gap-2">
-          <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className={check} />
-          Ops plan required
+          <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className={check} />Ops plan required
         </label>
         <ConflictOverride {...guard.props} idPrefix="edit" />
         <div className="flex flex-wrap gap-2">
@@ -266,7 +264,7 @@ export function EditDetail({ jobId, initial, date, options, seriesLater, started
   );
 }
 
-export function SafetyEditor({ jobId, notes, addresses }: { jobId: string; notes: string; addresses: SafetyAddressWire[] }) {
+export function SafetyEditor({ jobId, notes, addresses }: Readonly<{ jobId: string; notes: string; addresses: SafetyAddressWire[] }>) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(notes);
   const [list, setList] = useState(() => safetyRows(addresses));
@@ -306,7 +304,7 @@ export function SafetyEditor({ jobId, notes, addresses }: { jobId: string; notes
 type Person = { id: string; name: string };
 
 /** Puts someone in a position. Failing rules need an override reason; a vendor restriction never does. */
-export function AssignForm({ positions, people }: { positions: Array<{ id: string; name: string; open: number }>; people: Person[] }) {
+export function AssignForm({ positions, people }: Readonly<{ positions: Array<{ id: string; name: string; open: number }>; people: Person[] }>) {
   const [open, setOpen] = useState(false);
   const [positionId, setPositionId] = useState(positions.find((p) => p.open > 0)?.id ?? positions[0]?.id ?? "");
   const [userId, setUserId] = useState("");
@@ -360,8 +358,7 @@ export function AssignForm({ positions, people }: { positions: Array<{ id: strin
             </ul>
           </Notice>
           <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className={check} />
-            Assign anyway: I confirm overriding these rules
+            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className={check} />Assign anyway: I confirm overriding these rules
           </label>
           {confirmed ? (
             <FormField label="Override reason" hint="Required. Kept in the audit log with the rules it overrides. A vendor restriction cannot be overridden.">
@@ -371,8 +368,7 @@ export function AssignForm({ positions, people }: { positions: Array<{ id: strin
         </>
       ) : null}
       <label className="flex min-h-11 items-center gap-2">
-        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className={check} />
-        Tell the person
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className={check} />Tell the person
       </label>
       <div className="flex gap-2">
         <Button type="submit" size="sm" busy={busy}>
@@ -387,7 +383,7 @@ export function AssignForm({ positions, people }: { positions: Array<{ id: strin
 }
 
 /** Remove, no-show and Incident Commander for one roster row. */
-export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc }: { assignmentId: string; jobId: string; userId: string; name: string; status: string; started: boolean; canNameIc: boolean }) {
+export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc }: Readonly<{ assignmentId: string; jobId: string; userId: string; name: string; status: string; started: boolean; canNameIc: boolean }>) {
   const [mode, setMode] = useState<"remove" | "noshow" | null>(null);
   const [text, setText] = useState("");
   const { run, busy } = useCoordAction();
@@ -434,11 +430,16 @@ export function RosterRowActions({ assignmentId, jobId, userId, name, status, st
   );
 }
 
+function copiesText(n: number): string {
+  if (n === 0) return "Choose the dates to copy to.";
+  return `${n} ${n === 1 ? "copy" : "copies"} at the same times.`;
+}
+
 /**
  * Copy to other dates as one new series. A copy carries the detail and its attachments (contract included), never
  * the people: each copy starts with an empty roster under the normal release rules.
  */
-export function CopyDetail({ jobId, today, weekStartsOn }: { jobId: string; today: string; weekStartsOn: number }) {
+export function CopyDetail({ jobId, today, weekStartsOn }: Readonly<{ jobId: string; today: string; weekStartsOn: number }>) {
   const router = useRouter();
   const [dates, setDates] = useState<string[]>([]);
   const { run, busy } = useCoordAction();
@@ -452,7 +453,7 @@ export function CopyDetail({ jobId, today, weekStartsOn }: { jobId: string; toda
     >
       <DatesStep today={today} weekStartsOn={weekStartsOn} onDates={setDates} modes={["pick", "range"]} initial="pick" minDate={today} />
       <p className="m-0 text-sm text-muted" aria-live="polite">
-        {dates.length === 0 ? "Choose the dates to copy to." : `${dates.length} ${dates.length === 1 ? "copy" : "copies"} at the same times.`}
+        {copiesText(dates.length)}
       </p>
       <p className="m-0 max-w-[70ch] text-sm text-muted">Each copy brings the detail and its attachments, contract included. Nobody signed up here is copied; each copy opens with an empty roster.</p>
       <div className="flex flex-wrap gap-2">
@@ -467,8 +468,15 @@ export function CopyDetail({ jobId, today, weekStartsOn }: { jobId: string; toda
   );
 }
 
+/** The repeat pattern for the chosen kind: weekly on the detail's weekday, monthly on its day of the month. */
+function repeatRecurrence(kind: "daily" | "weekly" | "monthly", every: number, end: { count: number }, weekday: number, dayOfMonth: number) {
+  if (kind === "daily") return { kind, every, end };
+  if (kind === "weekly") return { kind, every, weekdays: [weekday], end };
+  return { kind, every, dayOfMonth, end };
+}
+
 /** Adds later dates to this detail's series on a pattern. */
-export function RepeatDetail({ jobId, weekday, dayOfMonth }: { jobId: string; weekday: number; dayOfMonth: number }) {
+export function RepeatDetail({ jobId, weekday, dayOfMonth }: Readonly<{ jobId: string; weekday: number; dayOfMonth: number }>) {
   const [kind, setKind] = useState<"daily" | "weekly" | "monthly">("weekly");
   const [every, setEvery] = useState("1");
   const [count, setCount] = useState("4");
@@ -484,7 +492,7 @@ export function RepeatDetail({ jobId, weekday, dayOfMonth }: { jobId: string; we
         run(() =>
           repeatDetailAction({
             jobId,
-            recurrence: kind === "daily" ? { kind, every: ev, end } : kind === "weekly" ? { kind, every: ev, weekdays: [weekday], end } : { kind, every: ev, dayOfMonth, end },
+            recurrence: repeatRecurrence(kind, ev, end, weekday, dayOfMonth),
           }),
         );
       }}
@@ -511,13 +519,35 @@ export function RepeatDetail({ jobId, weekday, dayOfMonth }: { jobId: string; we
   );
 }
 
+/** Why the detail is canceled, when it is not the agency's own choice. */
+function cancelCause(locked: boolean, forVendor: boolean): "vendor_hold" | "vendor" | undefined {
+  if (locked) return "vendor_hold";
+  return forVendor ? "vendor" : undefined;
+}
+
 /** Cancel, with a required reason. A locked detail cancels as a hold cancellation; otherwise it may be canceled for the vendor. */
-export function CancelDetail({ jobId, locked, latePayDefault }: { jobId: string; locked: boolean; latePayDefault: boolean }) {
+export function CancelDetail({ jobId, locked, latePayDefault }: Readonly<{ jobId: string; locked: boolean; latePayDefault: boolean }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(locked ? "Vendor on payment hold" : "");
   const [forVendor, setForVendor] = useState(false);
   const [applyPay, setApplyPay] = useState(false);
   const { run, busy } = useCoordAction();
+  // Late cancellation pay: fixed by a hold inside the window, chosen on a hold outside it, or "the vendor canceled".
+  // A render function, so the choice keeps its place in the form.
+  const payChoice = () => {
+    if (locked && latePayDefault) return <Notice tone="warning">The hold came inside the late cancellation window, so the people signed up are paid the minimum.</Notice>;
+    if (locked)
+      return (
+        <label className="flex min-h-11 items-center gap-2">
+          <input type="checkbox" checked={applyPay} onChange={(e) => setApplyPay(e.target.checked)} className={check} />Pay the people signed up the late cancellation minimum
+        </label>
+      );
+    return (
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" checked={forVendor} onChange={(e) => setForVendor(e.target.checked)} className={check} />The vendor canceled (late cancellation pay applies inside the window)
+      </label>
+    );
+  };
   if (!open)
     return (
       <Button variant="danger" onClick={() => setOpen(true)} className="w-fit">
@@ -529,27 +559,13 @@ export function CancelDetail({ jobId, locked, latePayDefault }: { jobId: string;
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => cancelDetailAction({ jobId, reason, cause: locked ? "vendor_hold" : forVendor ? "vendor" : undefined, applyLateCancelPay: locked ? latePayDefault || applyPay : undefined }));
+        run(() => cancelDetailAction({ jobId, reason, cause: cancelCause(locked, forVendor), applyLateCancelPay: locked ? latePayDefault || applyPay : undefined }));
       }}
     >
       <FormField label="Reason" hint="Everyone on the detail is told.">
         <Input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={500} />
       </FormField>
-      {locked ? (
-        latePayDefault ? (
-          <Notice tone="warning">The hold came inside the late cancellation window, so the people signed up are paid the minimum.</Notice>
-        ) : (
-          <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={applyPay} onChange={(e) => setApplyPay(e.target.checked)} className={check} />
-            Pay the people signed up the late cancellation minimum
-          </label>
-        )
-      ) : (
-        <label className="flex min-h-11 items-center gap-2">
-          <input type="checkbox" checked={forVendor} onChange={(e) => setForVendor(e.target.checked)} className={check} />
-          The vendor canceled (late cancellation pay applies inside the window)
-        </label>
-      )}
+      {payChoice()}
       <div className="flex gap-2">
         <Button type="submit" variant="danger" busy={busy}>
           Cancel detail
@@ -566,7 +582,7 @@ export function CancelDetail({ jobId, locked, latePayDefault }: { jobId: string;
  * One-button Hold and Release for a detail or, on a series, this and its later details. Release now appears while
  * the normal release time is still ahead. `status` is the current release state in words.
  */
-export function HoldRelease({ jobId, held, opensLater, seriesLater, status }: { jobId: string; held: boolean; opensLater: boolean; seriesLater: number; status: string }) {
+export function HoldRelease({ jobId, held, opensLater, seriesLater, status }: Readonly<{ jobId: string; held: boolean; opensLater: boolean; seriesLater: number; status: string }>) {
   const [scope, setScope] = useState<"one" | "series">("one");
   const { run, busy } = useCoordAction();
   return (
@@ -578,8 +594,7 @@ export function HoldRelease({ jobId, held, opensLater, seriesLater, status }: { 
         <fieldset className="m-0 flex flex-col gap-0.5 border-0 p-0">
           <legend className="mb-1 text-sm font-medium text-muted">Hold or release</legend>
           <label className="flex min-h-11 items-center gap-2">
-            <input type="radio" name="hold-scope" checked={scope === "one"} onChange={() => setScope("one")} className={check} />
-            This detail only
+            <input type="radio" name="hold-scope" checked={scope === "one"} onChange={() => setScope("one")} className={check} />This detail only
           </label>
           <label className="flex min-h-11 items-center gap-2">
             <input type="radio" name="hold-scope" checked={scope === "series"} onChange={() => setScope("series")} className={check} />
@@ -607,7 +622,7 @@ export function HoldRelease({ jobId, held, opensLater, seriesLater, status }: { 
   );
 }
 
-export function WaiveLateCancel({ jobId }: { jobId: string }) {
+export function WaiveLateCancel({ jobId }: Readonly<{ jobId: string }>) {
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();
   return (
@@ -639,7 +654,7 @@ type Preview = { notify: Named[]; unbilled: Named[] };
  * Brings a canceled detail back before it ends. The confirm step names who is told and whose late-cancel pay is
  * canceled, then takes a required reason that only staff see.
  */
-export function ReactivateDetail({ jobId, preview }: { jobId: string; preview: Preview }) {
+export function ReactivateDetail({ jobId, preview }: Readonly<{ jobId: string; preview: Preview }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();
@@ -679,14 +694,19 @@ export function ReactivateDetail({ jobId, preview }: { jobId: string; preview: P
   );
 }
 
+function notifyText(notify: Named[]): string {
+  if (!notify.length) return "The vendor. Nobody was on it when it was canceled.";
+  return `${names(notify)}, who ${notify.length === 1 ? "was" : "were"} on it when it was canceled, and the vendor.`;
+}
+
 /** The confirm step's lists: who is told, and whose late-cancel pay reactivating cancels. */
-export function ReactivatePeople({ notify, unbilled }: Preview) {
+export function ReactivatePeople({ notify, unbilled }: Readonly<Preview>) {
   return (
     <>
       <div className="flex flex-col gap-1">
         <h4 className="m-0 text-sm font-semibold">Who is told</h4>
         <p className="m-0 text-sm" data-testid="reactivate-notify">
-          {notify.length ? `${names(notify)}, who ${notify.length === 1 ? "was" : "were"} on it when it was canceled, and the vendor.` : "The vendor. Nobody was on it when it was canceled."}
+          {notifyText(notify)}
         </p>
       </div>
       {unbilled.length ? (
@@ -701,7 +721,7 @@ export function ReactivatePeople({ notify, unbilled }: Preview) {
   );
 }
 
-export function OpsPlanReview({ opsPlanId, versionId }: { opsPlanId: string; versionId: string }) {
+export function OpsPlanReview({ opsPlanId, versionId }: Readonly<{ opsPlanId: string; versionId: string }>) {
   const [comments, setComments] = useState("");
   const { run, busy } = useCoordAction();
   return (
@@ -737,7 +757,7 @@ async function attachContract(jobId: string, label: string, source: { file: File
  * Attach a contract to this one detail: a file (up to the shared upload limit) or an https link, with a label.
  * Open when the detail has no contract; folded behind a button when one covers it, to attach a replacement.
  */
-export function AttachContract({ jobId, missing, maxBytes }: { jobId: string; missing: boolean; maxBytes: number }) {
+export function AttachContract({ jobId, missing, maxBytes }: Readonly<{ jobId: string; missing: boolean; maxBytes: number }>) {
   const [open, setOpen] = useState(missing);
   const [source, setSource] = useState<"file" | "link">("file");
   const [label, setLabel] = useState("");

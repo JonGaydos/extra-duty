@@ -45,12 +45,12 @@ import type { Cents, Minutes } from "../types";
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 /** A canceled or removed assignment stays on the person's own lists this long after the job date. */
-export const CANCELED_VISIBLE_DAYS = 30;
+const CANCELED_VISIBLE_DAYS = 30;
 
 /** `rateCents` is the position's own hourly rate: the detail's base rate plus its differential. */
-export type CardPosition = { id: string; name: string; count: number; filled: number; backups: number; rateCents: Cents };
+type CardPosition = { id: string; name: string; count: number; filled: number; backups: number; rateCents: Cents };
 
-export type Availability = "open" | "full" | "not_released" | "started" | "canceled";
+type Availability = "open" | "full" | "not_released" | "started" | "canceled";
 
 /** A job as the personnel lists, map and calendar show it. */
 export type JobCard = {
@@ -91,6 +91,14 @@ const LIVE: AssignmentStatus[] = ["pending_short", "signed_up", "backup", "bille
 
 function released(job: Pick<Job, "state" | "held" | "releaseAt">, now: Date): boolean {
   return isReleased(job, now);
+}
+
+/** Whether a card can take a sign-up now, and if not, why. */
+function cardAvailability(job: Job, now: Date, isReleased: boolean, openSpots: number): Availability {
+  if (job.state === "canceled" || job.state === "declined") return "canceled";
+  if (now.getTime() >= job.startAt.getTime()) return "started";
+  if (!isReleased) return "not_released";
+  return openSpots > 0 ? "open" : "full";
 }
 
 /**
@@ -148,16 +156,7 @@ export async function loadJobCards(actor: Actor, tx: Tx, rows: Job[], now: Date 
     const openSpots = positions.reduce((n, p) => n + Math.max(0, p.count - p.filled), 0);
     const mineRow = people.find((a) => a.jobId === job.id && a.userId === actor.userId && LIVE.includes(a.status));
     const isReleased = released(job, now);
-    const availability: Availability =
-      job.state === "canceled" || job.state === "declined"
-        ? "canceled"
-        : now.getTime() >= job.startAt.getTime()
-          ? "started"
-          : !isReleased
-            ? "not_released"
-            : openSpots > 0
-              ? "open"
-              : "full";
+    const availability = cardAvailability(job, now, isReleased, openSpots);
     const span = { startAt: job.startAt, endAt: job.endAt };
     // A person on the detail sees their own position's pay; everyone else sees the base and the highest position.
     const minePosition = mineRow ? positions.find((p) => p.id === mineRow.positionId) : undefined;
@@ -228,9 +227,17 @@ const STATUS_LABEL: Record<AssignmentStatus, string> = {
 };
 
 /** The last instant a canceled or removed assignment stays listed: the end of the job's agency day plus 30 days. */
-export function canceledVisibleUntil(jobStartAt: Date): Date {
+function canceledVisibleUntil(jobStartAt: Date): Date {
   const p = agencyDateParts(jobStartAt);
   return agencyInstant(p.year, p.month, p.day + 1 + CANCELED_VISIBLE_DAYS, 0, 0);
+}
+
+/** Why a canceled or removed sign-up ended, as its owner reads it; null while it is live. */
+function goneReason(a: typeof assignments.$inferSelect, job: Job, backOn: boolean): string | null {
+  if (a.status !== "canceled" && a.status !== "removed") return null;
+  if (backOn) return BACK_ON_TEXT;
+  if (job.state === "canceled") return job.cancelReason ?? a.removalReason ?? "Detail canceled";
+  return a.removalReason ?? (a.status === "canceled" ? "You canceled this sign-up" : "Removed by a coordinator");
 }
 
 /**
@@ -268,14 +275,7 @@ export async function myDetails(actor: Actor, tx: Tx, now: Date = new Date(), ra
     if (neutral.has(a.id)) {
       return { assignmentId: a.id, status: "canceled" as const, label: STATUS_LABEL.canceled, reason: SUSPENSION_REMOVAL_TEXT, plannedStartAt: a.plannedStartAt ?? job.startAt, plannedEndAt: a.plannedEndAt ?? job.endAt, job: cards.get(job.id)! };
     }
-    const gone = a.status === "canceled" || a.status === "removed";
-    const reason = !gone
-      ? null
-      : backOn.has(a.id)
-        ? BACK_ON_TEXT
-        : job.state === "canceled"
-        ? (job.cancelReason ?? a.removalReason ?? "Detail canceled")
-        : (a.removalReason ?? (a.status === "canceled" ? "You canceled this sign-up" : "Removed by a coordinator"));
+    const reason = goneReason(a, job, backOn.has(a.id));
     return {
       assignmentId: a.id,
       status: a.status,
@@ -297,7 +297,7 @@ function merge(intervals: Array<{ startAt: Date; endAt: Date }>): Span[] {
     .sort((a, b) => a[0] - b[0]);
   const out: Span[] = [];
   for (const [s, e] of spans) {
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last && s <= last[1]) last[1] = Math.max(last[1], e);
     else out.push([s, e]);
   }
@@ -456,7 +456,8 @@ export async function jobActivity(actor: Actor, tx: Tx, jobId: string, limit = 3
     }
     const owner = ownerById.get(r.entityId ?? "");
     const you = owner?.userId === actor.userId;
-    const who = owner ? (you ? "You" : owner.name) : "Someone";
+    let who = "Someone";
+    if (owner) who = you ? "You" : owner.name;
     return { id: r.id, at: r.at, text: `${who} ${(you && YOUR_ASSIGNMENT_ACTIONS[r.action]) || ASSIGNMENT_ACTIONS[r.action]}` };
   });
 }
@@ -540,7 +541,7 @@ async function billItems(tx: Tx, items: Array<{ assignmentId: string }>): Promis
   });
 }
 
-export type Turn = "deputy" | "vendor" | "coordinator" | null;
+type Turn = "deputy" | "vendor" | "coordinator" | null;
 
 export type MyInvoice = {
   id: string;
@@ -658,7 +659,7 @@ export async function alertSettings(actor: Actor, tx: Tx): Promise<AlertSettings
 }
 
 /** Upper bound on pages read by `listAllJobs`, so a runaway window cannot load the whole table. */
-export const MAX_LIST_PAGES = 40;
+const MAX_LIST_PAGES = 40;
 
 /**
  * Every job `listJobs` returns for the filter, reading page after page (nothing is silently dropped at the
@@ -666,6 +667,7 @@ export const MAX_LIST_PAGES = 40;
  */
 export async function listAllJobs(actor: Actor, tx: Tx, filter: JobFilter): Promise<{ jobs: Job[]; truncated: boolean }> {
   const out: Job[] = [];
+  // Sequential: reads stop at the first short page, in this transaction.
   for (let page = 1; page <= MAX_LIST_PAGES; page++) {
     const rows = await listJobs(actor, tx, filter, page);
     out.push(...rows);

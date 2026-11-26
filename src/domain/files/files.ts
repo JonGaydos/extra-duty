@@ -9,11 +9,11 @@ import { getStorage, type Storage } from "@/lib/storage";
 import { uuidv7 } from "uuidv7";
 
 export type FileRow = typeof files.$inferSelect;
-export type FileKind = FileRow["kind"];
+type FileKind = FileRow["kind"];
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
-export const MAX_FILENAME = 255;
-export const W9_FILENAME = "W-9.pdf";
+const MAX_FILENAME = 255;
+const W9_FILENAME = "W-9.pdf";
 
 type Detected = "pdf" | "docx" | "doc" | "jpg" | "png";
 
@@ -38,20 +38,21 @@ function matchesMagic(body: Buffer, kind: Detected): boolean {
   return body.length >= m.length && m.every((b, i) => body[i] === b);
 }
 
+/** The refusal naming the file types a caller accepts (all but legacy .doc when it names none). */
+function allowedMessage(allowed: readonly Detected[] | undefined): string {
+  if (!allowed) return "Only PDF, DOCX, JPG and PNG files are allowed.";
+  if (allowed.length === 1 && allowed[0] === "pdf") return "Only PDF files are allowed.";
+  return `Only ${allowed.map((k) => k.toUpperCase()).join(", ")} files are allowed.`;
+}
+
 /** Validates size, declared content type and magic bytes. Returns the normalized content type. */
-export function validateUpload(body: Buffer, contentType: string, only?: Detected | readonly Detected[]): string {
+function validateUpload(body: Buffer, contentType: string, only?: Detected | readonly Detected[]): string {
   const ct = contentType.split(";")[0].trim().toLowerCase();
   const kind = TYPES[ct];
   // Legacy .doc is accepted only where a caller names it in `only`.
-  const allowed = only === undefined ? undefined : typeof only === "string" ? [only] : only;
+  const allowed = typeof only === "string" ? [only] : only;
   if (!kind || (allowed ? !allowed.includes(kind) : kind === "doc")) {
-    throw new ValidationError(
-      !allowed
-        ? "Only PDF, DOCX, JPG and PNG files are allowed."
-        : allowed.length === 1 && allowed[0] === "pdf"
-          ? "Only PDF files are allowed."
-          : `Only ${allowed.map((k) => k.toUpperCase()).join(", ")} files are allowed.`,
-    );
+    throw new ValidationError(allowedMessage(allowed));
   }
   if (body.length === 0) throw new ValidationError("The file is empty.");
   if (body.length > MAX_FILE_BYTES) throw new ValidationError("Files can be at most 20 MB.");

@@ -39,7 +39,7 @@ export async function generateViewport(): Promise<Viewport> {
   };
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // The override is rendered by the server, so the first paint is already in the right theme.
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (

@@ -2,9 +2,9 @@ import { describe, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
-import { assignments, auditLog, jobPositions, jobs, users } from "@/db/schema";
+import { assignments, auditLog, jobPositions, jobs, jobTypes, users, vendorLocations, vendors, vendorTypes } from "@/db/schema";
 import { signUp } from "@/domain/assignments/signup";
-import { calendarEntries, detailCards, filterOptions, getFilterPrefs, NO_FILTERS, saveFilterPrefs, saveViewFilters } from "@/domain/calendar/calendar";
+import { calendarEntries, detailCards, filterOptions, getFilterPrefs, listedDay, NO_FILTERS, saveFilterPrefs, saveViewFilters } from "@/domain/calendar/calendar";
 import { activeCount, resolveFilters } from "@/app/(app)/_shared/detail-filters";
 import { ForbiddenError } from "@/domain/errors";
 import { agencyInstant } from "@/domain/time/agency-time";
@@ -67,6 +67,29 @@ describe("agency calendar", () => {
     expect(await ids({ statuses: ["filled"] })).toEqual([]);
   });
 
+  test("filters by vendor type, detail type, location, a #number and the description, and keeps rows missing the field out", async () => {
+    const f = await setupFixture(get().db, "calf");
+    const { db } = get();
+    const a = await f.mkJob();
+    const b = await f.mkJob({ vendor: f.otherVendorId });
+    const [vt] = await db.insert(vendorTypes).values({ name: "calf School" }).returning();
+    await db.update(vendors).set({ typeId: vt.id }).where(eq(vendors.id, f.vendorId));
+    const [loc] = await db.insert(vendorLocations).values({ vendorId: f.vendorId, name: "calf North lot" }).returning();
+    const [otherType] = await db.insert(jobTypes).values({ name: "calf Traffic" }).returning();
+    await db.update(jobs).set({ locationId: loc.id, description: "Bring a reflective vest" }).where(eq(jobs.id, a.job.id));
+    await db.update(jobs).set({ typeId: otherType.id }).where(eq(jobs.id, b.job.id));
+    const ids = async (filters: Partial<typeof NO_FILTERS>) =>
+      (await f.run((tx) => calendarEntries(f.coord, tx, range, { ...NO_FILTERS, vendorIds: [f.vendorId, f.otherVendorId], ...filters }, NOW))).entries.map((e) => e.id);
+    expect(await ids({ vendorTypeIds: [vt.id] })).toEqual([a.job.id]);
+    expect(await ids({ typeIds: [otherType.id] })).toEqual([b.job.id]);
+    expect(await ids({ locationIds: [loc.id] })).toEqual([a.job.id]);
+    expect(await ids({ q: `#${b.job.number}` })).toEqual([b.job.id]);
+    expect(await ids({ q: String(a.job.number) })).toEqual([a.job.id]);
+    expect(await ids({ q: "REFLECTIVE" })).toEqual([a.job.id]);
+    expect(await ids({ q: "north lot" })).toEqual([a.job.id]);
+    expect(await ids({ q: "#99999999" })).toEqual([]);
+  });
+
   test("filter choices for personnel come from what they can see", async () => {
     const f = await setupFixture(get().db, "cal3");
     await f.mkJob();
@@ -88,7 +111,7 @@ describe("agency calendar", () => {
     // Not remembering drops the filters but keeps My details only.
     await f.run((tx) => saveFilterPrefs(p, tx, { mine: true, remember: false, filters: { ...NO_FILTERS, q: "parade" } }));
     expect(await f.run((tx) => getFilterPrefs(p, tx))).toEqual({ mine: true, remember: false, filters: null, personal: null });
-    expect((await get().db.select().from(auditLog).where(eq(auditLog.action, "user.detail_filters"))).length).toBe(2);
+    expect(await get().db.select().from(auditLog).where(eq(auditLog.action, "user.detail_filters"))).toHaveLength(2);
     const v = await makeUser(get().db, "vendor", "cal4-vendor@example.test", { vendorId: f.vendorId } as Partial<typeof users.$inferInsert>);
     await expect(f.run((tx) => calendarEntries({ ...v.actor, vendorId: f.vendorId }, tx, range, NO_FILTERS, NOW))).rejects.toBeInstanceOf(ForbiddenError);
   });
@@ -164,7 +187,7 @@ describe("agency calendar", () => {
   });
 
   test("each view counts and saves only the filters it shows", async () => {
-    const f = await setupFixture(get().db, "cal9");
+    const f = await setupFixture(get().db, "calx");
     const p = await f.person();
     // On /jobs the deputy remembers a search and two deputy-only filters.
     await f.run((tx) => saveViewFilters(p, tx, { mine: false, remember: true, filters: { ...NO_FILTERS, q: "parade", openOnly: true, sort: "rate" }, personal: true }));
@@ -187,5 +210,69 @@ describe("agency calendar", () => {
     await f.run((tx) => saveViewFilters(p, tx, { mine: false, remember: false, filters: NO_FILTERS, personal: true }));
     prefs = await f.run((tx) => getFilterPrefs(p, tx));
     expect(resolveFilters({}, prefs, { personal: true })).toEqual(NO_FILTERS);
+  });
+});
+
+describe("details still running after agency midnight", () => {
+  const get = useTestDb();
+  useEmailQueue(get);
+
+  /** A detail with the given span, with `on` signed up while it was still ahead. */
+  async function detailAt(f: Awaited<ReturnType<typeof setupFixture>>, startAt: Date, endAt: Date, on?: Awaited<ReturnType<typeof f.person>>) {
+    const d = await f.mkJob({ count: 2 });
+    if (on) await f.run((tx) => signUp(on, tx, d.positionId, { warningVersion: 1 }));
+    await get().db.update(jobs).set({ startAt, endAt }).where(eq(jobs.id, d.job.id));
+    return d.job.id;
+  }
+  const DAY = 86_400_000;
+
+  test("at 1 AM, today's lists include a detail that started at 10 PM and runs to 2 AM, and leave out one that ended", async () => {
+    const f = await setupFixture(get().db, "night");
+    const deputy = await f.person();
+    const other = await f.person();
+    const running = await detailAt(f, agencyInstant(2035, 6, 9, 22, 0), agencyInstant(2035, 6, 10, 2, 0), deputy);
+    // Ended at 00:30, before now: never listed.
+    await detailAt(f, agencyInstant(2035, 6, 9, 20, 0), agencyInstant(2035, 6, 10, 0, 30), deputy);
+    const now = agencyInstant(2035, 6, 10, 1, 0);
+    const midnight = agencyInstant(2035, 6, 10, 0, 0);
+    const today = { from: midnight, to: new Date(midnight.getTime() + 60 * DAY), runningAt: now };
+
+    // The calendar's list and today's day view start at agency midnight.
+    const staff = (await f.run((tx) => calendarEntries(f.coord, tx, today, NO_FILTERS, now))).entries;
+    expect(staff.map((e) => e.id)).toEqual([running]);
+    expect(staff[0].status).not.toBe("past");
+    expect(listedDay(staff[0].startAt, today.from)).toBe("2035-06-10");
+    // The coordinator Details list starts now.
+    const upcoming = { from: now, to: new Date(now.getTime() + 730 * DAY), runningAt: now };
+    expect((await f.run((tx) => calendarEntries(f.coord, tx, upcoming, NO_FILTERS, now))).entries.map((e) => e.id)).toEqual([running]);
+    // The deputy's Details list: their own running detail is listed; to anyone else it has started and is left out.
+    const list = { from: now, to: new Date(now.getTime() + 120 * DAY), runningAt: now };
+    expect((await f.run((tx) => detailCards(deputy, tx, list, NO_FILTERS, now))).cards.map((c) => c.id)).toEqual([running]);
+    expect((await f.run((tx) => detailCards(other, tx, list, NO_FILTERS, now))).cards.map((c) => c.id)).toEqual([]);
+    // Without runningAt (the month grid, by start day) nothing changes: the detail stays on the day it started.
+    const grid = { from: midnight, to: new Date(midnight.getTime() + 35 * DAY) };
+    expect((await f.run((tx) => calendarEntries(f.coord, tx, grid, NO_FILTERS, now))).entries).toEqual([]);
+  });
+
+  test("across both DST changes, a detail running past midnight stays on today's list until it ends", async () => {
+    const f = await setupFixture(get().db, "dst");
+    // Fall back (2035-11-04): 01:00 to 02:00 happens twice. 22:00 CDT to 02:00 CST is five hours.
+    const fall = await detailAt(f, agencyInstant(2035, 11, 3, 22, 0), agencyInstant(2035, 11, 4, 2, 0));
+    // Spring forward (2035-03-11): 02:00 to 03:00 is skipped.
+    const spring = await detailAt(f, agencyInstant(2035, 3, 10, 22, 0), agencyInstant(2035, 3, 11, 4, 0));
+    const ids = async (y: number, m: number, d: number, now: Date) => {
+      const midnight = agencyInstant(y, m, d, 0, 0);
+      const r = { from: midnight, to: new Date(midnight.getTime() + 60 * DAY), runningAt: now };
+      const entries = (await f.run((tx) => calendarEntries(f.coord, tx, r, NO_FILTERS, now))).entries;
+      return entries.map((e) => `${e.id}@${listedDay(e.startAt, r.from)}`);
+    };
+    const firstOneThirty = agencyInstant(2035, 11, 4, 1, 30);
+    const secondOneThirty = new Date(firstOneThirty.getTime() + 3_600_000);
+    expect(await ids(2035, 11, 4, firstOneThirty)).toEqual([`${fall}@2035-11-04`]);
+    expect(await ids(2035, 11, 4, secondOneThirty)).toEqual([`${fall}@2035-11-04`]);
+    expect(await ids(2035, 11, 4, agencyInstant(2035, 11, 4, 2, 0))).toEqual([]);
+    expect(await ids(2035, 3, 11, agencyInstant(2035, 3, 11, 1, 30))).toEqual([`${spring}@2035-03-11`]);
+    expect(await ids(2035, 3, 11, agencyInstant(2035, 3, 11, 3, 30))).toEqual([`${spring}@2035-03-11`]);
+    expect(await ids(2035, 3, 11, agencyInstant(2035, 3, 11, 4, 0))).toEqual([]);
   });
 });

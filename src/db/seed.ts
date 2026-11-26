@@ -103,6 +103,7 @@ export async function seedInTx(tx: Tx, opts: { adminEmail?: string } = {}): Prom
       .onConflictDoNothing({ target: paymentMethods.name });
 
     // Presets have no unique name; seed a context only while it has no presets at all.
+    // Sequential: reads and writes in this transaction.
     for (const [context, texts] of Object.entries(NOTE_PRESETS) as [keyof typeof NOTE_PRESETS, string[]][]) {
       const have = await tx.select({ id: notePresets.id }).from(notePresets).where(eq(notePresets.context, context));
       if (have.length === 0) {

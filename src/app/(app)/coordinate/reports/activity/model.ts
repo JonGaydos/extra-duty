@@ -20,7 +20,10 @@ export function sortRows(rows: ActivityRow[], column: string, dir: "asc" | "desc
     if (column === "name") return sign * byName(a, b);
     const x = a.values[column] ?? null;
     const y = b.values[column] ?? null;
-    if (x === null || y === null) return x === y ? byName(a, b) : x === null ? 1 : -1;
+    if (x === null || y === null) {
+      if (x === y) return byName(a, b);
+      return x === null ? 1 : -1;
+    }
     return x === y ? byName(a, b) : sign * (x - y);
   });
 }

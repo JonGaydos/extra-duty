@@ -57,12 +57,12 @@ export function ThemeToggle({
   initial,
   signedIn,
   compact = false,
-}: {
+}: Readonly<{
   initial: ThemePreference;
   signedIn: boolean;
   /** Icons only, for the desktop header. */
   compact?: boolean;
-}) {
+}>) {
   const [theme, setTheme] = useState<ThemePreference>(initial);
   const [saveFailed, setSaveFailed] = useState(false);
   const name = useId();

@@ -29,7 +29,7 @@ export type InvoiceBatchJob = { batchId: string };
  * pg-boss for one database. `migrate: false` at runtime: the schema and the queues are installed by the release
  * step (installBoss), so the web and worker database role needs no DDL rights.
  */
-export function createBoss(connectionString: string, opts: { worker: boolean; schedule?: boolean; migrate?: boolean }): PgBoss {
+function createBoss(connectionString: string, opts: { worker: boolean; schedule?: boolean; migrate?: boolean }): PgBoss {
   const boss = new PgBoss({
     connectionString,
     supervise: opts.worker,
@@ -49,11 +49,13 @@ export async function installBoss(connectionString: string, tickQueues: readonly
   const boss = createBoss(connectionString, { worker: false, schedule: false, migrate: true });
   await boss.start();
   try {
+    // Sequential: queue setup in the release step, one queue at a time.
     for (const name of EMAIL_QUEUES) {
       await boss.createQueue(name, { ...EMAIL_QUEUE_OPTIONS });
       // createQueue leaves an existing queue alone; this applies changed options.
       await boss.updateQueue(name, { ...EMAIL_QUEUE_OPTIONS });
     }
+    // Sequential: queue setup in the release step, one queue at a time.
     for (const name of tickQueues) await boss.createQueue(name);
   } finally {
     await boss.stop({ graceful: false });
@@ -94,6 +96,7 @@ export function getBoss(opts: { worker?: boolean; mode?: DataMode } = {}): Promi
 }
 
 export async function stopBoss(): Promise<void> {
+  // Sequential: each instance is stopped before the next.
   for (const mode of Object.keys(instances) as DataMode[]) {
     const boss = await instances[mode]!.catch(() => undefined);
     delete instances[mode];

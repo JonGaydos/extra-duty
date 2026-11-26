@@ -45,25 +45,33 @@ async function agencyHeader(): Promise<AgencyHeaderData> {
 const dated = (d: Date) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
 const isoDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 
+/** Every picture a manual's chapters name, as JPEG for the PDF; a missing picture stops the build. */
+async function manualImages(root: string, manual: string, chapters: Awaited<ReturnType<typeof loadChapters>>): Promise<Map<string, PdfImage>> {
+  const images = new Map<string, PdfImage>();
+  // Sequential: one picture at a time keeps only one decoded image in memory.
+  for (const c of chapters) {
+    for (const src of imageRefs(c.blocks)) {
+      const path = join(root, manual, src);
+      if (!existsSync(path)) throw new Error(`${manual}/${c.file} names a missing image: ${src}`);
+      if (images.has(src)) continue;
+      const { data, info } = await sharp(readFileSync(path)).flatten({ background: "#ffffff" }).jpeg({ quality: 72 }).toBuffer({ resolveWithObject: true });
+      // Phone shots are taken at twice the pixels; their drawn size comes from the CSS width.
+      const phone = src.endsWith("-phone.webp");
+      images.set(src, { data, width: phone ? info.width / 2 : info.width, height: phone ? info.height / 2 : info.height, phone });
+    }
+  }
+  return images;
+}
+
 async function main(): Promise<void> {
   const root = manualsRoot();
   const agency = await agencyHeader();
   const now = new Date();
   mkdirSync(OUT, { recursive: true });
+  // Sequential: one manual at a time, so its pictures and PDF leave memory before the next.
   for (const m of MANUALS) {
     const chapters = await loadChapters(m.id, root);
-    const images = new Map<string, PdfImage>();
-    for (const c of chapters) {
-      for (const src of imageRefs(c.blocks)) {
-        const path = join(root, m.id, src);
-        if (!existsSync(path)) throw new Error(`${m.id}/${c.file} names a missing image: ${src}`);
-        if (images.has(src)) continue;
-        const { data, info } = await sharp(readFileSync(path)).flatten({ background: "#ffffff" }).jpeg({ quality: 72 }).toBuffer({ resolveWithObject: true });
-        // Phone shots are taken at twice the pixels; their drawn size comes from the CSS width.
-        const phone = src.endsWith("-phone.webp");
-        images.set(src, { data, width: phone ? info.width / 2 : info.width, height: phone ? info.height / 2 : info.height, phone });
-      }
-    }
+    const images = await manualImages(root, m.id, chapters);
     const pdf = await renderManualPdf({ agency, title: m.title, summary: m.summary, dated: dated(now), chapters, images });
     const name = `Extra Duty Manual - ${m.title.replace(/ manual$/, "")} - ${isoDay(now)}.pdf`;
     writeFileSync(join(OUT, name), pdf);

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { Button } from "@/ui/components/Button";
 import { FormField, Input } from "@/ui/components/FormField";
 import { FormMessage, type Message } from "../form-message";
 import { postAuth, tooManyText } from "../post-json";
 import { sendCode } from "./actions";
+import { formText } from "@/lib/form-text";
 
 type Props = {
   trustedDeviceDays?: number;
@@ -19,7 +20,7 @@ const ERRORS: Record<string, string> = {
   INVALID_TWO_FACTOR_COOKIE: "Your sign-in has timed out. Sign in again.",
 };
 
-export function TwoFactorForm({ trustedDeviceDays = 30, codeMinutes = 15 }: Props) {
+export function TwoFactorForm({ trustedDeviceDays = 30, codeMinutes = 15 }: Readonly<Props>) {
   const [message, setMessage] = useState<Message>(null);
   const [busy, setBusy] = useState(false);
   const sentOnLoad = useRef(false);
@@ -47,14 +48,14 @@ export function TwoFactorForm({ trustedDeviceDays = 30, codeMinutes = 15 }: Prop
     void requestCode();
   }, []);
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     setBusy(true);
     setMessage(null);
     try {
       const result = await postAuth("/two-factor/verify-otp", {
-        code: String(form.get("code") ?? "").trim(),
+        code: formText(form, "code").trim(),
         trustDevice: form.get("trustDevice") === "on",
       });
       if (result.status === 200) {

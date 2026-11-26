@@ -16,18 +16,115 @@ import { StaffInvoiceActions } from "./StaffInvoiceActions";
 
 const PARTY: Record<string, string> = { deputy: "Deputy", vendor: "Vendor", coordinator: "Coordinator" };
 
+const TURN: Record<string, { tone: ChipTone; text: string }> = {
+  coordinator: { tone: "coordinator", text: "Coordinator's turn" },
+  deputy: { tone: "attention", text: "Deputy's turn" },
+};
+const VENDOR_TURN: { tone: ChipTone; text: string } = { tone: "neutral", text: "Vendor's turn" };
+
+function workedText(inv: Invoice): string {
+  if (inv.worked) return timeRange(inv.worked.startAt, inv.worked.endAt);
+  return inv.kind === "late_cancel" ? "Late cancellation minimum" : "Not billed yet";
+}
+
+/** An open payment issue: since when, who it waits on, what the deputy said and what the vendor reports. */
+function IssueNotice({ issue, waitingOn }: Readonly<{ issue: PaymentIssueView; waitingOn: Invoice["issueWaitingOn"] }>) {
+  const paid = issue.vendorPaid;
+  const reference = paid?.reference ? `, ${paid.reference}` : "";
+  return (
+    <Notice tone="warning">
+      Payment issue open since {dateLabel(issue.openedAt)}, waiting on the {waitingOn}.{issue.note ? ` Deputy said: ${issue.note}` : ""}
+      {paid ? ` Vendor reports paid ${dateLabel(paid.paidAt)}${reference}.` : ""}
+    </Notice>
+  );
+}
+
+/** Who sees an issue note: staff only, or sent to the vendor. */
+function VisibilityChip({ visibility }: Readonly<{ visibility: string }>) {
+  if (visibility === "internal") return <Chip>Staff only</Chip>;
+  return visibility === "vendor" ? <Chip>Sent to vendor</Chip> : null;
+}
+
+/** The deputy, vendor, detail, amount, and the scheduled and worked times. */
+function InvoiceFacts({ inv }: Readonly<{ inv: Invoice }>) {
+  return (
+    <dl className="m-0 grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Deputy</dt>
+        <dd className="m-0 flex flex-col gap-0.5">
+          <span>{inv.payeeName}</span>
+          <EmailLinks emails={[inv.payeeEmail]} />
+          {inv.payeePhone ? <PhoneLink phone={inv.payeePhone} /> : null}
+        </dd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Vendor</dt>
+        <dd className="m-0">
+          <Link href={`/coordinate/vendors/${inv.vendorId}`}>{inv.vendorName}</Link>
+        </dd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Detail</dt>
+        <dd className="m-0">
+          <Link href={`/coordinate/details/${inv.jobId}`}>
+            #{inv.jobNumber} {inv.jobTitle}
+          </Link>
+          , {dayLabel(inv.scheduled.startAt)}
+        </dd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Amount</dt>
+        <dd className="m-0">
+          <PayLabel variant="plain" totalCents={inv.totalCents} rateCents={inv.rateCents} /> <span className="text-muted">for {hoursText(inv.minutes, true)}</span>
+        </dd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Scheduled</dt>
+        <dd className="m-0">{timeRange(inv.scheduled.startAt, inv.scheduled.endAt)}</dd>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <dt className="text-xs font-semibold text-muted">Worked</dt>
+        <dd className="m-0">{workedText(inv)}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** The reason hours changed, a queued send, an approved invoice not sent, and who must respond by when. */
+function InvoiceNotices({ inv }: Readonly<{ inv: Invoice }>) {
+  return (
+    <>
+      {inv.changeReason ? <p className="m-0 text-sm">Reason given: &ldquo;{inv.changeReason}&rdquo;</p> : null}
+      {inv.queuedSend ? (
+        <Notice tone="info">
+          {inv.queuedSend}{" "}
+          <Link href={`/coordinate/send-invoices#vendor-${inv.vendorId}`}>Review the batch</Link>
+        </Notice>
+      ) : null}
+      {inv.status === "approved_unsent" ? (
+        <Notice tone="info">Approved, not sent. The vendor does not see this invoice until it is sent, and nobody&apos;s response time runs until then.</Notice>
+      ) : null}
+      {inv.party && inv.dueAt ? (
+        <p className="m-0 text-sm text-muted">
+          {PARTY[inv.party]} has until {dateTime(inv.dueAt)} to respond{inv.overdue ? "; that time has passed" : ""}.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export function turnChip(status: string, party: string | null, overdue: boolean): { tone: ChipTone; text: string } {
   if (status === "paid") return { tone: "success", text: "Paid" };
   if (status === "written_off") return { tone: "danger", text: "Written off" };
   if (status === "pending_review") return { tone: "coordinator", text: "Waiting for review" };
   if (status === "ready_to_send") return { tone: "info", text: "Ready to send" };
   if (status === "approved_unsent") return { tone: "neutral", text: "Approved, not sent" };
-  const who = party === "coordinator" ? "Coordinator's turn" : party === "deputy" ? "Deputy's turn" : "Vendor's turn";
-  return { tone: overdue ? "danger" : party === "coordinator" ? "coordinator" : party === "deputy" ? "attention" : "neutral", text: overdue ? `${who}, overdue` : who };
+  const turn = TURN[party ?? ""] ?? VENDOR_TURN;
+  return { tone: overdue ? "danger" : turn.tone, text: overdue ? `${turn.text}, overdue` : turn.text };
 }
 
 /** Coordinators and admins: the whole timeline (names included), the issue's notes and every action. */
-export function StaffInvoice({ inv, issue, payeeActions }: { inv: Invoice; issue: PaymentIssueView | null; /** The actor's own invoice: their payee actions (mark received, report non-payment). */ payeeActions?: React.ReactNode }) {
+export function StaffInvoice({ inv, issue, payeeActions }: Readonly<{ inv: Invoice; issue: PaymentIssueView | null; /** The actor's own invoice: their payee actions (mark received, report non-payment). */ payeeActions?: React.ReactNode }>) {
   const chip = turnChip(inv.status, inv.party, inv.overdue);
   return (
     <StatusProvider>
@@ -44,66 +141,9 @@ export function StaffInvoice({ inv, issue, payeeActions }: { inv: Invoice; issue
             {inv.vendorOnHold ? <Chip tone="danger">Vendor on payment hold</Chip> : null}
           </div>
           <h1 className="m-0 text-2xl font-bold md:text-3xl">Invoice {inv.number}</h1>
-          <dl className="m-0 grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Deputy</dt>
-              <dd className="m-0 flex flex-col gap-0.5">
-                <span>{inv.payeeName}</span>
-                <EmailLinks emails={[inv.payeeEmail]} />
-                {inv.payeePhone ? <PhoneLink phone={inv.payeePhone} /> : null}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Vendor</dt>
-              <dd className="m-0">
-                <Link href={`/coordinate/vendors/${inv.vendorId}`}>{inv.vendorName}</Link>
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Detail</dt>
-              <dd className="m-0">
-                <Link href={`/coordinate/details/${inv.jobId}`}>
-                  #{inv.jobNumber} {inv.jobTitle}
-                </Link>
-                , {dayLabel(inv.scheduled.startAt)}
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Amount</dt>
-              <dd className="m-0">
-                <PayLabel variant="plain" totalCents={inv.totalCents} rateCents={inv.rateCents} /> <span className="text-muted">for {hoursText(inv.minutes, true)}</span>
-              </dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Scheduled</dt>
-              <dd className="m-0">{timeRange(inv.scheduled.startAt, inv.scheduled.endAt)}</dd>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <dt className="text-xs font-semibold text-muted">Worked</dt>
-              <dd className="m-0">{inv.worked ? timeRange(inv.worked.startAt, inv.worked.endAt) : inv.kind === "late_cancel" ? "Late cancellation minimum" : "Not billed yet"}</dd>
-            </div>
-          </dl>
-          {inv.changeReason ? <p className="m-0 text-sm">Reason given: &ldquo;{inv.changeReason}&rdquo;</p> : null}
-          {inv.queuedSend ? (
-            <Notice tone="info">
-              {inv.queuedSend}{" "}
-              <Link href={`/coordinate/send-invoices#vendor-${inv.vendorId}`}>Review the batch</Link>
-            </Notice>
-          ) : null}
-          {inv.status === "approved_unsent" ? (
-            <Notice tone="info">Approved, not sent. The vendor does not see this invoice until it is sent, and nobody&apos;s response time runs until then.</Notice>
-          ) : null}
-          {inv.party && inv.dueAt ? (
-            <p className="m-0 text-sm text-muted">
-              {PARTY[inv.party]} has until {dateTime(inv.dueAt)} to respond{inv.overdue ? "; that time has passed" : ""}.
-            </p>
-          ) : null}
-          {issue ? (
-            <Notice tone="warning">
-              Payment issue open since {dateLabel(issue.openedAt)}, waiting on the {inv.issueWaitingOn}.{issue.note ? ` Deputy said: ${issue.note}` : ""}
-              {issue.vendorPaid ? ` Vendor reports paid ${dateLabel(issue.vendorPaid.paidAt)}${issue.vendorPaid.reference ? `, ${issue.vendorPaid.reference}` : ""}.` : ""}
-            </Notice>
-          ) : null}
+          <InvoiceFacts inv={inv} />
+          <InvoiceNotices inv={inv} />
+          {issue ? <IssueNotice issue={issue} waitingOn={inv.issueWaitingOn} /> : null}
           <StaffInvoiceActions
             invoiceId={inv.id}
             status={inv.status}
@@ -134,13 +174,13 @@ export function StaffInvoice({ inv, issue, payeeActions }: { inv: Invoice; issue
           ) : null}
           <InvoicePdfLink id={inv.id} number={inv.number} />
         </Card>
-        {issue && issue.notes.length ? (
+        {issue?.notes.length ? (
           <Card>
             <CardTitle>Issue notes</CardTitle>
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
               {issue.notes.map((n) => (
                 <li key={n.id}>
-                  <span className="text-muted">{dateTime(n.at)}:</span> {n.note} {n.visibility === "internal" ? <Chip>Staff only</Chip> : n.visibility === "vendor" ? <Chip>Sent to vendor</Chip> : null}
+                  <span className="text-muted">{dateTime(n.at)}:</span> {n.note} <VisibilityChip visibility={n.visibility} />
                 </li>
               ))}
             </ul>

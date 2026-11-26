@@ -41,7 +41,7 @@ export async function userDirectory(actor: Actor, tx: Tx, now: Date = new Date()
   }));
 }
 
-export type HeldFlag = { qualificationId: string; name: string; grantedAt: Date };
+type HeldFlag = { qualificationId: string; name: string; grantedAt: Date };
 
 export type UserRecord = {
   user: typeof users.$inferSelect;
@@ -161,7 +161,7 @@ export async function flagRecord(actor: Actor, tx: Tx, id: string): Promise<Flag
   };
 }
 
-export type ReviewSummary = {
+type ReviewSummary = {
   id: string;
   startedAt: Date;
   dueAt: Date;

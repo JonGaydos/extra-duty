@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** One group of agency rules on one page with one Save. */
-export default async function SettingsGroupPage({ params }: Props) {
+export default async function SettingsGroupPage({ params }: Readonly<Props>) {
   const actor = await managementActor();
   const group = groupOf((await params).group);
   if (!group) notFound();

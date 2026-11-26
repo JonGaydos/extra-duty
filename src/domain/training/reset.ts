@@ -44,7 +44,8 @@ export async function resetTrainingData(actor: Actor | "system", tx: Tx, now: Da
   // Every app table; the migrations and the queue live in other schemas. No RESTART IDENTITY: that needs the
   // sequences' owner, and the app's database role is not (detail and invoice numbers simply continue).
   const { rows } = await tx.execute<{ name: string }>(sql`select tablename as name from pg_tables where schemaname = 'public'`);
-  if (rows.length) await tx.execute(sql.raw(`truncate table ${rows.map((r) => `"public"."${r.name}"`).join(", ")} cascade`));
+  const tables = rows.map((r) => `"public"."${r.name}"`).join(", ");
+  if (rows.length) await tx.execute(sql.raw(`truncate table ${tables} cascade`));
   await seedInTx(tx);
   const data = buildDemoData(now);
   await loadDemoData(tx, data);

@@ -23,7 +23,7 @@ import { AddItem, ListEditor, type ListItem } from "./ListEditor";
 
 /** Client wrappers that bind each Management list to its server actions. */
 
-export function FlagList({ items }: { items: ListItem[] }) {
+export function FlagList({ items }: Readonly<{ items: ListItem[] }>) {
   return (
     <ListEditor
       items={items}
@@ -38,7 +38,7 @@ export function AddFlag() {
   return <AddItem label="Flag name" button="Add flag" onAdd={(name) => createFlagAction(name)} />;
 }
 
-export function NamedList({ list, items, noun }: { list: string; items: ListItem[]; noun: string }) {
+export function NamedList({ list, items, noun }: Readonly<{ list: string; items: ListItem[]; noun: string }>) {
   return (
     <ListEditor
       items={items}
@@ -49,7 +49,7 @@ export function NamedList({ list, items, noun }: { list: string; items: ListItem
   );
 }
 
-export function AddNamed({ list, noun }: { list: string; noun: string }) {
+export function AddNamed({ list, noun }: Readonly<{ list: string; noun: string }>) {
   const label = noun.charAt(0).toUpperCase() + noun.slice(1);
   return <AddItem label={`${label} name`} button={`Add ${noun}`} onAdd={(name) => listCreateAction({ list, name })} />;
 }
@@ -57,7 +57,7 @@ export function AddNamed({ list, noun }: { list: string; noun: string }) {
 export type RankItem = { id: string; name: string; active: boolean; inLadder: boolean; holders: number };
 
 /** Ranks in ladder order, lowest first, with move up and down. */
-export function RankList({ ranks }: { ranks: RankItem[] }) {
+export function RankList({ ranks }: Readonly<{ ranks: RankItem[] }>) {
   const { run, busy } = useCoordAction();
   return (
     <Card pad={false} as="div">
@@ -102,7 +102,7 @@ export function AddRank() {
 }
 
 /** A flag request: approve at once, or deny with a reason the person sees. */
-export function FlagRequestActions({ id, who }: { id: string; who: string }) {
+export function FlagRequestActions({ id, who }: Readonly<{ id: string; who: string }>) {
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();

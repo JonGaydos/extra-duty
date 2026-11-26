@@ -26,7 +26,7 @@ const back = (href: string, label: string) => (
 );
 
 /** One row per chapter, numbered, the whole row a link. */
-function Contents({ manual, chapters, current }: { manual: ManualId; chapters: Chapter[]; current?: string }) {
+function Contents({ manual, chapters, current }: Readonly<{ manual: ManualId; chapters: Chapter[]; current?: string }>) {
   return (
     <ol role="list" className="m-0 list-none p-0">
       {chapters.map((c) => (
@@ -53,7 +53,7 @@ function Contents({ manual, chapters, current }: { manual: ManualId; chapters: C
  * Help: the user manuals in the app, rendered from the same Markdown as the PDFs (docs/manuals). Each role sees only
  * its own manuals (coordinators and admins also see the deputy and vendor manuals); any other manual is a 404.
  */
-export default async function HelpPage({ params }: { params: Promise<Params> }) {
+export default async function HelpPage({ params }: Readonly<{ params: Promise<Params> }>) {
   const shell = await loadShell();
   if (!shell) redirect("/sign-in");
   const role = shell.actor.role;

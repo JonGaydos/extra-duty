@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Personnel activity" };
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Who worked, who signed up and who canceled, one row per person, for coordinators and admins. */
-export default async function ActivityReportPage({ searchParams }: Props) {
+export default async function ActivityReportPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const savedId = Array.isArray(sp.saved) ? sp.saved[0] : sp.saved;

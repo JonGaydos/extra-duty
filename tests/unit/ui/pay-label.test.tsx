@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { PayLabel, payText } from "@/ui/components/PayLabel";
 
-const text = (html: string) => html.replace(/<[^>]+>/g, "");
+const text = (html: string) => html.replace(/<[^<>]+>/g, "");
 
 describe("PayLabel", () => {
   test("shows the total and the hourly rate together", () => {

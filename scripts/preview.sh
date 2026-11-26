@@ -19,10 +19,12 @@ mkdir -p "$P/logs" "$P/storage"
 chmod 700 "$P"
 
 pg_running() { "$PG_BIN/pg_ctl" status -D "$PG_DATA" >/dev/null 2>&1; }
-app_running() { [ -f "$APP_PID" ] && kill -0 "$(cat "$APP_PID")" 2>/dev/null; }
+# Installed tools only: a missing one stops with a hint instead of being downloaded.
+need() { [[ -x "$ROOT/node_modules/.bin/$1" ]] || { echo "$1 is not installed; run npm install first." >&2; exit 1; }; }
+app_running() { [[ -f "$APP_PID" ]] && kill -0 "$(cat "$APP_PID")" 2>/dev/null; }
 
 make_env() {
-  [ -f "$ENV_FILE" ] && return 0
+  [[ -f "$ENV_FILE" ]] && return 0
   umask 077
   cat > "$ENV_FILE" <<EOT
 DATABASE_URL=postgres://postgres:$(openssl rand -hex 16)@127.0.0.1:$PG_PORT/extra_duty
@@ -43,7 +45,7 @@ db_password() { sed -n 's#^DATABASE_URL=postgres://postgres:\([^@]*\)@.*#\1#p' "
 
 start_pg() {
   if pg_running; then echo "postgres: running"; return; fi
-  if [ ! -f "$PG_DATA/PG_VERSION" ]; then
+  if [[ ! -f "$PG_DATA/PG_VERSION" ]]; then
     local pwf; pwf="$(mktemp)"; db_password > "$pwf"
     "$PG_BIN/initdb" -D "$PG_DATA" -U postgres --pwfile="$pwf" --auth=scram-sha-256 -E UTF8 --locale=C >"$P/logs/initdb.log" 2>&1
     rm -f "$pwf"
@@ -78,15 +80,16 @@ stop_app() {
 }
 
 cmd_start() {
+  need tsx; need next
   make_env; load_env
   start_pg
   ensure_db
   npm run --silent db:migrate >"$P/logs/migrate.log" 2>&1 || { echo "migrate failed; see $P/logs/migrate.log"; exit 1; }
   npm run --silent db:seed >"$P/logs/seed.log" 2>&1 || { echo "seed failed; see $P/logs/seed.log"; exit 1; }
-  npx tsx scripts/preview-demo.ts >"$P/logs/demo.log" 2>&1 || { echo "demo data failed; see $P/logs/demo.log"; exit 1; }
+  "$ROOT/node_modules/.bin/tsx" scripts/preview-demo.ts >"$P/logs/demo.log" 2>&1 || { echo "demo data failed; see $P/logs/demo.log"; exit 1; }
   echo "db: migrated, seeded, demo data present"
   if app_running; then echo "app: already running (use restart to rebuild)"; return; fi
-  npx next build >"$P/logs/build.log" 2>&1 || { echo "build failed; see $P/logs/build.log"; exit 1; }
+  "$ROOT/node_modules/.bin/next" build >"$P/logs/build.log" 2>&1 || { echo "build failed; see $P/logs/build.log"; exit 1; }
   nohup node_modules/.bin/next start -H 0.0.0.0 -p "$APP_PORT" >"$P/logs/app.log" 2>&1 &
   echo $! > "$APP_PID"
   for _ in $(seq 1 60); do

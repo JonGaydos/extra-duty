@@ -1,24 +1,25 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Button } from "@/ui/components/Button";
 import { FormMessage, type Message } from "../form-message";
 import { PasswordFields, PasswordSet } from "../password-fields";
 import { postAuth } from "../post-json";
+import { formText } from "@/lib/form-text";
 
 type Props = { token: string; minLength: number };
 
-export function ResetPasswordForm({ token, minLength }: Props) {
+export function ResetPasswordForm({ token, minLength }: Readonly<Props>) {
   const [message, setMessage] = useState<Message>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const error = (text: string) => setMessage({ text, tone: "danger" });
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const newPassword = String(form.get("password") ?? "");
-    if (newPassword !== String(form.get("confirm") ?? "")) {
+    const newPassword = formText(form, "password");
+    if (newPassword !== formText(form, "confirm")) {
       error("The passwords do not match.");
       return;
     }

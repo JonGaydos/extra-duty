@@ -245,7 +245,7 @@ for (const theme of THEMES) {
 /** The maps menu's right edge and main's sideways overflow, after opening it. */
 async function menuFits(page: Page) {
   return page.evaluate(() => {
-    const menu = document.querySelector('[role="group"][aria-label="Open with"]')!.getBoundingClientRect();
+    const menu = document.querySelector('fieldset[aria-label="Open with"]')!.getBoundingClientRect();
     const main = document.getElementById("main")!;
     return { right: Math.round(menu.right), left: Math.round(menu.left), sideways: main.scrollWidth - main.clientWidth };
   });
@@ -269,7 +269,7 @@ test.describe("maps menu and scroll position on a phone", () => {
     // Town center patrol: a pinned location with an address. (Harbor dock watch, at the same place and price, has a pin too.)
     await page.getByRole("region", { name: "Map of details" }).getByRole("button", { name: "$280 at $70/hr" }).first().click();
     // The chosen pin's card (the list of details below the map has its own Open in Maps buttons).
-    await page.locator('#main [role="status"][aria-live="polite"]').getByRole("button", { name: "Open in Maps" }).click();
+    await page.locator('#main output[aria-live="polite"]').getByRole("button", { name: "Open in Maps" }).click();
     const pin = await menuFits(page);
     expect(pin.right).toBeLessThanOrEqual(PHONE.width);
     expect(pin.left).toBeGreaterThanOrEqual(0);

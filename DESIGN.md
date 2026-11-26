@@ -230,7 +230,7 @@ Extra Duty is the board a deputy checks between shifts and a coordinator keeps o
 
 Density follows the device. Phone screens are roomy and stacked, with one primary action per card and a full-width tab bar pinned to the bottom edge, within thumb reach. Desktop screens are a centered 1240 px column with a top nav, two-column card layouts and compact 36 px row actions. Night mode is the same board in low light: deep blue-gray surfaces, lighter text, a brighter button blue and a pale link blue, so a deputy checking a detail at 2 AM is not blinded.
 
-Source of truth: the approved mockups in `docs/mockups/project/` (Main, Dep-*, Dep-Home-Night, Coord-*, Vendor-Request, Invoice). Code: tokens in `src/ui/tokens.css`, components in `src/ui/components/`, shell in `src/ui/shell/` and `src/app/(app)/layout.tsx`.
+Source of truth: this document, with the manual screenshots in `docs/manuals/images/` showing each screen as built. Code: tokens in `src/ui/tokens.css`, components in `src/ui/components/`, shell in `src/ui/shell/` and `src/app/(app)/layout.tsx`.
 
 **Key Characteristics:**
 - Flat white cards with a 1 px line, no shadows except chrome that floats (the status note, the focused skip link).
@@ -412,7 +412,7 @@ The agency Calendar (every detail the person may see; vendors use their portal) 
 `Notice` is a short tinted message inside a card: an info icon and 13 px text on a soft fill (warning, danger, success, info), 12 px radius, 10 by 12 px padding. Form results sit in an always-present `role="status"` region so each new message is announced.
 
 ### Signed-out pages
-`AuthShell` frames sign-in, code entry, invite acceptance and password resets (mockup Dep-SignIn):
+`AuthShell` frames sign-in, code entry, invite acceptance and password resets:
 - A centered column, phone width on every screen (440 px max), 56 px from the top (80 px on desktop).
 - The agency mark: the agency logo in its slot (see Agency logo), or a 76 px circle with the agency's initials when there is none.
 - "Extra Duty" at 23 px 700 over the agency name from settings in muted 14 px.
@@ -456,7 +456,7 @@ Minimal and state-only: color and background transitions at 150 ms on hover and 
 - Times as "2:00 to 6:00 PM", dates as "Tue, Dec 1", money as "$1,087.50".
 
 ### Accessibility
-- WCAG 2.2 AA contrast in both themes: text 4.5:1, large text and UI boundaries (fields, open squares, focus ring) 3:1. The mockups' lighter open-square outline and field border were darkened to pass.
+- WCAG 2.2 AA contrast in both themes: text 4.5:1, large text and UI boundaries (fields, open squares, focus ring) 3:1. The lighter open-square outline and field border from the early design drafts were darkened to pass.
 - Touch targets at least 44 by 44 px on phones; compact desktop controls grow to 44 px on touch screens (`pointer-coarse`).
 - Visible focus everywhere: a 2 px focus-color outline with a 2 px offset.
 - Real buttons and links, and links underlined (see Links); switches use `role="switch"` and `aria-checked`; the staffing grid is `role="img"` with a summary label; the current nav item has `aria-current="page"`.

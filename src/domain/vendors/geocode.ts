@@ -1,7 +1,7 @@
 import { matchLabel } from "@/lib/address-match";
 
-export const GEOCODE_TIMEOUT_MS = 5000;
-export const GEOCODE_MIN_INTERVAL_MS = 1000;
+const GEOCODE_TIMEOUT_MS = 5000;
+const GEOCODE_MIN_INTERVAL_MS = 1000;
 /** Most lookups kept in the cache; the least recently used goes first. */
 export const GEOCODE_CACHE_MAX = 500;
 /** Callers allowed to wait for a turn; past this a lookup answers "unavailable" at once rather than queueing. */
@@ -19,7 +19,7 @@ const DEFAULT_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const USER_AGENT = "ExtraDuty/1.0";
 
 export type LatLng = { lat: number; lng: number };
-export type GeocodeMatch = LatLng & { label: string };
+type GeocodeMatch = LatLng & { label: string };
 export type Lookup = { status: "match"; match: GeocodeMatch } | { status: "none" } | { status: "unavailable" };
 
 // One process-wide cache and queue, shared by every request this server handles.

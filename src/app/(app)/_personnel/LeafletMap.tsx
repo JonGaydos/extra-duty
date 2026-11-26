@@ -6,6 +6,9 @@ import type { Map as LeafletMapType } from "leaflet";
 
 export type MapPin = { id: string; lat: number; lng: number; label: string; name: string; tone?: "pay" | "safety" | "plain" };
 
+/** A character as an HTML numeric entity, for the pin label markup. */
+const entity = (c: string) => `&#${c.codePointAt(0)};`;
+
 /**
  * OpenStreetMap tiles through Leaflet, with the agency's tile URL and attribution from settings. Pins are
  * keyboard-focusable buttons named in words; choosing one calls `onSelect`. The page always lists the same
@@ -20,7 +23,7 @@ export function LeafletMap({
   className = "h-80",
   zoom = 13,
   center,
-}: {
+}: Readonly<{
   tileUrl: string;
   attribution: string;
   pins: MapPin[];
@@ -30,8 +33,8 @@ export function LeafletMap({
   zoom?: number;
   /** Where the map opens with no pins (the agency's default center from settings). */
   center: { lat: number; lng: number; zoom: number };
-}) {
-  const box = useRef<HTMLDivElement>(null);
+}>) {
+  const box = useRef<HTMLElement>(null);
   const map = useRef<LeafletMapType | null>(null);
   const select = useRef(onSelect);
   select.current = onSelect;
@@ -54,7 +57,7 @@ export function LeafletMap({
         seen.set(key, stack + 1);
         const icon = L.divIcon({
           className: "ed-pin",
-          html: `<span class="ed-pin-label ed-pin-${p.tone ?? "pay"}">${p.label.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)}</span>`,
+          html: `<span class="ed-pin-label ed-pin-${p.tone ?? "pay"}">${p.label.replace(/[&<>"]/g, entity)}</span>`,
           iconSize: undefined,
           iconAnchor: [0, stack * 30],
         });
@@ -79,5 +82,5 @@ export function LeafletMap({
     };
   }, [tileUrl, attribution, pins, zoom, center.lat, center.lng, center.zoom]);
 
-  return <div ref={box} role="region" aria-label={label} className={`ed-map relative z-0 w-full overflow-hidden rounded-xl border border-line md:rounded-2xl ${className}`} />;
+  return <section ref={box} aria-label={label} className={`ed-map relative z-0 w-full overflow-hidden rounded-xl border border-line md:rounded-2xl ${className}`} />;
 }

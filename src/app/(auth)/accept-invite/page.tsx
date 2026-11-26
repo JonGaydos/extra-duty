@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Set up your account" };
 
 type Props = { searchParams: Promise<{ token?: string }> };
 
-export default async function AcceptInvitePage({ searchParams }: Props) {
+export default async function AcceptInvitePage({ searchParams }: Readonly<Props>) {
   const { token } = await searchParams;
   const { security, agency } = await loadSettings();
   const logo = await loadLogo();

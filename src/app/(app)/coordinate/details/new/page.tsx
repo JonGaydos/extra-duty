@@ -21,7 +21,7 @@ const hhmm = (d: Date) => {
 };
 
 /** New detail, or a copy of one (`?from=<job id>`) with every field filled in and no dates chosen. */
-export default async function NewDetailPage({ searchParams }: Props) {
+export default async function NewDetailPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const from = typeof sp.from === "string" ? sp.from : undefined;

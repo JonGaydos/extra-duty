@@ -23,7 +23,7 @@ function setup(initial: ThemePreference) {
     keep: (t) => cookie.push(t),
   });
   const flush = () => new Promise((r) => setTimeout(r, 0));
-  return { chooser, saves, screen, cookie, flush, last: <T,>(a: T[]) => a[a.length - 1] };
+  return { chooser, saves, screen, cookie, flush, last: <T,>(a: T[]) => a.at(-1) };
 }
 
 describe("theme chooser", () => {

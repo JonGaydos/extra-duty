@@ -168,7 +168,7 @@ describe("vendor portal views", () => {
     const rows = await run((tx) => vendorInvoices(vendorUser, tx));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: sent.id, payeeName: "Avery Harmon", totalCents: 26000, rateCents: 6500, status: "sent", jobTitle: "VV invoice sent" });
-    expect(rows[0].number).toMatch(/\d+$/);
+    expect(rows[0].number).toMatch(/\d$/);
     expect(rows[0].vendorPaid).toMatchObject({ method: "Ramp", reference: "RMP-1" });
   });
 });

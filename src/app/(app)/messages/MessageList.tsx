@@ -9,14 +9,14 @@ import { ActionStatus, useAction } from "../_personnel/use-action";
 export type MessageRowView = { id: string; who: string; initials: string; when: string; subject: string; snippet: string; unread: boolean; tag: string | null };
 
 /** Messages with checkboxes; the chosen ones can be marked read or unread, or deleted from this inbox. */
-export function MessageList({ rows, selectable }: { rows: MessageRowView[]; selectable: boolean }) {
+export function MessageList({ rows, selectable }: Readonly<{ rows: MessageRowView[]; selectable: boolean }>) {
   const [chosen, setChosen] = useState<string[]>([]);
   const { run, busy, result } = useAction();
   const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   return (
     <div className="flex flex-col gap-2.5">
       {selectable ? (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Chosen messages">
+        <fieldset className="min-w-0 flex flex-wrap items-center gap-2" aria-label="Chosen messages">
           <span className="text-sm text-muted">{chosen.length ? `${chosen.length} chosen` : "Choose messages to mark or delete them"}</span>
           {chosen.length ? (
             <>
@@ -31,7 +31,7 @@ export function MessageList({ rows, selectable }: { rows: MessageRowView[]; sele
           </Button>
             </>
           ) : null}
-        </div>
+        </fieldset>
       ) : null}
       <ActionStatus result={result} />
       <ul className="m-0 flex list-none flex-col divide-y divide-divider overflow-hidden rounded-xl border border-line bg-surface p-0 md:rounded-2xl">

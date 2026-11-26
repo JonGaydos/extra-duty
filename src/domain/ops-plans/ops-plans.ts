@@ -24,10 +24,9 @@ import { getSettings } from "@/domain/settings/settings";
 import { agencyDateParts } from "@/domain/time/agency-time";
 import type { Storage } from "@/lib/storage";
 
-export type OpsPlan = typeof opsPlans.$inferSelect;
 export type OpsPlanVersion = typeof opsPlanVersions.$inferSelect;
 /** Per job: `not_started` has no plan row yet; `denied` means the IC must resubmit. */
-export type OpsPlanJobStatus = "not_started" | "submitted" | "agreed" | "denied";
+type OpsPlanJobStatus = "not_started" | "submitted" | "agreed" | "denied";
 
 const IC_QUALIFICATION = "Incident Commander";
 const UPLOAD_TYPES = ["pdf", "docx", "doc"] as const;
@@ -104,13 +103,6 @@ export async function nameIc(actor: Actor, tx: Tx, jobId: string, userId: string
 export function opsPlanDueAt(job: { startAt: Date; opsPlanDueAt: Date | null }, icAssignedAt: Date): Date {
   if (!job.opsPlanDueAt) return job.startAt;
   return icAssignedAt.getTime() > job.opsPlanDueAt.getTime() ? job.startAt : job.opsPlanDueAt;
-}
-
-/** The due date that applies right now: it follows whoever the current IC is. Null with no IC and no due date set. */
-export async function opsPlanDueFor(tx: Tx, job: { id: string; startAt: Date; opsPlanDueAt: Date | null }): Promise<Date | null> {
-  const ic = await currentIcInfo(tx, job.id);
-  if (ic) return opsPlanDueAt(job, ic.assignedAt);
-  return job.opsPlanDueAt;
 }
 
 async function latestVersion(tx: Tx, planId: string): Promise<OpsPlanVersion | null> {

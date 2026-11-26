@@ -114,7 +114,7 @@ describe("deputy notes", () => {
 
     await run((tx) => reviewDeputyNote(fx.coord, tx, vendorNote.id, { decision: "approve", editedBody: "  Clean wording.  " }));
     await run((tx) => reviewDeputyNote(admin, tx, locNote.id, { decision: "approve" }));
-    expect((await inbox(author.userId, "deputyNote.approved")).length).toBe(2);
+    expect(await inbox(author.userId, "deputyNote.approved")).toHaveLength(2);
 
     const bodies = async (id: string) => (await notesFor(author, id)).map((n) => n.body);
     expect(await bodies(atA.id)).toEqual(["North only: lock the east gate.", "Clean wording."]);
@@ -156,8 +156,11 @@ describe("deputy notes", () => {
     const done = await run((tx) => reviewDeputyNote(fx.coord, tx, note.id, { decision: "deny", comment: "Not appropriate." }));
     expect(done).toMatchObject({ status: "denied", reviewedBy: fx.coord.userId, reviewComment: "Not appropriate." });
     const rows = await inbox(author.userId, "deputyNote.denied");
-    expect(rows.length).toBe(before + 1);
-    expect(rows.some((r) => r.body?.includes("Not appropriate."))).toBe(true);
+    expect(rows).toHaveLength(before + 1);
+    expect(rows.map((r) => r.body)).toContain("Your deputy note was not approved. Reason: Not appropriate.");
+    const plain = await submit(author, job.id, "Denied without a reason", "vendor", after(job));
+    await run((tx) => reviewDeputyNote(fx.coord, tx, plain.id, { decision: "deny" }));
+    expect((await inbox(author.userId, "deputyNote.denied")).map((r) => r.body)).toContain("Your deputy note was not approved.");
     expect((await notesFor(fx.coord, job.id)).map((n) => n.body)).not.toContain("Denied wording");
     await expect(run((tx) => reviewDeputyNote(fx.coord, tx, note.id, { decision: "approve" }))).rejects.toBeInstanceOf(ValidationError);
   });

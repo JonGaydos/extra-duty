@@ -29,13 +29,13 @@ export function PayLabel({
   rateCents,
   upTo,
   variant = "pill",
-}: {
+}: Readonly<{
   totalCents: Cents;
   rateCents: Cents;
   /** The highest-paid position (an Incident Commander's differential), shown as a range when it pays more. */
   upTo?: { totalCents: Cents; rateCents: Cents } | null;
   variant?: "pill" | "plain";
-}) {
+}>) {
   const range = upTo && (upTo.totalCents !== totalCents || upTo.rateCents !== rateCents) ? upTo : null;
   const total = range ? `${dollars(totalCents)} to ${dollars(range.totalCents)}` : dollars(totalCents);
   const rate = range ? `${dollars(rateCents)} to ${dollars(range.rateCents)}` : dollars(rateCents);

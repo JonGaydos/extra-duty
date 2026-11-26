@@ -11,6 +11,7 @@ import { agencyDayKey } from "@/domain/time/agency-time";
 import { Card, CardTitle } from "@/ui/components/Card";
 import { Chip } from "@/ui/components/Chip";
 import { PayLabel } from "@/ui/components/PayLabel";
+import type { Actor } from "@/domain/actor";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
 import { InvoiceActions } from "../../billing/InvoiceActions";
@@ -28,11 +29,68 @@ const PARTY: Record<string, string> = { deputy: "You", vendor: "Vendor", coordin
 function eventText(e: TimelineEvent): string {
   const what = eventLabel(e.event, PAYEE_INVOICE_EVENT);
   const who = e.party ? `${PARTY[e.party] ?? e.party}: ` : "";
-  return `${who}${what}${e.note ? `. ${e.note}` : ""}`;
+  const note = e.note ? `. ${e.note}` : "";
+  return `${who}${what}${note}`;
+}
+
+type MyInvoice = Awaited<ReturnType<typeof myInvoices>>[number];
+
+const STATUS_TEXT: Partial<Record<MyInvoice["status"], string>> = {
+  pending_review: "In review",
+  ready_to_send: "Queued to send",
+  approved_unsent: "Approved, not sent",
+  paid: "Paid",
+  returned: "Returned",
+};
+const TURN_TEXT: Record<string, string> = { deputy: "Your turn", coordinator: "Coordinator's turn" };
+
+/** The invoice's chip: whose turn while it is out, else where it stands. */
+function statusChip(inv: MyInvoice): { tone: "success" | "danger" | "attention" | "neutral"; text: string } {
+  let tone: "success" | "danger" | "attention" | "neutral" = "neutral";
+  if (inv.status === "paid") tone = "success";
+  else if (inv.status === "written_off") tone = "danger";
+  else if (inv.turn === "deputy") tone = "attention";
+  const text = inv.status === "sent" ? (TURN_TEXT[inv.turn ?? ""] ?? "Vendor's turn") : (STATUS_TEXT[inv.status] ?? "Written off");
+  return { tone, text };
+}
+
+/** The staff view of any invoice, with the payee's own actions when it is their own. */
+async function staffView(actor: Actor, id: string, now: Date) {
+  const view = await withTx(async (tx) => {
+    try {
+      const inv = await staffInvoice(actor, tx, id, now);
+      // Staff may handle their own invoices too; they also get the payee's own actions there.
+      const own = inv.payeeUserId === actor.userId ? (await myInvoices(actor, tx, now, id))[0] : undefined;
+      return { inv, issue: inv.issueId ? await getPaymentIssue(actor, tx, inv.issueId) : null, own, methods: own ? await activePaymentMethods(tx) : [] };
+    } catch (e) {
+      if (e instanceof NotFoundError) return "missing" as const;
+      throw e;
+    }
+  });
+  if (view === "missing") notFound();
+  return (
+    <StaffInvoice
+      inv={view.inv}
+      issue={view.issue}
+      payeeActions={
+        view.own ? (
+          <InvoiceActions
+            invoiceId={view.own.id}
+            number={view.own.number}
+            methods={view.methods}
+            today={agencyDayKey(now)}
+            canMark={(view.own.status === "sent" || view.own.status === "approved_unsent") && !view.own.deputyPaidAt}
+            canReport={view.own.canReport}
+            vendorSaysPaid={view.own.vendorPaidAt !== null}
+          />
+        ) : null
+      }
+    />
+  );
 }
 
 /** Coordinators and admins get the staff view of any invoice; everyone else their own invoice with its timeline, the PDF and the payment actions. Links in alerts point here. */
-export default async function InvoicePage({ params }: Props) {
+export default async function InvoicePage({ params }: Readonly<Props>) {
   const shell = await loadShell();
   if (!shell) redirect("/sign-in");
   const { actor } = shell;
@@ -40,39 +98,7 @@ export default async function InvoicePage({ params }: Props) {
   if (actor.role === "vendor") redirect("/vendor/invoices");
   const now = new Date();
   const staff = actor.role === "coordinator" || actor.role === "admin";
-  if (staff) {
-    const view = await withTx(async (tx) => {
-      try {
-        const inv = await staffInvoice(actor, tx, id, now);
-        // Staff may handle their own invoices too; they also get the payee's own actions there.
-        const own = inv.payeeUserId === actor.userId ? (await myInvoices(actor, tx, now, id))[0] : undefined;
-        return { inv, issue: inv.issueId ? await getPaymentIssue(actor, tx, inv.issueId) : null, own, methods: own ? await activePaymentMethods(tx) : [] };
-      } catch (e) {
-        if (e instanceof NotFoundError) return "missing" as const;
-        throw e;
-      }
-    });
-    if (view === "missing") notFound();
-    return (
-      <StaffInvoice
-        inv={view.inv}
-        issue={view.issue}
-        payeeActions={
-          view.own ? (
-            <InvoiceActions
-              invoiceId={view.own.id}
-              number={view.own.number}
-              methods={view.methods}
-              today={agencyDayKey(now)}
-              canMark={(view.own.status === "sent" || view.own.status === "approved_unsent") && !view.own.deputyPaidAt}
-              canReport={view.own.canReport}
-              vendorSaysPaid={view.own.vendorPaidAt !== null}
-            />
-          ) : null
-        }
-      />
-    );
-  }
+  if (staff) return staffView(actor, id, now);
   const data = await withTx(async (tx) => {
     const [inv] = await myInvoices(actor, tx, now, id);
     if (!inv) return null;
@@ -85,6 +111,7 @@ export default async function InvoicePage({ params }: Props) {
   });
   if (!data) notFound();
   const { inv } = data;
+  const chip = statusChip(inv);
 
   return (
     <div className="mx-auto flex w-full max-w-180 flex-col gap-4.5">
@@ -94,9 +121,7 @@ export default async function InvoicePage({ params }: Props) {
       </Link>
       <Card>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Chip tone={inv.status === "paid" ? "success" : inv.status === "written_off" ? "danger" : inv.turn === "deputy" ? "attention" : "neutral"}>
-            {inv.status === "sent" ? (inv.turn === "deputy" ? "Your turn" : inv.turn === "coordinator" ? "Coordinator's turn" : "Vendor's turn") : inv.status === "pending_review" ? "In review" : inv.status === "ready_to_send" ? "Queued to send" : inv.status === "approved_unsent" ? "Approved, not sent" : inv.status === "paid" ? "Paid" : inv.status === "returned" ? "Returned" : "Written off"}
-          </Chip>
+          <Chip tone={chip.tone}>{chip.text}</Chip>
         </div>
         <h1 className="m-0 text-2xl font-bold md:text-3xl">Invoice {inv.number}</h1>
         <dl className="m-0 grid gap-3 sm:grid-cols-2">

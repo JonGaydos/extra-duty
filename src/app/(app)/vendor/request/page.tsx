@@ -16,10 +16,11 @@ export default async function RequestPage() {
   const { o, weekStartsOn } = await withTx(async (tx) => ({ o: await vendorRequestOptions(actor, tx), weekStartsOn: (await getSettings(tx)).weekStartsOn }));
   const r = o.rules;
   const min = Math.round((r.minimumBillableMinutes / 60) * 100) / 100;
+  const latePay = r.lateCancelPayBasis === "scheduled" ? "the scheduled hours" : `the ${min}-hour minimum`;
   const rules = [
     `Requests must be at least ${r.minNoticeHours} hours ahead.`,
     `Changes are locked within ${r.editLockHours} hours of the start.`,
-    `Cancelling within ${r.lateCancelHours} hours of the start pays each deputy signed up ${r.lateCancelPayBasis === "scheduled" ? "the scheduled hours" : `the ${min}-hour minimum`}.`,
+    `Cancelling within ${r.lateCancelHours} hours of the start pays each deputy signed up ${latePay}.`,
     `Every detail bills at least ${min} hours.`,
   ];
 
@@ -31,11 +32,13 @@ export default async function RequestPage() {
           <p className="m-0 font-semibold text-danger-ink">Requests are paused</p>
           <p className="m-0 text-sm text-danger-ink">Your account is on payment hold. Call the coordinators to resolve it.</p>
         </Card>
-      ) : o.positionTypes.length === 0 || o.jobTypes.length === 0 ? (
+      ) : null}
+      {!o.onHold && (o.positionTypes.length === 0 || o.jobTypes.length === 0) ? (
         <Card>
           <p className="m-0 text-sm text-muted">Requests are not set up yet. Call the coordinators to request a detail.</p>
         </Card>
-      ) : (
+      ) : null}
+      {!o.onHold && o.positionTypes.length > 0 && o.jobTypes.length > 0 ? (
         <RequestForm
           locations={o.locations}
           contacts={o.contacts}
@@ -47,7 +50,7 @@ export default async function RequestPage() {
           today={agencyDayKey(new Date())}
           weekStartsOn={weekStartsOn}
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ export async function calendarFeedsTick(now: Date, run: TxRunner = withTx): Prom
   const ids = await run(feedIdsWithLinks);
   let synced = 0;
   let failed = 0;
+  // Sequential: one feed at a time, each in its own short transaction, so a failure is logged and skipped.
   for (const id of ids) {
     try {
       const r = await syncFeedById(run, id, now);

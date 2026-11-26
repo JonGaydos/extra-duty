@@ -30,9 +30,10 @@ const span = (date: string, start: string, end: string) => {
 
 /** Expands a range or repeat of request dates by the same rules the coordinators use. */
 export async function expandRequestDatesAction(selection: DateSelection, firstDate: string): Promise<ActionResult> {
-  return act(async (actor) => {
+  // act() takes a promise-returning callback; nothing here waits, so the result is returned already resolved.
+  return act((actor) => {
     assertCan(actor, "vendorRequest.submit", { vendorId: actor.vendorId ?? undefined });
-    return { ok: true, value: JSON.stringify(expandSelection(selection, firstDate)) };
+    return Promise.resolve({ ok: true, value: JSON.stringify(expandSelection(selection, firstDate)) });
   });
 }
 
@@ -75,7 +76,7 @@ export async function vendorMarkPaidAction(input: { invoiceId: string; paidDate:
   });
 }
 
-type LocationWire = { name: string; address: string; notes: string; pin?: LocationInput["pin"] };
+type LocationWire = { name: string; address: string; notes: string; pin?: Exclude<LocationInput["pin"], undefined> };
 
 export async function addLocationAction(input: LocationWire): Promise<ActionResult> {
   return act(async (actor, tx) => {

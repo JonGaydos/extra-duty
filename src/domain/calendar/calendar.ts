@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "@/db/client";
 import { assignments, jobPositions, jobs, jobTypes, users, vendorLocations, vendors, vendorTypes } from "@/db/schema";
@@ -6,9 +6,9 @@ import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
 import { ForbiddenError } from "../errors";
-import type { JobSort } from "../jobs/jobs";
+import { startWindow, type JobSort } from "../jobs/jobs";
 import { listAllJobs, loadJobCards, myDetails, type JobCard, type MyDetail } from "../personnel/views";
-import { agencyDateOnly, agencyDateParts, agencyInstant, agencyWeekKey } from "../time/agency-time";
+import { agencyDateOnly, agencyDateParts, agencyDayKey, agencyInstant, agencyWeekKey } from "../time/agency-time";
 import { scheduledPayCents } from "../planning/recommend";
 import { isReleased } from "../release/release";
 import { getSettings } from "../settings/settings";
@@ -97,7 +97,7 @@ export type CalEntry = {
 };
 
 /** At most this many details are read for one view; the page says when it was cut. */
-export const MAX_CAL_ENTRIES = 2000;
+const MAX_CAL_ENTRIES = 2000;
 
 const LIVE = ["pending_short", "signed_up", "backup", "billed", "paid", "late_canceled", "no_show"] as const;
 const FILLING = ["signed_up", "pending_short", "billed", "paid", "no_show"];
@@ -105,7 +105,7 @@ const FILLING = ["signed_up", "pending_short", "billed", "paid", "no_show"];
 const isStaff = (a: Actor) => a.role === "coordinator" || a.role === "admin";
 
 /** The status word a calendar entry shows; color is never the only signal. */
-export function calStatus(job: { state: CalEntry["state"]; held: boolean; releaseAt: Date | null; startAt: Date; endAt: Date }, needed: number, filled: number, now: Date): CalStatus {
+function calStatus(job: { state: CalEntry["state"]; held: boolean; releaseAt: Date | null; startAt: Date; endAt: Date }, needed: number, filled: number, now: Date): CalStatus {
   if (job.state === "canceled" || job.state === "declined") return "canceled";
   if (job.state === "requested") return "requested";
   if (job.endAt.getTime() <= now.getTime()) return "past";
@@ -113,26 +113,74 @@ export function calStatus(job: { state: CalEntry["state"]; held: boolean; releas
   return needed - filled > 0 ? "open" : "filled";
 }
 
-export async function calendarEntries(actor: Actor, tx: Tx, range: { from: Date; to: Date }, f: DetailFilters, now: Date = new Date()): Promise<{ entries: CalEntry[]; truncated: boolean }> {
-  if (actor.role === "vendor") throw new ForbiddenError();
-  assertCan(actor, "job.read");
-  let rows: Array<typeof jobs.$inferSelect>;
-  let truncated = false;
+/**
+ * A view's dates: details starting in [from, to]. A "today" or upcoming view sets `runningAt` (now) to also list
+ * details that started earlier and are still running; the month grid, which places details by start day, does not.
+ */
+export type DetailRange = { from: Date; to: Date; runningAt?: Date };
+
+/** The agency day a listed detail goes under: its start day, or the list's first day if it started earlier and is still running. */
+export function listedDay(startAt: Date, from: Date): string {
+  return agencyDayKey(startAt < from ? from : startAt);
+}
+
+/** The details in range the actor may see on the calendar, at most MAX_CAL_ENTRIES for staff. */
+async function calendarJobs(actor: Actor, tx: Tx, range: DetailRange, f: DetailFilters): Promise<{ rows: Array<typeof jobs.$inferSelect>; truncated: boolean }> {
   if (isStaff(actor)) {
-    rows = await tx
+    const rows = await tx
       .select()
       .from(jobs)
-      .where(and(gte(jobs.startAt, range.from), lte(jobs.startAt, range.to)))
+      .where(startWindow(range))
       .orderBy(asc(jobs.startAt), asc(jobs.number))
       .limit(MAX_CAL_ENTRIES + 1);
-    truncated = rows.length > MAX_CAL_ENTRIES;
-    rows = rows.slice(0, MAX_CAL_ENTRIES);
-  } else {
-    // The personnel lists' own visibility: no requests, held details only for people on them, hidden vendors left out.
-    const r = await listAllJobs(actor, tx, { from: range.from, to: range.to, mine: f.mine || undefined });
-    rows = r.jobs;
-    truncated = r.truncated;
+    return { rows: rows.slice(0, MAX_CAL_ENTRIES), truncated: rows.length > MAX_CAL_ENTRIES };
   }
+  // The personnel lists' own visibility: no requests, held details only for people on them, hidden vendors left out.
+  const r = await listAllJobs(actor, tx, { from: range.from, to: range.to, runningAt: range.runningAt, mine: f.mine || undefined });
+  return { rows: r.jobs, truncated: r.truncated };
+}
+
+/** An empty picker keeps every row; otherwise the row needs a value the picker lists. */
+function inPicker<T>(picked: readonly T[], value: T | null | undefined): boolean {
+  return picked.length === 0 || (!!value && picked.includes(value));
+}
+
+/** "1234" or "#1234" is a job number; anything else matches the title, description, vendor or place. */
+function matchesText(q: string, job: typeof jobs.$inferSelect, vendorName: string, locationName: string | null): boolean {
+  if (!q) return true;
+  const asNumber = /^#?(\d{1,9})$/.exec(q);
+  if (asNumber && job.number === Number(asNumber[1])) return true;
+  return [job.title, job.description ?? "", vendorName, locationName ?? ""].some((t) => t.toLowerCase().includes(q));
+}
+
+type EntryFacts = {
+  vendorTypeId: string | null | undefined;
+  vendorName: string;
+  locationName: string | null;
+  on: Array<{ userId: string; status: string }>;
+  mine: boolean;
+  status: CalStatus;
+};
+
+/** Whether a detail passes the shared filters (`q` already trimmed and lowercased). */
+function keptByFilters(f: DetailFilters, q: string, job: typeof jobs.$inferSelect, e: EntryFacts): boolean {
+  if (f.mine && !e.mine) return false;
+  const picked =
+    inPicker(f.vendorIds, job.vendorId) &&
+    inPicker(f.vendorTypeIds, e.vendorTypeId) &&
+    inPicker(f.typeIds, job.typeId) &&
+    inPicker(f.locationIds, job.locationId) &&
+    inPicker(f.statuses, e.status);
+  if (!picked) return false;
+  if (f.personId && !e.on.some((p) => p.userId === f.personId && p.status !== "late_canceled")) return false;
+  if (f.jobNumber !== null && job.number !== f.jobNumber) return false;
+  return matchesText(q, job, e.vendorName, e.locationName);
+}
+
+export async function calendarEntries(actor: Actor, tx: Tx, range: DetailRange, f: DetailFilters, now: Date = new Date()): Promise<{ entries: CalEntry[]; truncated: boolean }> {
+  if (actor.role === "vendor") throw new ForbiddenError();
+  assertCan(actor, "job.read");
+  const { rows, truncated } = await calendarJobs(actor, tx, range, f);
   if (rows.length === 0) return { entries: [], truncated };
 
   const ids = rows.map((j) => j.id);
@@ -161,17 +209,7 @@ export async function calendarEntries(actor: Actor, tx: Tx, range: { from: Date;
     const filled = on.filter((p) => FILLING.includes(p.status)).length;
     const status = calStatus(job, needed, filled, now);
 
-    if (f.mine && !mine) continue;
-    if (f.vendorIds.length && !f.vendorIds.includes(job.vendorId)) continue;
-    if (f.vendorTypeIds.length && !(vendor?.typeId && f.vendorTypeIds.includes(vendor.typeId))) continue;
-    if (f.typeIds.length && !f.typeIds.includes(job.typeId)) continue;
-    if (f.locationIds.length && !(job.locationId && f.locationIds.includes(job.locationId))) continue;
-    if (f.statuses.length && !f.statuses.includes(status)) continue;
-    if (f.personId && !on.some((p) => p.userId === f.personId && p.status !== "late_canceled")) continue;
-    if (f.jobNumber !== null && job.number !== f.jobNumber) continue;
-    // "1234" or "#1234" is a job number; anything else matches the title, description, vendor or place.
-    const asNumber = /^#?(\d{1,9})$/.exec(q);
-    if (q && !(asNumber && job.number === Number(asNumber[1])) && ![job.title, job.description ?? "", vendor?.name ?? "", locationName ?? ""].some((t) => t.toLowerCase().includes(q))) continue;
+    if (!keptByFilters(f, q, job, { vendorTypeId: vendor?.typeId, vendorName: vendor?.name ?? "", locationName, on, mine, status })) continue;
 
     const span = { startAt: job.startAt, endAt: job.endAt };
     // As on the job card: a person on the detail sees their own position's pay; everyone else the base and the highest.
@@ -217,7 +255,7 @@ export async function calendarEntries(actor: Actor, tx: Tx, range: { from: Date;
 export async function detailCards(
   actor: Actor,
   tx: Tx,
-  range: { from: Date; to: Date },
+  range: DetailRange,
   f: DetailFilters,
   now: Date = new Date(),
 ): Promise<{ cards: JobCard[]; truncated: boolean; hiddenBySchedule: number; gone: MyDetail[] }> {
@@ -230,7 +268,7 @@ export async function detailCards(
     const p = agencyDateParts(start);
     to = new Date(Math.min(to.getTime(), agencyInstant(p.year, p.month, p.day + 7, 0, 0).getTime()));
   }
-  const window = { from: range.from, to };
+  const window = { from: range.from, to, runningAt: range.runningAt };
   const { entries, truncated } = await calendarEntries(actor, tx, window, f, now);
   const keep = new Set(entries.map((e) => e.id));
   if (keep.size === 0) return { cards: [], truncated, hiddenBySchedule: 0, gone };
@@ -259,7 +297,7 @@ export type FilterOptions = {
  * Choices for the filter panel. Staff choose from every vendor, place and person; personnel from the vendors and
  * places of details they can see in the range and the people on those details' rosters.
  */
-export async function filterOptions(actor: Actor, tx: Tx, range: { from: Date; to: Date }): Promise<FilterOptions> {
+export async function filterOptions(actor: Actor, tx: Tx, range: DetailRange): Promise<FilterOptions> {
   if (actor.role === "vendor") throw new ForbiddenError();
   assertCan(actor, "job.read");
   const types = await tx.select({ id: jobTypes.id, name: jobTypes.name }).from(jobTypes).where(eq(jobTypes.active, true)).orderBy(asc(jobTypes.sortOrder), asc(jobTypes.name));
@@ -327,14 +365,13 @@ const prefsSchema = z.object({
 });
 
 /** The deputy-only filters, shown and saved only by the personnel Details list. */
-export const PERSONAL_KEYS = ["openOnly", "week", "flex", "workable", "sort"] as const;
-export type PersonalFilters = Pick<DetailFilters, (typeof PERSONAL_KEYS)[number]>;
+export type PersonalFilters = Pick<DetailFilters, "openOnly" | "week" | "flex" | "workable" | "sort">;
 
 /** Filters without the deputy-only ones (what the Calendar and the coordinator Details list show). */
 export function sharedOnly(f: DetailFilters): DetailFilters {
   return { ...f, openOnly: false, week: false, flex: false, workable: false, sort: "date" };
 }
-export function personalOnly(f: DetailFilters): PersonalFilters {
+function personalOnly(f: DetailFilters): PersonalFilters {
   return { openOnly: f.openOnly, week: f.week, flex: f.flex, workable: f.workable, sort: f.sort };
 }
 

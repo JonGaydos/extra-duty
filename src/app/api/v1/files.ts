@@ -27,11 +27,12 @@ export class TooLargeError extends DomainError {
 export const UPLOAD_ENVELOPE = 64 * 1024;
 
 /** Reads the body, stopping as soon as it passes `limit` bytes. */
-export async function readLimited(req: Request, limit: number, message?: string): Promise<Uint8Array<ArrayBuffer>> {
+async function readLimited(req: Request, limit: number, message?: string): Promise<Uint8Array<ArrayBuffer>> {
   if (!req.body) return new Uint8Array(new ArrayBuffer(0));
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  // Sequential: each chunk is read after the last, so the size is checked as the body streams in.
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;

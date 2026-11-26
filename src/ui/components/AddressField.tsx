@@ -9,11 +9,13 @@ import { useMapConfig } from "./MapConfig";
 import type { AddressValue } from "./address-value";
 import { PinPicker } from "./PinPicker";
 
-export { addressValue, pinWire, type AddressState, type AddressValue, type PinWire } from "./address-value";
+export { addressValue, pinWire, type AddressValue } from "./address-value";
 
 const LOOKUP_TIMEOUT_MS = 8000;
 
-async function lookup(q: string): Promise<{ status: string; match: { label: string; lat: number; lng: number } | null } | null> {
+type Lookup = { status: string; match: { label: string; lat: number; lng: number } | null };
+
+async function lookup(q: string): Promise<Lookup | null> {
   try {
     const res = await fetch(`/api/v1/geocode?q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) });
     if (!res.ok) return null;
@@ -21,6 +23,65 @@ async function lookup(q: string): Promise<{ status: string; match: { label: stri
   } catch {
     return null;
   }
+}
+
+/** The field once the lookup of `q` answered: verified (the pin follows unless placed by hand), a suggestion, or not verified. */
+function afterLookup(now: AddressValue, q: string, r: Lookup | null): AddressValue {
+  const found = r?.status === "match" ? r.match : null;
+  // A suite or unit the person typed stays in the suggestion (the map never has one).
+  const match = found ? { ...found, label: withUnit(q, found.label) } : null;
+  const decision = addressDecision(q, match);
+  const keepManual = now.pin === "manual";
+  if (decision === "verified" && match) {
+    return { ...now, state: "verified", suggestion: null, ...(keepManual ? {} : { lat: match.lat, lng: match.lng, pin: "auto" as const }) };
+  }
+  if (decision === "suggest" && match) return { ...now, state: "suggest", suggestion: match };
+  return { ...now, state: "unverified", suggestion: null, unavailable: !r || r.status === "unavailable" };
+}
+
+/** What the lookup found, with the choice between a suggestion and the typed address. */
+function LookupStatus({
+  id,
+  value,
+  onUseSuggested,
+  onKeepTyped,
+}: Readonly<{ id: string; value: AddressValue; onUseSuggested: () => void; onKeepTyped: () => void }>) {
+  return (
+    <output id={id} aria-live="polite" className="flex flex-col gap-1.5 empty:hidden">
+      {value.state === "checking" ? <p className="m-0 text-xs text-muted">Looking up the address.</p> : null}
+      {value.state === "verified" ? <p className="m-0 text-xs font-medium text-success-ink">Found on the map.</p> : null}
+      {value.state === "unverified" ? (
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <Chip tone="warning">Not verified</Chip>
+          <span>{value.unavailable ? "The address lookup did not answer. It saves as typed." : "Saved as typed. Check it before deputies rely on it."}</span>
+        </p>
+      ) : null}
+      {value.state === "suggest" && value.suggestion ? (
+        <div className="flex flex-col gap-2 rounded-md border border-line bg-subtle px-3 py-2.5">
+          <p className="m-0 text-sm">
+            <span className="text-muted">Did you mean </span>
+            <span className="font-semibold">{value.suggestion.label}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={onUseSuggested}>
+              Use suggested
+            </Button>
+            <Button size="sm" variant="secondary" onClick={onKeepTyped}>
+              Keep as entered
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {value.state !== "idle" ? (
+        <p className="m-0 text-micro text-muted">
+          Address search by{" "}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">
+            OpenStreetMap
+          </a>
+        </p>
+      ) : null}
+    </output>
+  );
 }
 
 /**
@@ -38,7 +99,7 @@ export function AddressField({
   required,
   maxLength = 300,
   id: givenId,
-}: {
+}: Readonly<{
   label: string;
   hint?: string;
   value: AddressValue;
@@ -48,7 +109,7 @@ export function AddressField({
   required?: boolean;
   maxLength?: number;
   id?: string;
-}) {
+}>) {
   const auto = useId();
   const id = givenId ?? auto;
   const hintId = `${id}-hint`;
@@ -71,18 +132,7 @@ export function AddressField({
     const r = await lookup(q);
     const now = latest.current;
     if (now.address.trim() !== q) return;
-    const found = r?.status === "match" ? r.match : null;
-    // A suite or unit the person typed stays in the suggestion (the map never has one).
-    const match = found ? { ...found, label: withUnit(q, found.label) } : null;
-    const decision = addressDecision(q, match);
-    const keepManual = now.pin === "manual";
-    if (decision === "verified" && match) {
-      report.current({ ...now, state: "verified", suggestion: null, ...(keepManual ? {} : { lat: match.lat, lng: match.lng, pin: "auto" as const }) });
-    } else if (decision === "suggest" && match) {
-      report.current({ ...now, state: "suggest", suggestion: match });
-    } else {
-      report.current({ ...now, state: "unverified", suggestion: null, unavailable: !r || r.status === "unavailable" });
-    }
+    report.current(afterLookup(now, q, r));
   };
 
   const edit = (text: string) => {
@@ -122,40 +172,7 @@ export function AddressField({
           {hint}
         </p>
       ) : null}
-      <div id={statusId} role="status" aria-live="polite" className="flex flex-col gap-1.5 empty:hidden">
-        {value.state === "checking" ? <p className="m-0 text-xs text-muted">Looking up the address.</p> : null}
-        {value.state === "verified" ? <p className="m-0 text-xs font-medium text-success-ink">Found on the map.</p> : null}
-        {value.state === "unverified" ? (
-          <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <Chip tone="warning">Not verified</Chip>
-            <span>{value.unavailable ? "The address lookup did not answer. It saves as typed." : "Saved as typed. Check it before deputies rely on it."}</span>
-          </p>
-        ) : null}
-        {value.state === "suggest" && value.suggestion ? (
-          <div className="flex flex-col gap-2 rounded-md border border-line bg-subtle px-3 py-2.5">
-            <p className="m-0 text-sm">
-              <span className="text-muted">Did you mean </span>
-              <span className="font-semibold">{value.suggestion.label}</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={useSuggested}>
-                Use suggested
-              </Button>
-              <Button size="sm" variant="secondary" onClick={keepTyped}>
-                Keep as entered
-              </Button>
-            </div>
-          </div>
-        ) : null}
-        {value.state !== "idle" ? (
-          <p className="m-0 text-micro text-muted">
-            Address search by{" "}
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer noopener">
-              OpenStreetMap
-            </a>
-          </p>
-        ) : null}
-      </div>
+      <LookupStatus id={statusId} value={value} onUseSuggested={useSuggested} onKeepTyped={keepTyped} />
       {showPin ? (
         <>
           <PinPicker

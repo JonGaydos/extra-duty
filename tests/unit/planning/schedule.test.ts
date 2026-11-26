@@ -190,7 +190,7 @@ DTEND:20261106T160000Z
 SUMMARY:Cancelled thing
 STATUS:CANCELLED
 END:VEVENT
-END:VCALENDAR`.replace(/\n/g, "\r\n");
+END:VCALENDAR`.replaceAll("\n", "\r\n");
 
 describe("parseIcsBusy", () => {
   test("expands the recurring meeting, skips Free and cancelled, and blocks the all-day date", () => {
@@ -291,7 +291,7 @@ describe("parseIcsBusy scale and exceptions", () => {
 
   test("NUL characters are stripped and titles are capped", () => {
     const long = "x".repeat(MAX_TITLE_LENGTH + 100);
-    const ics = wrap(event(["UID:a@t", "DTSTART:20261104T150000Z", "DTEND:20261104T160000Z", "SUMMARY:Bad\u0000Title"]) + event(["UID:b@t", "DTSTART:20261105T150000Z", "DTEND:20261105T160000Z", `SUMMARY:${long}`]));
+    const ics = wrap(event(["UID:a@t", "DTSTART:20261104T150000Z", "DTEND:20261104T160000Z", "SUMMARY:\u0000Bad\u0000Ti\u0000\u0000tle\u0000"]) + event(["UID:b@t", "DTSTART:20261105T150000Z", "DTEND:20261105T160000Z", `SUMMARY:${long}`]));
     const out = parseIcsBusy(ics, at(11, 1, 0), at(11, 20, 0));
     expect(out[0].title).toBe("BadTitle");
     expect(out[1].title).toHaveLength(MAX_TITLE_LENGTH);

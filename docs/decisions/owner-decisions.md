@@ -37,6 +37,7 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - A coordinator can approve a rate outside the range on a single detail, with a reason.
   - That exception is shown only in the audit log and on the detail's staff page, never on invoices.
 - **Copying a detail (2026-11-25).** A copy carries the detail itself (vendor, location, title, description, notes, positions, rate, flexible times, officer safety, site contact and attachments) but never the people who were signed up or working it. The copy starts with an empty roster.
+- **Overnight details (2026-11-26).** A detail still running stays on today's lists until it ends, even if it started before midnight. The month calendar still places a detail on the day it starts.
 - **Reactivating a canceled detail (2026-11-24).**
   - Coordinators can bring back a canceled detail before its end time, with a required reason.
   - It starts fresh with an empty roster. The former deputies and the vendor are notified.
@@ -90,4 +91,5 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - Recorded runs keep their video and traces in dated folders, saved after each test file, so a crash loses at most the test in progress.
 - **Self-hosting (2026-11-24).** Docker Compose with Caddy for automatic HTTPS, plus a guide covering install, backups, updates and restore.
 - **Open source (2026-11-25).** The owner releases Extra Duty publicly as open source under AGPL-3.0, from a personal GitHub account. The public release is made generic first: no owner name, agency name, home network address or real local organizations. It is published with a fresh single-commit history, while the full history stays private. The public app makes no reference to any other software product or vendor, and contains no IP addresses, real names, contact details, machine names or local tooling references.
+- **Code quality cleanup (2026-11-25).** Every SonarCloud finding is addressed, area by area: real risks first, then mechanical tidy-ups, then rewrites of nested conditions, complex functions and sequential waits, with no behavior change and full tests each round. All rounds are done locally and checked with the same rules run locally; GitHub receives one combined update at the end, not one per round. A wider review (library vulnerabilities, dead code, stricter type checks, licenses, secret and privacy scan) runs before that update.
 - **DigitalOcean (2026-11-24).** This will be decided after deployment. Nothing is connected now.

@@ -113,6 +113,14 @@ export type VendorJobControls = {
 
 const refused = (reason: string) => ({ allowed: false, reason });
 
+/** Why the vendor can change nothing on the detail right now, or null when it is open to changes. */
+function closedToVendor(job: { state: string; startAt: Date }, hold: boolean, now: Date): string | null {
+  if (job.state === "canceled" || job.state === "declined") return "This detail is closed.";
+  if (hold) return "Your account is on payment hold, so details cannot be changed. Call the coordinators.";
+  if (job.startAt.getTime() <= now.getTime()) return "This detail has started.";
+  return null;
+}
+
 /**
  * What the vendor may change on its own detail right now, from the vendor settings (edit lock, edits after sign-up,
  * cancellation window) and the rules in `vendorEditAllowed`. Another vendor's job is not found.
@@ -120,7 +128,7 @@ const refused = (reason: string) => ({ allowed: false, reason });
 export async function vendorJobControls(actor: Actor, tx: Tx, jobId: string, now: Date = new Date()): Promise<VendorJobControls> {
   const vendorId = ownVendor(actor);
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
-  if (!job || job.vendorId !== vendorId) throw new NotFoundError("Job not found.");
+  if (job?.vendorId !== vendorId) throw new NotFoundError("Job not found.");
   const s = await getSettings(tx);
   const posRows = await tx
     .select({ positionTypeId: jobPositions.positionTypeId, name: positionTypes.name, count: jobPositions.count })
@@ -146,14 +154,7 @@ export async function vendorJobControls(actor: Actor, tx: Tx, jobId: string, now
   const lateHours = s.lateVendorCancelHours;
   const base = { positions, signedUp, pendingChange: pending ?? null };
 
-  const closedReason =
-    job.state === "canceled" || job.state === "declined"
-      ? "This detail is closed."
-      : v?.hold
-        ? "Your account is on payment hold, so details cannot be changed. Call the coordinators."
-        : job.startAt.getTime() <= now.getTime()
-          ? "This detail has started."
-          : null;
+  const closedReason = closedToVendor(job, v?.hold ?? false, now);
   if (closedReason) {
     return { ...base, edit: refused(closedReason), schedule: { ...refused(closedReason), needsApproval: false, positionsOnly: false }, cancel: { ...refused(closedReason), latePay: false, lateHours } };
   }

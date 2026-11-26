@@ -4,13 +4,14 @@ import { redirect } from "next/navigation";
 import { NO_FILTERS, saveViewFilters } from "@/domain/calendar/calendar";
 import { act } from "../_personnel/result";
 import { filterParams, filtersFromParams } from "./detail-filters";
+import { formText } from "@/lib/form-text";
 
 /** Only these pages take the filter panel; anything else goes to the Calendar. */
 const PATHS = ["/calendar", "/coordinate/details", "/jobs"];
 const KEEP = ["view", "date"];
 
 function target(form: FormData): { path: string; keep: URLSearchParams } {
-  const raw = String(form.get("path") ?? "");
+  const raw = formText(form, "path");
   const path = PATHS.includes(raw) ? raw : "/calendar";
   const keep = new URLSearchParams();
   for (const k of KEEP) {

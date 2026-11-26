@@ -29,7 +29,7 @@ import { Check, CheckGroup } from "../_admin/forms";
 type Option = { id: string; name: string };
 type Account = { name: string; phone: string; role: Role; rankId: string; badgeNumber: string };
 
-function AccountFields({ value, onChange, ranks, canPickAdmin, email }: { value: Account; onChange: (v: Account) => void; ranks: Option[]; canPickAdmin: boolean; email?: { value: string; set: (v: string) => void } }) {
+function AccountFields({ value, onChange, ranks, canPickAdmin, email }: Readonly<{ value: Account; onChange: (v: Account) => void; ranks: Option[]; canPickAdmin: boolean; email?: { value: string; set: (v: string) => void } }>) {
   const set = (k: keyof Account) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => onChange({ ...value, [k]: e.target.value });
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -68,7 +68,7 @@ function AccountFields({ value, onChange, ranks, canPickAdmin, email }: { value:
   );
 }
 
-export function InviteUser({ canInviteAdmins, ranks, flags }: { canInviteAdmins: boolean; ranks: Option[]; flags: Option[] }) {
+export function InviteUser({ canInviteAdmins, ranks, flags }: Readonly<{ canInviteAdmins: boolean; ranks: Option[]; flags: Option[] }>) {
   const empty: Account = { name: "", phone: "", role: "personnel", rankId: "", badgeNumber: "" };
   const [open, setOpen] = useState(false);
   const [v, setV] = useState<Account>(empty);
@@ -115,7 +115,7 @@ export function InviteUser({ canInviteAdmins, ranks, flags }: { canInviteAdmins:
   );
 }
 
-export function EditAccount({ userId, initial, ranks, canPickAdmin }: { userId: string; initial: Account; ranks: Option[]; canPickAdmin: boolean }) {
+export function EditAccount({ userId, initial, ranks, canPickAdmin }: Readonly<{ userId: string; initial: Account; ranks: Option[]; canPickAdmin: boolean }>) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState(initial);
   const { run, busy } = useCoordAction();
@@ -146,7 +146,7 @@ export function EditAccount({ userId, initial, ranks, canPickAdmin }: { userId: 
   );
 }
 
-export function SuspendForm({ userId, today }: { userId: string; today: string }) {
+export function SuspendForm({ userId, today }: Readonly<{ userId: string; today: string }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [until, setUntil] = useState("");
@@ -188,7 +188,7 @@ export function SuspendForm({ userId, today }: { userId: string; today: string }
   );
 }
 
-export function LiftSuspension({ userId }: { userId: string }) {
+export function LiftSuspension({ userId }: Readonly<{ userId: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Button variant="secondary" busy={busy} onClick={() => run(() => liftSuspensionAction(userId))} className="w-fit">
@@ -197,7 +197,7 @@ export function LiftSuspension({ userId }: { userId: string }) {
   );
 }
 
-export function RevokeFlag({ userId, qualificationId, label }: { userId: string; qualificationId: string; label: string }) {
+export function RevokeFlag({ userId, qualificationId, label }: Readonly<{ userId: string; qualificationId: string; label: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Button size="sm" variant="secondary" busy={busy} aria-label={`Revoke ${label}`} onClick={() => run(() => revokeFlagAction({ userId, qualificationId }))}>
@@ -207,7 +207,7 @@ export function RevokeFlag({ userId, qualificationId, label }: { userId: string;
 }
 
 /** Grant one flag to one person: pick a flag (on a user page) or a person (on a flag page). */
-export function GrantFlag({ userId, qualificationId, choices, chooseLabel }: { userId?: string; qualificationId?: string; choices: Option[]; chooseLabel: "Flag" | "Person" }) {
+export function GrantFlag({ userId, qualificationId, choices, chooseLabel }: Readonly<{ userId?: string; qualificationId?: string; choices: Option[]; chooseLabel: "Flag" | "Person" }>) {
   const [pick, setPick] = useState("");
   const { run, busy } = useCoordAction();
   if (choices.length === 0) return null;
@@ -246,7 +246,7 @@ type Checklist = {
 };
 
 /** One list in the departure checklist: a heading with its count, what happens to it, and the rows. */
-function ChecklistSection({ title, what, count, children }: { title: string; what: string; count: number; children: React.ReactNode }) {
+function ChecklistSection({ title, what, count, children }: Readonly<{ title: string; what: string; count: number; children: React.ReactNode }>) {
   return (
     <section className="flex flex-col gap-1.5" aria-label={title}>
       <h3 className="m-0 flex items-baseline gap-2 text-sm font-semibold text-ink">
@@ -275,7 +275,7 @@ const CheckRow = ({ main, meta, chip }: { main: string; meta: string; chip?: str
  * Turning someone off when they leave: the last day and a reason first, then the checklist (nothing changes yet),
  * then the confirmation. An admin's API keys that will stop working are listed and must be acknowledged.
  */
-function DepartureFlow({ userId, name, today, apiKeys }: { userId: string; name: string; today: string; apiKeys: Array<{ name: string; prefix: string }> }) {
+function DepartureFlow({ userId, name, today, apiKeys }: Readonly<{ userId: string; name: string; today: string; apiKeys: Array<{ name: string; prefix: string }> }>) {
   const [step, setStep] = useState<"idle" | "form" | "review">("idle");
   const [lastDay, setLastDay] = useState(today);
   const [reason, setReason] = useState("");
@@ -334,7 +334,7 @@ function DepartureFlow({ userId, name, today, apiKeys }: { userId: string; name:
     );
   const day = (iso: string) => dayLabel(new Date(iso));
   return (
-    <div role="group" aria-label={`Checklist for ${name}`} className="flex flex-col gap-4 rounded-md border border-danger-line bg-danger-soft p-3">
+    <fieldset aria-label={`Checklist for ${name}`} className="min-w-0 flex flex-col gap-4 rounded-md border border-danger-line bg-danger-soft p-3">
       <p className="m-0 text-sm text-danger-ink">
         Turn off {name}&apos;s account, last day {dateLabel(new Date(`${lastDay}T12:00:00Z`))}? They are signed out and cannot sign in. Their history stays.
       </p>
@@ -366,8 +366,7 @@ function DepartureFlow({ userId, name, today, apiKeys }: { userId: string; name:
             ))}
           </ul>
           <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-ink">
-            <input type="checkbox" checked={keysOk} onChange={(e) => setKeysOk(e.target.checked)} className="size-4.5 accent-accent" />
-            I understand these keys will stop working
+            <input type="checkbox" checked={keysOk} onChange={(e) => setKeysOk(e.target.checked)} className="size-4.5 accent-accent" />I understand these keys will stop working
           </label>
         </div>
       ) : null}
@@ -382,7 +381,7 @@ function DepartureFlow({ userId, name, today, apiKeys }: { userId: string; name:
           Keep account
         </Button>
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -393,7 +392,7 @@ export function AccessActions({
   sent,
   today,
   apiKeys = [],
-}: {
+}: Readonly<{
   userId: string;
   name: string;
   canResend: boolean;
@@ -402,7 +401,7 @@ export function AccessActions({
   today: string;
   /** An admin's API keys that still work: turning the account off stops them. */
   apiKeys?: Array<{ name: string; prefix: string }>;
-}) {
+}>) {
   const { run, busy } = useCoordAction();
   return (
     <div className="flex flex-col gap-3">
@@ -417,7 +416,7 @@ export function AccessActions({
 }
 
 /** Turns a departed account back on, with a reason. Old sign-ups stay removed. */
-export function ReactivateForm({ userId, name }: { userId: string; name: string }) {
+export function ReactivateForm({ userId, name }: Readonly<{ userId: string; name: string }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();
@@ -452,7 +451,7 @@ export function ReactivateForm({ userId, name }: { userId: string; name: string 
 }
 
 /** Writes off one unbilled detail of someone who left, with a reason. */
-export function WriteOffDetail({ assignmentId, label }: { assignmentId: string; label: string }) {
+export function WriteOffDetail({ assignmentId, label }: Readonly<{ assignmentId: string; label: string }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();

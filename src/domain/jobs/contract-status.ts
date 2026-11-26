@@ -8,7 +8,7 @@ import { vendorHasCurrentContract } from "../vendors/vendors";
 export type ContractStatus = "vendor" | "detail" | "missing";
 
 /** How far back "recent" reaches for the missing-contract to-do list. */
-export const RECENT_CONTRACT_DAYS = 30;
+const RECENT_CONTRACT_DAYS = 30;
 
 async function statusFor(tx: Tx, job: { id: string; vendorId: string; startAt: Date }): Promise<ContractStatus> {
   if (await vendorHasCurrentContract(tx, job.vendorId, agencyDayKey(job.startAt))) return "vendor";
@@ -38,6 +38,7 @@ export async function detailsMissingContract(tx: Tx, now: Date): Promise<Missing
     .where(and(gte(jobs.startAt, since), notInArray(jobs.state, ["canceled", "declined"])))
     .orderBy(asc(jobs.startAt), asc(jobs.id));
   const out: MissingContractJob[] = [];
+  // Sequential: these queries share one transaction's connection, which runs one at a time.
   for (const j of rows) if ((await statusFor(tx, j)) === "missing") out.push(j);
   return out;
 }

@@ -6,6 +6,7 @@ import { csvCell } from "@/lib/csv";
 import type { Actor } from "../actor";
 import { assertCan } from "../auth/policy";
 import { NotFoundError, ValidationError } from "../errors";
+import { byText } from "@/lib/sort";
 
 /**
  * Every table the data API and the export cover, by database name. A new table is covered only once it is added here
@@ -98,8 +99,8 @@ const HIDDEN_COLUMNS: Record<string, readonly string[]> = {
   files: ["storageKey"],
 };
 
-/** JSON keys that hold secrets (settings keep the SMTP password and email API key encrypted). */
-const SECRET_KEY = /password|secret|token|apikey|enc$/i;
+/** JSON keys that hold secrets: any key containing one of the words, or ending in "enc" (settings keep the SMTP password and email API key encrypted). */
+const isSecretKey = (key: string) => /password|secret|token|apikey/i.test(key) || /enc$/i.test(key);
 
 type Entity = { name: string; table: PgTable; columns: Record<string, PgColumn> };
 
@@ -116,12 +117,13 @@ const ENTITIES: Map<string, Entity> = new Map(
 );
 
 /** Every table in the data API and the export, by its database name. */
-export const EXPORT_TABLES: readonly string[] = [...ENTITIES.keys()].sort();
+export const EXPORT_TABLES: readonly string[] = [...ENTITIES.keys()].sort(byText);
 
-function redact(value: unknown): unknown {
+/** Hides non-empty text under secret-looking keys, at any depth. */
+export function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === "object" && !(value instanceof Date)) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, SECRET_KEY.test(k) && typeof v === "string" && v !== "" ? "[hidden]" : redact(v)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, isSecretKey(k) && typeof v === "string" && v !== "" ? "[hidden]" : redact(v)]));
   }
   return value;
 }
@@ -145,7 +147,7 @@ async function page(tx: Tx, e: Entity, conds: SQL[], after: string | undefined, 
 }
 
 export type EntityQuery = { updatedSince?: Date; cursor?: string; limit?: number; filters?: Record<string, string> };
-export const ENTITY_PAGE_DEFAULT = 100;
+const ENTITY_PAGE_DEFAULT = 100;
 
 /**
  * Admins (and their API keys) only. One page of a table's rows in id order, without secret columns. `filters` are
@@ -167,7 +169,7 @@ export async function readEntity(actor: Actor, tx: Tx, name: string, q: EntityQu
     conds.push(sql`${col}::text = ${value}`);
   }
   const rows = await page(tx, e, conds, q.cursor, limit);
-  return { rows, nextCursor: rows.length === limit ? String(rows[rows.length - 1].id) : null };
+  return { rows, nextCursor: rows.length === limit ? String(rows.at(-1)!.id) : null };
 }
 
 const EXPORT_PAGE = 1000;
@@ -176,15 +178,18 @@ function csvValue(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (v instanceof Date) return v.toISOString();
-  if (typeof v === "object") return csvCell(JSON.stringify(v));
-  return csvCell(String(v));
+  if (typeof v === "string") return csvCell(v);
+  if (typeof v === "bigint") return csvCell(String(v));
+  // Objects (JSON columns) as JSON; nothing else comes from the database.
+  return csvCell(JSON.stringify(v) ?? "");
 }
 
 /**
  * Every exported table as text, one file at a time: `[name, chunks]`. JSON files are arrays of rows; CSV files
  * have a header of database column names. Rows are read in pages of 1,000 inside the caller's transaction.
+ * Each file's chunks do the database reads, as the zip writer reaches that file.
  */
-export async function* exportTables(actor: Actor, tx: Tx, format: "json" | "csv"): AsyncGenerator<{ name: string; chunks: AsyncGenerator<string> }> {
+export function* exportTables(actor: Actor, tx: Tx, format: "json" | "csv"): Generator<{ name: string; chunks: AsyncIterable<string> | Iterable<string> }> {
   assertCan(actor, "data.readAll");
   for (const name of EXPORT_TABLES) {
     const e = entity(name);
@@ -194,6 +199,7 @@ export async function* exportTables(actor: Actor, tx: Tx, format: "json" | "csv"
       else yield "[";
       let after: string | undefined;
       let first = true;
+      // Sequential: each page starts after the last id of the one before.
       for (;;) {
         const rows = await page(tx, e, [], after, EXPORT_PAGE);
         if (rows.length === 0) break;
@@ -203,7 +209,7 @@ export async function* exportTables(actor: Actor, tx: Tx, format: "json" | "csv"
             : rows.map((r, i) => `${first && i === 0 ? "" : ","}\n${JSON.stringify(r)}`).join("");
         first = false;
         yield text;
-        after = String(rows[rows.length - 1].id);
+        after = String(rows.at(-1)!.id);
         if (rows.length < EXPORT_PAGE) break;
       }
       if (format === "json") yield "\n]\n";
@@ -212,9 +218,9 @@ export async function* exportTables(actor: Actor, tx: Tx, format: "json" | "csv"
   }
   yield {
     name: "files.txt",
-    chunks: (async function* () {
-      yield "W-9 and other files are not included. Each file is listed by id in the files table (name, type, size, kind, owner).\r\n";
-      yield "Download one through the API: vendor documents, detail attachments, ops plans and invoices have their own routes; W-9s need an API key with the w9 scope.\r\n";
-    })(),
+    chunks: [
+      "W-9 and other files are not included. Each file is listed by id in the files table (name, type, size, kind, owner).\r\n",
+      "Download one through the API: vendor documents, detail attachments, ops plans and invoices have their own routes; W-9s need an API key with the w9 scope.\r\n",
+    ],
   };
 }

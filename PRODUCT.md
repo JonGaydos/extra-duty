@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-<!-- Inferred from docs/specs/2026-11-22-extra-duty-design.md and the approved mockups in docs/mockups/project/ during Task 36. Confirmed by the owner on 2026-11-24, with one correction: deputies use phone and desktop about equally. -->
+<!-- Inferred from docs/specs/2026-11-22-extra-duty-design.md and the approved design mockups during Task 36. Confirmed by the owner on 2026-11-24, with one correction: deputies use phone and desktop about equally. -->
 
 ## Platform
 
@@ -44,7 +44,7 @@ The agency runs its own system and never touches detail money: vendors pay deput
 
 ## Evidence on Hand
 
-- Approved screen mockups: docs/mockups/project/*.dc.html (phone deputy screens, desktop coordinator screens, vendor request, invoice, one night-mode screen).
+- Design system: DESIGN.md. Screens as built: the manual screenshots in docs/manuals/images/ (phone and desktop).
 - No real agency logo, photography or testimonials are in the repository; do not invent them.
 
 ## Product Principles

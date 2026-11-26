@@ -10,7 +10,7 @@ import { formatInvoiceNumber, type Invoice } from "@/domain/invoices/invoices";
 import { getSettings } from "@/domain/settings/settings";
 
 export type Party = "deputy" | "coordinator" | "vendor";
-export type InvoiceEvent = typeof invoiceEvents.$inferSelect;
+type InvoiceEvent = typeof invoiceEvents.$inferSelect;
 /** Staff and payees get full rows; vendors get no user ids, `vendorVisible` or audit columns. */
 export type TimelineEvent = Pick<InvoiceEvent, "id" | "invoiceId" | "event" | "party" | "note" | "at"> & {
   actorUserId?: string | null;
@@ -116,7 +116,7 @@ async function validatePayment(tx: Tx, input: PaymentInput, now: Date): Promise<
   if (!(input.paidAt instanceof Date) || Number.isNaN(input.paidAt.getTime())) throw new ValidationError("Enter the date paid.");
   if (input.paidAt.getTime() > now.getTime()) throw new ValidationError("The paid date cannot be in the future.");
   const [m] = await tx.select().from(paymentMethods).where(eq(paymentMethods.id, input.paymentMethodId));
-  if (!m || !m.active) throw new ValidationError("Choose a valid payment method.");
+  if (!m?.active) throw new ValidationError("Choose a valid payment method.");
 }
 
 /** Marks the invoice paid in full once both sides have marked; closes open issues as paid. */
@@ -176,6 +176,7 @@ async function closeInvoice(tx: Tx, inv: Invoice, outcome: "paid" | "written_off
     .from(paymentIssues)
     .where(and(eq(paymentIssues.invoiceId, inv.id), eq(paymentIssues.status, "open")))
     .orderBy(asc(paymentIssues.createdAt), asc(paymentIssues.id));
+  // Sequential: each issue is closed with writes and audit rows in this transaction.
   for (const issue of open) await finishIssue(tx, issue, inv, outcome, now, actor);
 }
 

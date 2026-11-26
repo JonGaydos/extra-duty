@@ -111,13 +111,14 @@ export async function reviewDeputyNote(
     before: snapshot(note),
     after: { ...snapshot(done), comment },
   });
+  const reason = comment ? ` Reason: ${comment}` : "";
   await emit(
     tx,
     {
       recipients: [note.submittedBy],
       type: approve ? "deputyNote.approved" : "deputyNote.denied",
       title: approve ? "Your note was approved" : "Your note was not approved",
-      body: approve ? "Your deputy note will show on future details." : `Your deputy note was not approved.${comment ? ` Reason: ${comment}` : ""}`,
+      body: approve ? "Your deputy note will show on future details." : `Your deputy note was not approved.${reason}`,
       link: `/jobs/${note.submittedFromJobId}`,
     },
     now,

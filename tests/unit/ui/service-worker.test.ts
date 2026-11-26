@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { serviceWorkerSource } from "@/app/sw";
+import { byText } from "@/lib/sort";
+
+// Fake client lookups are async to match the service worker API; they answer at once.
 
 type Listener = (event: Record<string, unknown>) => void;
 
@@ -13,8 +16,8 @@ function boot(fetchImpl: (req: never) => Promise<Response>) {
     registration: { showNotification: vi.fn(async () => {}) },
     clients: {
       claim: vi.fn(async () => {}),
-      matchAll: vi.fn(async () => [] as Array<{ url: string; focus: () => Promise<void> }>),
-      openWindow: vi.fn(async () => null),
+      matchAll: vi.fn(() => Promise.resolve([] as Array<{ url: string; focus: () => Promise<void> }>)),
+      openWindow: vi.fn(() => Promise.resolve(null)),
     },
   };
   new Function("self", "fetch", "Response", "URL", serviceWorkerSource())(self, fetchImpl, Response, URL);
@@ -62,6 +65,6 @@ describe("service worker", () => {
     expect(await page.text()).toContain("You are offline");
     expect(await fire("fetch", { request: { mode: "cors", url: "https://duty.example/api/v1/jobs" } })).toBeUndefined();
     expect(serviceWorkerSource()).not.toMatch(/caches\./);
-    expect([...listeners.keys()].sort()).toEqual(["activate", "fetch", "install", "notificationclick", "push"]);
+    expect([...listeners.keys()].sort(byText)).toEqual(["activate", "fetch", "install", "notificationclick", "push"]);
   });
 });

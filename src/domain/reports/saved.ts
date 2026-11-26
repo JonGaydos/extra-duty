@@ -51,6 +51,7 @@ export const BUILT_IN_REPORTS: ReadonlyArray<{ name: string; spec: SavedSpec }> 
  * filters, and the change is audited as the system. Reports people saved are never touched.
  */
 export async function seedBuiltInReports(tx: Tx): Promise<void> {
+  // Sequential: reads and writes in this transaction.
   for (const r of BUILT_IN_REPORTS) {
     validateSavedSpec(r.spec);
     const spec = JSON.parse(JSON.stringify(r.spec)) as Record<string, unknown>;

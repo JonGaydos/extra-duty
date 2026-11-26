@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, test } from "vitest";
 import { agencyChannelOn, agencyChannelsProblem, CATALOG, channelsFor, groupFor, RECIPIENT_GROUPS, type CatalogKey } from "@/domain/notifications/catalog";
 import { NOTIFICATION_TYPES } from "@/domain/notifications/types";
+import { byText } from "@/lib/sort";
 
 const ROOT = join(__dirname, "../../..");
 
@@ -54,7 +55,7 @@ describe("notification catalog", () => {
         found.push(`${relative(ROOT, path)} ${m[0]}`);
       }
     }
-    expect(found.sort()).toEqual(SEND_SITES.map((s) => `${s.file} ${s.call}`).sort());
+    expect(found.toSorted(byText)).toEqual(SEND_SITES.map((s) => `${s.file} ${s.call}`).sort(byText));
     for (const s of SEND_SITES) if (!["notify", "queue worker", "auth wrapper"].includes(s.key)) expect(CATALOG[s.key as CatalogKey], s.key).toBeDefined();
   });
 
@@ -70,7 +71,7 @@ describe("notification catalog", () => {
     const locked = Object.entries(CATALOG)
       .filter(([, e]) => e.locked)
       .map(([k]) => k)
-      .sort();
+      .sort(byText);
     expect(locked).toEqual(["auth.invite", "auth.password_reset", "auth.sign_in_code", "invoice.delivery", "settings.email_replaced", "settings.test_email"]);
     expect(agencyChannelsProblem({ "auth.sign_in_code": { personnel: { email: false } } })).toMatch(/cannot be turned off/);
     expect(agencyChannelsProblem({ "invoice.delivery": { vendor: { email: false } } })).toMatch(/This email is the invoice/);

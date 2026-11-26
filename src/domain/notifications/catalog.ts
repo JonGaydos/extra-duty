@@ -10,22 +10,20 @@ export const RECIPIENT_GROUPS = ["vendor", "personnel", "staff"] as const;
 export type RecipientGroup = (typeof RECIPIENT_GROUPS)[number];
 export const GROUP_LABEL: Record<RecipientGroup, string> = { vendor: "Vendors", personnel: "Deputies and personnel", staff: "Coordinators and admins" };
 
-export const CHANNELS = ["email", "push"] as const;
+const CHANNELS = ["email", "push"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export const CATEGORIES = ["Details", "Sign-ups", "Billing and invoices", "Payments", "Vendor requests", "Ops plans", "Messages", "Account"] as const;
-export type Category = (typeof CATEGORIES)[number];
+type Category = (typeof CATEGORIES)[number];
 
 /** Emails sent outside the notify path: no inbox row, no push. */
-export const EMAIL_ONLY_KEYS = [
-  "auth.sign_in_code",
-  "auth.invite",
-  "auth.password_reset",
-  "settings.test_email",
-  "invoice.delivery",
-  "invoice.vendor_payment_reminder",
-] as const;
-export type EmailOnlyKey = (typeof EMAIL_ONLY_KEYS)[number];
+type EmailOnlyKey =
+  | "auth.sign_in_code"
+  | "auth.invite"
+  | "auth.password_reset"
+  | "settings.test_email"
+  | "invoice.delivery"
+  | "invoice.vendor_payment_reminder";
 export type CatalogKey = NotificationType | EmailOnlyKey;
 
 export type CatalogEntry = {
@@ -200,17 +198,24 @@ export function agencyChannelOn(stored: AgencyChannels, key: CatalogKey, group: 
   return stored[key]?.[group]?.[channel] ?? true;
 }
 
+/** Why one group's stored channels for a type cannot be saved, or null. */
+function groupChannelsProblem(entry: CatalogEntry, group: string, channels: Partial<Record<Channel, boolean>> | undefined): string | null {
+  const allowed = (RECIPIENT_GROUPS as readonly string[]).includes(group) ? channelsFor(entry, group as RecipientGroup) : [];
+  for (const [channel, on] of Object.entries(channels ?? {})) {
+    if (!(allowed as readonly string[]).includes(channel)) return `${entry.label} has no ${channel} for ${GROUP_LABEL[group as RecipientGroup] ?? group}.`;
+    if (entry.locked && on === false) return `${entry.label} cannot be turned off. ${entry.locked}`;
+  }
+  return null;
+}
+
 /** Why stored agency choices cannot be saved, or null. */
 export function agencyChannelsProblem(stored: AgencyChannels): string | null {
   for (const [key, groups] of Object.entries(stored)) {
     const entry = (CATALOG as Record<string, CatalogEntry | undefined>)[key];
     if (!entry) return `Unknown notification type: ${key}.`;
     for (const [group, channels] of Object.entries(groups ?? {})) {
-      const allowed = (RECIPIENT_GROUPS as readonly string[]).includes(group) ? channelsFor(entry, group as RecipientGroup) : [];
-      for (const [channel, on] of Object.entries(channels ?? {})) {
-        if (!(allowed as readonly string[]).includes(channel)) return `${entry.label} has no ${channel} for ${GROUP_LABEL[group as RecipientGroup] ?? group}.`;
-        if (entry.locked && on === false) return `${entry.label} cannot be turned off. ${entry.locked}`;
-      }
+      const problem = groupChannelsProblem(entry, group, channels);
+      if (problem) return problem;
     }
   }
   return null;

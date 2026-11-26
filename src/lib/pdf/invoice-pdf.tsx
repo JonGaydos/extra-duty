@@ -2,6 +2,7 @@ import { Document, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@
 import { TrainingMark } from "./training-mark";
 import { AGENCY_TZ } from "@/domain/time/agency-time";
 import { containSize, logoSlot } from "@/lib/logo-fit";
+import { keyedByContent } from "@/lib/list-keys";
 
 export type InvoicePdfData = {
   /** Display number, for example ED-000001. */
@@ -36,7 +37,9 @@ export type InvoicePdfData = {
 export function formatMoney(cents: number): string {
   const sign = cents < 0 ? "-" : "";
   const abs = Math.abs(cents);
-  const dollars = Math.floor(abs / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const digits = Math.floor(abs / 100).toString();
+  let dollars = "";
+  for (let i = 0; i < digits.length; i++) dollars += (i > 0 && (digits.length - i) % 3 === 0 ? "," : "") + digits[i];
   return `${sign}$${dollars}.${String(abs % 100).padStart(2, "0")}`;
 }
 
@@ -54,12 +57,12 @@ export function formatDate(at: Date): string {
   return clean(dateFmt.format(at));
 }
 
-export function formatDateTime(at: Date): string {
+function formatDateTime(at: Date): string {
   return `${formatDate(at)}, ${clean(timeFmt.format(at))}`;
 }
 
 /** "Fri, Dec 4, 2026, 5:30 PM to 9:30 PM"; both full stamps when the job crosses days. */
-export function formatSpan(startAt: Date, endAt: Date): string {
+function formatSpan(startAt: Date, endAt: Date): string {
   if (formatDate(startAt) === formatDate(endAt)) {
     return `${formatDateTime(startAt)} to ${clean(timeFmt.format(endAt))}`;
   }
@@ -67,7 +70,7 @@ export function formatSpan(startAt: Date, endAt: Date): string {
 }
 
 /** Hours with up to two decimals: 4, 3.5, 4.25. */
-export function formatHours(minutes: number): string {
+function formatHours(minutes: number): string {
   return String(Math.round((minutes / 60) * 100) / 100);
 }
 
@@ -103,7 +106,7 @@ export function pdfLogoBox(logo: { width?: number | null; height?: number | null
 }
 
 /** Logo, agency name and Sheriff. Shared by the invoice, the tax summary and the report PDFs. */
-export function AgencyHeader({ agency }: { agency: AgencyHeaderData }) {
+export function AgencyHeader({ agency }: Readonly<{ agency: AgencyHeaderData }>) {
   return (
     <View style={s.header}>
       {/* react-pdf Image is a PDF primitive, not an HTML img. */}
@@ -120,7 +123,7 @@ export function AgencyHeader({ agency }: { agency: AgencyHeaderData }) {
   );
 }
 
-function InvoiceDocument({ d }: { d: InvoicePdfData }) {
+function InvoiceDocument({ d }: Readonly<{ d: InvoicePdfData }>) {
   const lateCancel = d.kind === "late_cancel";
   const minimumApplied = !lateCancel && d.minutes > d.workedMinutes && d.minutes === d.minimumMinutes;
   const paidLine = d.paid
@@ -149,8 +152,8 @@ function InvoiceDocument({ d }: { d: InvoicePdfData }) {
         <View style={s.section}>
           <Text style={s.label}>Pay to</Text>
           <Text style={s.bold}>{d.payee.name}</Text>
-          {d.payee.mailingAddress.split("\n").filter((l) => l.trim()).map((line, i) => (
-            <Text key={i}>{line}</Text>
+          {keyedByContent(d.payee.mailingAddress.split("\n").filter((l) => l.trim()), (l) => l).map(({ key, item: line }) => (
+            <Text key={key}>{line}</Text>
           ))}
           <Text>{d.payee.email}</Text>
         </View>

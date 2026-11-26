@@ -17,7 +17,7 @@ import { getEarningsGoal } from "./preferences";
 import { assertOwn, bestPlacement, loadDuty, scheduleShiftsForCaps, type Interval, type PlannedJob } from "./schedule";
 
 const DAY_MS = 86_400_000;
-export const RECOMMENDATION_DAYS = 60;
+const RECOMMENDATION_DAYS = 60;
 const MAX_CANDIDATES = 200;
 
 /** What the detail pays at its scheduled hours: billable minutes (rounding, then the minimum) at the job rate. */
@@ -32,7 +32,7 @@ export function scheduledPayCents(
   return invoiceTotal(minutes, job.rateCents);
 }
 
-export type Candidate = { jobPositionId: string; startAt: Date; endAt: Date; totalCents: Cents; flex?: PlannedJob["flex"] };
+type Candidate = { jobPositionId: string; startAt: Date; endAt: Date; totalCents: Cents; flex?: Exclude<PlannedJob["flex"], undefined> };
 
 export type RecommendInput = {
   /** Already filtered to eligible, released, open and not hidden. */
@@ -56,7 +56,7 @@ function place(input: Blockers, picked: Interval[], c: Pick<Candidate, "startAt"
 }
 
 /** The chosen details with the placement each would take, soonest first. */
-export function pickRecommendations(input: RecommendInput): Array<{ jobPositionId: string; placement: Interval }> {
+function pickRecommendations(input: RecommendInput): Array<{ jobPositionId: string; placement: Interval }> {
   const picked: Array<{ jobPositionId: string; placement: Interval }> = [];
   let total = 0;
   if (input.remainingCents <= 0) return picked;
@@ -101,6 +101,20 @@ export async function goalProgress(actor: Actor, tx: Tx, now: Date): Promise<{ g
   }
   const remainingCents = goalCents === null ? 0 : Math.max(0, goalCents - earnedCents - signedUpCents);
   return { goalCents, earnedCents, signedUpCents, remainingCents };
+}
+
+function jobFlex(job: Job) {
+  return job.flexEarliestStartAt && job.flexLatestEndAt ? { earliestStartAt: job.flexEarliestStartAt, latestEndAt: job.flexLatestEndAt, allowShorter: job.flexAllowShorter } : null;
+}
+
+/** The person's sign-up check for a detail, or null when they may not see it. */
+async function visibleEligibility(actor: Actor, tx: Tx, jobId: string, now: Date) {
+  try {
+    return await eligibilityFor(actor, tx, jobId, now);
+  } catch (err) {
+    if (err instanceof NotFoundError) return null;
+    throw err;
+  }
 }
 
 export type Recommendation = Job & { jobPositionId: string; totalCents: Cents; placement: Interval };
@@ -160,7 +174,7 @@ export async function recommendationsFor(actor: Actor, tx: Tx, now: Date): Promi
   const capCheck = (picked: Interval[]) =>
     evaluateCaps({
       existing: [...capExisting, ...picked.slice(0, -1)],
-      candidate: picked[picked.length - 1],
+      candidate: picked.at(-1)!,
       seasons: seasonRows,
       weekStartsOn: settings.weekStartsOn,
       rollingWindowHours: settings.rollingCapWindowHours,
@@ -175,19 +189,13 @@ export async function recommendationsFor(actor: Actor, tx: Tx, now: Date): Promi
   const picks: Recommendation[] = [];
   const placements: Interval[] = [];
   let total = 0;
+  // Sequential: each pick depends on the placements before it, and the walk stops once the goal is reached.
   for (const { job, vendorMinimum } of rows) {
     if (total >= progress.remainingCents) break;
-    const flex = job.flexEarliestStartAt && job.flexLatestEndAt ? { earliestStartAt: job.flexEarliestStartAt, latestEndAt: job.flexLatestEndAt, allowShorter: job.flexAllowShorter } : null;
-    const placement = place(blockers, placements, { startAt: job.startAt, endAt: job.endAt, flex });
+    const placement = place(blockers, placements, { startAt: job.startAt, endAt: job.endAt, flex: jobFlex(job) });
     if (!placement) continue;
-    let e;
-    try {
-      e = await eligibilityFor(actor, tx, job.id, now);
-    } catch (err) {
-      if (err instanceof NotFoundError) continue;
-      throw err;
-    }
-    if (!e.canSignUp) continue;
+    const e = await visibleEligibility(actor, tx, job.id, now);
+    if (!e?.canSignUp) continue;
     const [pos] = await tx.select({ differential: jobPositions.rateDifferentialCents }).from(jobPositions).where(eq(jobPositions.id, e.jobPositionId));
     const rateCents = positionRateCents(job.rateCents, { rateDifferentialCents: pos?.differential ?? 0 });
     const totalCents = scheduledPayCents({ ...job, rateCents }, vendorMinimum, settings, job);

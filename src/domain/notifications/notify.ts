@@ -70,13 +70,25 @@ export async function emit(tx: Tx, event: NotificationEvent, now: Date = new Dat
     if (!id) throw new Error("The notification could not be queued.");
   };
 
+  // Sequential: the jobs are queued in this transaction, in recipient order.
   for (const p of active) {
     const pref = prefs.get(p.id);
     if (p.email && agencyOn(p.role, "email") && (event.mandatory || (pref?.email ?? DEFAULT_CHANNELS[event.type].email))) await queue(NOTIFY_EMAIL_QUEUE, p);
-    if (p.role === "vendor" || !subscribed.has(p.id)) continue;
-    if (!agencyOn(p.role, "push")) continue;
-    if (!event.mandatory && !(pref?.push ?? DEFAULT_CHANNELS[event.type].push)) continue;
+    if (!pushWanted(event, p, pref, subscribed.has(p.id), agencyOn)) continue;
     const until = event.mandatory ? null : quietHoursEnd(quiet.get(p.id), now);
     await queue(NOTIFY_PUSH_QUEUE, p, until ? { startAfter: until } : {});
   }
+}
+
+/** Whether a push goes to this person: never to vendors or people with no subscription, then the agency, then their choice. */
+function pushWanted<R extends string>(
+  event: NotificationEvent,
+  p: { role: R },
+  pref: { push: boolean } | undefined,
+  subscribed: boolean,
+  agencyOn: (role: R, channel: Channel) => boolean,
+): boolean {
+  if (p.role === "vendor" || !subscribed) return false;
+  if (!agencyOn(p.role, "push")) return false;
+  return Boolean(event.mandatory) || (pref?.push ?? DEFAULT_CHANNELS[event.type].push);
 }

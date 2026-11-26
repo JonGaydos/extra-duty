@@ -2,7 +2,7 @@ import type { ThemePreference } from "@/domain/users/profile";
 import { THEME_COLOR, themeCookie } from "./theme-cookie";
 
 export type { ThemePreference };
-export { THEME_COLOR, THEME_COOKIE, parseTheme, themeColorFor, themeCookie } from "./theme-cookie";
+export { THEME_COOKIE, parseTheme, themeColorFor } from "./theme-cookie";
 export { ThemeToggle } from "./theme-toggle";
 
 /**
@@ -11,7 +11,7 @@ export { ThemeToggle } from "./theme-toggle";
  * parses, before the shell paints, and rewrites the cookie so the server
  * renders the right theme from then on. The browser chrome color follows.
  */
-export function ThemeSync({ theme }: { theme: ThemePreference }) {
+export function ThemeSync({ theme }: Readonly<{ theme: ThemePreference }>) {
   const set = theme ? `d.setAttribute("data-theme",${JSON.stringify(theme)})` : `d.removeAttribute("data-theme")`;
   const color = theme
     ? `function(){return ${JSON.stringify(THEME_COLOR[theme])}}`

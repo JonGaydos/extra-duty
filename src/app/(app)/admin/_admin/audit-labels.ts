@@ -49,7 +49,7 @@ const VERBS: Record<string, string> = {
   export: "exported",
 };
 
-const words = (s: string) => s.replace(/_/g, " ");
+const words = (s: string) => s.replaceAll("_", " ");
 
 export function auditLabel(action: string): string {
   if (EXACT[action]) return EXACT[action];

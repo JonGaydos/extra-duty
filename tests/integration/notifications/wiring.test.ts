@@ -21,6 +21,7 @@ import { watchReleaseTick } from "@/jobs/backup-window";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
 
 type Job = typeof jobsTable.$inferSelect;
 const GOOD_EMAIL = { provider: "smtp" as const, from: "Sheriff <no-reply@sheriff.example>", smtp: { host: "smtp.test" } };
@@ -49,7 +50,7 @@ describe("automatic alert wiring", () => {
     setEmailSender(mail);
   });
 
-  const sorted = (ids: string[]) => [...ids].sort();
+  const sorted = (ids: string[]) => [...ids].sort(byText);
   /** Everyone who got a row of this type with this link. */
   const got = async (type: string, link: string) =>
     sorted((await get().db.select({ u: notifications.userId }).from(notifications).where(and(eq(notifications.type, type as never), eq(notifications.link, link)))).map((r) => r.u));

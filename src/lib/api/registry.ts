@@ -6,7 +6,7 @@ import { agencyDate } from "./dates";
  * and the OpenAPI document at /api/v1/openapi.json is built from this list, so the two cannot drift apart (a test
  * scans the route files against it).
  */
-export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type RouteDef = {
   method: Method;
@@ -50,7 +50,7 @@ function define<const T extends Record<string, Spec>>(specs: T): Keyed<T> {
 // Building blocks
 
 /** A file answer. The OpenAPI document shows it as a download of this type. */
-export const file = (contentType: string, description: string) => z.custom<Uint8Array>().meta({ file: contentType, description });
+const file = (contentType: string, description: string) => z.custom<Uint8Array>().meta({ file: contentType, description });
 export function fileType(schema: z.ZodType): string | null {
   const meta = z.globalRegistry.get(schema) as { file?: string } | undefined;
   return meta?.file ?? null;
@@ -158,8 +158,6 @@ const audience = z.union([
   z.object({ kind: z.literal("job"), jobId: text }),
   z.object({ kind: z.literal("coordinators") }),
 ]);
-
-export const ENTITY_DESCRIPTION = "A table name, for example users, vendors, jobs, job_positions, assignments, invoices, invoice_events, payment_issues, ops_plans or audit_log.";
 
 export const routes = define({
   // API description and full data access
@@ -477,8 +475,6 @@ export const routes = define({
     status: 201,
   },
 });
-
-export type Routes = typeof routes;
 
 /** Every route definition, for the OpenAPI document. */
 export function allRoutes(): RouteDef[] {

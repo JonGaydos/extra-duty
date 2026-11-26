@@ -26,8 +26,77 @@ type Props = { params: Promise<{ id: string }> };
 
 const day = (key: string) => dateLabel(new Date(`${key}T12:00:00Z`));
 
+type VendorRec = Awaited<ReturnType<typeof vendorRecord>>;
+
+/** A document: a link, a file to download, or its label alone. */
+function DocumentLabel({ d, vendorId }: Readonly<{ d: VendorRec["documents"][number]; vendorId: string }>) {
+  if (d.url)
+    return (
+      <a href={d.url} target="_blank" rel="noreferrer noopener">
+        {d.label}
+      </a>
+    );
+  if (d.fileId)
+    return (
+      <a href={`/api/v1/vendors/${vendorId}/documents/${d.id}/file`} className="inline-flex items-center gap-1" download>
+        {d.label}
+        <span className="sr-only">, download</span>
+        <Icon name="download" size={16} />
+      </a>
+    );
+  return <>{d.label}</>;
+}
+
+/** An active location's address, map link, pin and detail count. */
+function LocationMeta({ l }: Readonly<{ l: VendorRec["locations"][number] }>) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="text-ink">{l.address ?? "No address"}</span>
+      {l.address || l.lat !== null ? <MapsLink address={l.address} lat={l.lat} lng={l.lng} /> : null}
+      <span>
+        {l.lat !== null ? "Pin set" : "No pin"}. {plural(l.details, "detail")}
+      </span>
+    </span>
+  );
+}
+
+/** The vendor's facts, edit, payment hold, send schedule and email choice. */
+function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySchedule: Parameters<typeof VendorSendSchedule>[0]["agency"] }>) {
+  const v = rec.vendor;
+  return (
+    <Card>
+      <div className="flex flex-wrap gap-1.5">
+        {v.active ? <Chip tone="success">Active</Chip> : <Chip>Inactive</Chip>}
+        {v.paymentHold ? <Chip tone="danger">Payment hold</Chip> : null}
+      </div>
+      <h1 className="m-0 text-2xl font-bold md:text-3xl">{v.name}</h1>
+      <ContactList
+        items={[
+          { label: "Contact", value: v.contactName },
+          { label: "Phone", value: v.phone ? <PhoneLink phone={v.phone} /> : null },
+          { label: v.billingEmails.length > 1 ? "Billing emails" : "Billing email", value: v.billingEmails.length ? <EmailLinks emails={v.billingEmails} /> : null },
+          { label: "Default rate", value: v.defaultRateCents ? <span data-numeric>{dollars(v.defaultRateCents)}/hr</span> : "Agency default" },
+          { label: "Minimum billable", value: v.minimumBillableMinutes ? hoursText(v.minimumBillableMinutes) : null },
+          { label: "Vendor type", value: rec.typeName },
+          { label: "Notes", value: v.notes ? <span className="whitespace-pre-line">{v.notes}</span> : null },
+        ]}
+      />
+      <div className="flex flex-wrap gap-2" id="hold">
+        <EditVendor
+          vendorId={v.id}
+          initial={{ name: v.name, contactName: v.contactName ?? "", phone: v.phone ?? "", billingEmails: v.billingEmails.join(", "), rate: v.defaultRateCents ? String(v.defaultRateCents / 100) : "", notes: v.notes ?? "" }}
+        />
+        <PaymentHold vendorId={v.id} onHold={v.paymentHold} />
+      </div>
+      <VendorSendSchedule vendorId={v.id} current={v.invoiceSendSchedule} agency={agencySchedule} />
+      <VendorEmailApproved vendorId={v.id} initial={v.emailApprovedInvoices} />
+      {v.paymentHold ? <p className="m-0 text-sm text-danger-ink">On hold: {v.paymentHoldReason}. Future details are locked and closed to sign-ups.</p> : null}
+    </Card>
+  );
+}
+
 /** One vendor's record: contact, payment hold, locations, contracts, deputy notes, payments, restrictions and logins. */
-export default async function VendorPage({ params }: Props) {
+export default async function VendorPage({ params }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const { id } = await params;
   const data = await withTx(async (tx) => {
@@ -49,34 +118,7 @@ export default async function VendorPage({ params }: Props) {
         <Icon name="chevronLeft" size={18} />
         Back to vendors
       </Link>
-      <Card>
-        <div className="flex flex-wrap gap-1.5">
-          {v.active ? <Chip tone="success">Active</Chip> : <Chip>Inactive</Chip>}
-          {v.paymentHold ? <Chip tone="danger">Payment hold</Chip> : null}
-        </div>
-        <h1 className="m-0 text-2xl font-bold md:text-3xl">{v.name}</h1>
-        <ContactList
-          items={[
-            { label: "Contact", value: v.contactName },
-            { label: "Phone", value: v.phone ? <PhoneLink phone={v.phone} /> : null },
-            { label: v.billingEmails.length > 1 ? "Billing emails" : "Billing email", value: v.billingEmails.length ? <EmailLinks emails={v.billingEmails} /> : null },
-            { label: "Default rate", value: v.defaultRateCents ? <span data-numeric>{dollars(v.defaultRateCents)}/hr</span> : "Agency default" },
-            { label: "Minimum billable", value: v.minimumBillableMinutes ? hoursText(v.minimumBillableMinutes) : null },
-            { label: "Vendor type", value: rec.typeName },
-            { label: "Notes", value: v.notes ? <span className="whitespace-pre-line">{v.notes}</span> : null },
-          ]}
-        />
-        <div className="flex flex-wrap gap-2" id="hold">
-          <EditVendor
-            vendorId={v.id}
-            initial={{ name: v.name, contactName: v.contactName ?? "", phone: v.phone ?? "", billingEmails: v.billingEmails.join(", "), rate: v.defaultRateCents ? String(v.defaultRateCents / 100) : "", notes: v.notes ?? "" }}
-          />
-          <PaymentHold vendorId={v.id} onHold={v.paymentHold} />
-        </div>
-        <VendorSendSchedule vendorId={v.id} current={v.invoiceSendSchedule} agency={data.agencySchedule} />
-        <VendorEmailApproved vendorId={v.id} initial={v.emailApprovedInvoices} />
-        {v.paymentHold ? <p className="m-0 text-sm text-danger-ink">On hold: {v.paymentHoldReason}. Future details are locked and closed to sign-ups.</p> : null}
-      </Card>
+      <VendorCard rec={rec} agencySchedule={data.agencySchedule} />
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-6">
         <div className="flex min-w-0 flex-col gap-4.5">
@@ -91,19 +133,7 @@ export default async function VendorPage({ params }: Props) {
                   <Row
                     key={l.id}
                     title={l.name}
-                    meta={
-                      l.active ? (
-                        <span className="flex flex-col gap-0.5">
-                          <span className="text-ink">{l.address ?? "No address"}</span>
-                          {l.address || l.lat !== null ? <MapsLink address={l.address} lat={l.lat} lng={l.lng} /> : null}
-                          <span>
-                            {l.lat !== null ? "Pin set" : "No pin"}. {plural(l.details, "detail")}
-                          </span>
-                        </span>
-                      ) : (
-                        "Deactivated, kept for history."
-                      )
-                    }
+                    meta={l.active ? <LocationMeta l={l} /> : "Deactivated, kept for history."}
                     actions={
                       <>
                         {l.active && l.lat === null ? <Chip tone="warning">Check pin</Chip> : null}
@@ -131,19 +161,7 @@ export default async function VendorPage({ params }: Props) {
                   {rec.documents.map((d) => (
                     <li key={d.id} className="flex flex-col gap-0.5">
                       <span className="flex flex-wrap items-center gap-2 font-semibold">
-                        {d.url ? (
-                          <a href={d.url} target="_blank" rel="noreferrer noopener">
-                            {d.label}
-                          </a>
-                        ) : d.fileId ? (
-                          <a href={`/api/v1/vendors/${v.id}/documents/${d.id}/file`} className="inline-flex items-center gap-1" download>
-                            {d.label}
-                            <span className="sr-only">, download</span>
-                            <Icon name="download" size={16} />
-                          </a>
-                        ) : (
-                          d.label
-                        )}
+                        <DocumentLabel d={d} vendorId={v.id} />
                         {d.kind === "contract" ? <Chip>Contract</Chip> : null}
                       </span>
                       <span className="text-sm text-muted">

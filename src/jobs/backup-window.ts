@@ -19,6 +19,7 @@ const inOwnTx = <T>(tx: Tx | undefined, fn: (t: Tx) => Promise<T>): Promise<T> =
 export async function backupOfferTick(now: Date, tx?: Tx): Promise<{ ended: number }> {
   const ids = await inOwnTx(tx, listOpenOfferJobIds);
   let ended = 0;
+  // Sequential: one transaction per job, in job id order, so a failure leaves the earlier jobs committed.
   for (const id of ids) {
     ended += await inOwnTx(tx, async (t) => processJobOffers(t, await lockJob(t, id), now));
   }
@@ -48,6 +49,7 @@ export async function watchReleaseTick(now: Date, tx?: Tx): Promise<{ alerted: n
     )
   ).map((r) => r.jobId);
   let alerted = 0;
+  // Sequential: one transaction per job, in job id order, so a failure leaves the earlier jobs committed.
   for (const id of ids) {
     alerted += await inOwnTx(tx, async (t) => {
       const job = await lockJob(t, id);
@@ -64,9 +66,11 @@ export async function watchReleaseTick(now: Date, tx?: Tx): Promise<{ alerted: n
       let n = 0;
       // A hidden vendor's release alerts are discovery alerts: skipped, and the watch stays open.
       const visible = new Set(await withoutHiddenVendor(t, watches.map(({ w }) => w.userId), job.vendorId));
+      // Sequential: reads and alert writes in this transaction, in watch order.
       for (const { w } of watches) {
         if (!visible.has(w.userId)) continue;
         let eligible = false;
+        // Sequential: stops at the first position the person could take.
         for (const p of positions) {
           const position = await loadPosition(t, p.id);
           const free = position.count - (await signedUpCount(t, position.id)) - (await heldByOffers(t, position.id, w.userId));

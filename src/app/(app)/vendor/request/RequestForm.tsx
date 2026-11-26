@@ -15,6 +15,8 @@ import { DatesStep } from "../../coordinate/_coordinator/DatesStep";
 import { FlexFields, PreviewRow, SafetyAddressFields, safetyWire, type FlexWire, type SafetyAddressRow, type TimeOverride } from "../../coordinate/_coordinator/DetailFields";
 import { SiteContactFields, type ContactOption, type SiteContactValue } from "../../coordinate/_coordinator/SiteContactFields";
 import { expandRequestDatesAction } from "../_vendor/actions";
+import { byText } from "@/lib/sort";
+import { useRowKeys } from "@/ui/use-row-keys";
 
 type Option = { id: string; name: string };
 const NEW = "new";
@@ -46,7 +48,7 @@ export function RequestForm({
   rules,
   today,
   weekStartsOn,
-}: {
+}: Readonly<{
   locations: Array<Option & { address: string | null }>;
   contacts: ContactOption[];
   jobTypes: Option[];
@@ -56,7 +58,7 @@ export function RequestForm({
   rules: string[];
   today: string;
   weekStartsOn: number;
-}) {
+}>) {
   const router = useRouter();
   const { run, busy, result } = useAction();
   const [locationId, setLocationId] = useState(locations[0]?.id ?? NEW);
@@ -68,6 +70,7 @@ export function RequestForm({
   const [typeId, setTypeId] = useState(jobTypes[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [positions, setPositions] = useState([{ positionTypeId: defaultPositionTypeId, count: "1" }]);
+  const positionKeys = useRowKeys(positions);
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [contact, setContact] = useState<SiteContactValue>({ contactName: "", contactPhone: "", newContact: null });
@@ -96,7 +99,7 @@ export function RequestForm({
   const adding = locationId === NEW;
   const allDates = useMemo(() => {
     const set = new Set([...(date ? [date] : []), ...(moreDates ? extra : [])]);
-    return [...set].filter((d) => d === date || !removed.has(d)).sort();
+    return [...set].filter((d) => d === date || !removed.has(d)).sort(byText);
   }, [date, extra, moreDates, removed]);
 
   const submit = () => {
@@ -233,7 +236,7 @@ export function RequestForm({
           <CardTitle>Who you need</CardTitle>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {positions.map((p, i) => (
-              <li key={i} className="grid grid-cols-[minmax(0,1fr)_6rem] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
+              <li key={positionKeys[i]} className="grid grid-cols-[minmax(0,1fr)_6rem] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]">
                 <FormField label={i === 0 ? "Position" : `Position ${i + 1}`}>
                   <Select value={p.positionTypeId} onChange={(e) => setPosition(i, { positionTypeId: e.target.value })}>
                     {positionTypes.map((t) => (

@@ -20,7 +20,20 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 
 type Link = { title: string; href: string; meta: string; flag?: React.ReactNode };
 
-function Group({ title, links }: { title: string; links: Link[] }) {
+/** "3 job types", or "None yet". */
+const countMeta = (n: number, one: string) => (n ? plural(n, one) : "None yet");
+
+function usersMeta(active: number, suspended: number): string {
+  const held = suspended ? `, ${suspended} suspended` : "";
+  return `${plural(active, "active account")}${held}`;
+}
+
+function ranksMeta(ladder: string[], outside: string[]): string {
+  const rest = outside.length ? `. Outside the ladder: ${outside.join(", ")}` : "";
+  return `${ladder.join(", ")}${rest}`;
+}
+
+function Group({ title, links }: Readonly<{ title: string; links: Link[] }>) {
   return (
     <CountSection title={title}>
       <Rows>
@@ -70,8 +83,8 @@ export default async function ManagementPage() {
           <Group
             title="People"
             links={[
-              { title: "Users", href: "/admin/users", meta: `${plural(active.length, "active account")}${suspended ? `, ${suspended} suspended` : ""}` },
-              { title: "Ranks", href: "/admin/ranks", meta: `${ladder.join(", ")}${outside.length ? `. Outside the ladder: ${outside.join(", ")}` : ""}` },
+              { title: "Users", href: "/admin/users", meta: usersMeta(active.length, suspended) },
+              { title: "Ranks", href: "/admin/ranks", meta: ranksMeta(ladder, outside) },
               {
                 title: "Special flags",
                 href: "/admin/flags",
@@ -112,11 +125,11 @@ export default async function ManagementPage() {
           <Group
             title="Lists"
             links={[
-              { title: "Position types", href: "/admin/positions", meta: counts.positions ? plural(counts.positions, "position type") : "None yet" },
-              { title: "Job types", href: "/admin/lists/job-types", meta: counts.jobTypes ? plural(counts.jobTypes, "job type") : "None yet" },
-              { title: "Vendor types", href: "/admin/lists/vendor-types", meta: counts.vendorTypes ? plural(counts.vendorTypes, "vendor type") : "None yet" },
-              { title: "Payment methods", href: "/admin/lists/payment-methods", meta: counts.paymentMethods ? plural(counts.paymentMethods, "payment method") : "None yet" },
-              { title: "Note presets", href: "/admin/note-presets", meta: counts.presets ? plural(counts.presets, "preset") : "None yet" },
+              { title: "Position types", href: "/admin/positions", meta: countMeta(counts.positions, "position type") },
+              { title: "Job types", href: "/admin/lists/job-types", meta: countMeta(counts.jobTypes, "job type") },
+              { title: "Vendor types", href: "/admin/lists/vendor-types", meta: countMeta(counts.vendorTypes, "vendor type") },
+              { title: "Payment methods", href: "/admin/lists/payment-methods", meta: countMeta(counts.paymentMethods, "payment method") },
+              { title: "Note presets", href: "/admin/note-presets", meta: countMeta(counts.presets, "preset") },
             ]}
           />
           <Group

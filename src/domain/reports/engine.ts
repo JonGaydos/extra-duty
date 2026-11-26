@@ -12,10 +12,10 @@ import { formatMoney } from "@/lib/pdf/invoice-pdf";
 import { renderReportPdf } from "@/lib/pdf/report-pdf";
 import { DATASETS, MAX_ROWS, ageBucket, type ActivityKind, type DatasetName, type Fact, type GroupBy, type Measure, type ReportSpec } from "./datasets";
 
-export type { DatasetName, GroupBy, Measure, ReportFilters, ReportSpec } from "./datasets";
+export type { DatasetName, GroupBy, Measure, ReportSpec } from "./datasets";
 
 /** `keys` holds each row's grouping ids (a person's id for the deputy grouping), in the order of `rows`. */
-export type ReportResult = { columns: string[]; rows: unknown[][]; keys: string[][]; totals: Record<string, number> };
+export type ReportResult = { columns: string[]; rows: Array<Array<string | number | null>>; keys: string[][]; totals: Record<string, number> };
 
 /** A saved spec may leave the period open; it is chosen when the report runs. */
 export type SavedSpec = Omit<ReportSpec, "from" | "to"> & { from?: Date; to?: Date };
@@ -60,9 +60,18 @@ function parseWith<T>(schema: z.ZodType<T>, raw: unknown): T {
   const r = schema.safeParse(agencyDates(raw));
   if (!r.success) {
     const i = r.error.issues[0];
-    throw new ValidationError(`${i.path.length > 0 ? `${i.path.join(".")}: ` : ""}${i.message}`);
+    const where = i.path.length > 0 ? `${i.path.join(".")}: ` : "";
+    throw new ValidationError(`${where}${i.message}`);
   }
   return r.data;
+}
+
+/** Every filter the spec sets must be one the dataset declares. */
+function checkFilters(d: (typeof DATASETS)[keyof typeof DATASETS], spec: SavedSpec): void {
+  for (const [name, values] of Object.entries(spec.filters)) {
+    if (!values || values.length === 0) continue;
+    if (!d.filters.includes(name as never)) throw new ValidationError(`${d.title} reports cannot be filtered by ${name}.`);
+  }
 }
 
 /** The dataset must declare every grouping, measure, filter and status the spec asks for. */
@@ -70,10 +79,7 @@ function checkCapabilities(spec: SavedSpec): void {
   const d = DATASETS[spec.dataset];
   for (const g of spec.groupBy) if (!d.groupings.includes(g)) throw new ValidationError(`${d.title} reports cannot be grouped by ${g}.`);
   for (const m of spec.measures) if (!d.measures.includes(m)) throw new ValidationError(`${d.title} reports do not support the ${m} measure.`);
-  for (const [name, values] of Object.entries(spec.filters)) {
-    if (!values || values.length === 0) continue;
-    if (!d.filters.includes(name as never)) throw new ValidationError(`${d.title} reports cannot be filtered by ${name}.`);
-  }
+  checkFilters(d, spec);
   if (spec.measures.some((m) => m === "cap_hours" || m === "over_under_hours") && !spec.groupBy.includes("month")) {
     throw new ValidationError("Cap measures compare each month with its cap, so group by month.");
   }
@@ -99,7 +105,7 @@ function checkPeriod(from: Date, to: Date): void {
 }
 
 /** Validates a spec to run: Zod shape, period (required, at most 5 years), then what the dataset supports. */
-export function validateReportSpec(raw: unknown): ReportSpec {
+function validateReportSpec(raw: unknown): ReportSpec {
   const spec = parseWith(reportSpecSchema, raw);
   checkCapabilities(spec);
   checkPeriod(spec.from, spec.to);
@@ -248,6 +254,13 @@ const isMoney = (c: string) => c.endsWith("_cents");
 
 export type ExportOptions = { /** Title of a saved report; defaults to the dataset name. */ name?: string; now?: Date };
 
+/** One exported cell: blank for null, money columns through `money`, anything else as text. */
+function cellText(v: string | number | null, money: boolean, formatMoneyCell: (cents: number) => string): string {
+  if (v === null) return "";
+  if (typeof v === "number" && money) return formatMoneyCell(v);
+  return String(v);
+}
+
 /** CSV (header row, formula-safe) or PDF (agency header, name, period, paginated table). Audited. */
 export async function exportReport(actor: Actor, tx: Tx, rawSpec: ReportSpec, format: "csv" | "pdf", opts: ExportOptions = {}): Promise<Buffer> {
   assertCan(actor, "report.run");
@@ -265,17 +278,17 @@ export async function exportReport(actor: Actor, tx: Tx, rawSpec: ReportSpec, fo
   const nGroups = spec.groupBy.length;
   if (format === "csv") {
     const header = result.columns.map((c) => (isMoney(c) ? `${labelFor(spec.dataset, c as Measure)} ($)` : labelFor(spec.dataset, c as GroupBy | Measure)));
-    const lines = result.rows.map((r) => r.map((v, i) => (v === null ? "" : typeof v === "number" ? (isMoney(result.columns[i]) ? centsText(v) : String(v)) : String(v))));
+    const lines = result.rows.map((r) => r.map((v, i) => cellText(v, isMoney(result.columns[i]), centsText)));
     return Buffer.from(toCsv(header, lines), "utf8");
   }
-  const fmt = (v: unknown, i: number) => (v === null ? "" : typeof v === "number" ? (isMoney(result.columns[i]) ? formatMoney(v) : String(v)) : String(v));
+  const fmt = (v: string | number | null, i: number) => cellText(v, isMoney(result.columns[i]), formatMoney);
   const title = opts.name ?? `${DATASETS[spec.dataset].title} report`;
   return renderReportPdf({
     agency: await loadAgencyHeader(tx),
     name: title,
     period: `${agencyDayKey(spec.from)} to ${agencyDayKey(spec.to)}`,
     columns: result.columns.map((c, i) => ({ label: labelFor(spec.dataset, c as GroupBy | Measure), right: i >= nGroups })),
-    rows: result.rows.map((r) => r.map(fmt)),
+    rows: result.rows.map((r) => r.map((v, i) => fmt(v, i))),
     totals: nGroups > 0 ? ["Total", ...result.columns.slice(1).map((c, i) => (i + 1 >= nGroups ? fmt(result.totals[c], i + 1) : ""))] : null,
   });
 }

@@ -4,7 +4,10 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 const PREFIX = "ed-scroll:";
-const keyOf = (pathname: string, search: string) => `${PREFIX}${pathname}${search ? `?${search}` : ""}`;
+const keyOf = (pathname: string, search: string) => {
+  const query = search ? `?${search}` : "";
+  return `${PREFIX}${pathname}${query}`;
+};
 
 /** Puts main back where it was on that page, after the page has painted and the router has done its own scroll. */
 function restore(key: string): void {

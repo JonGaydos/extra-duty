@@ -6,7 +6,7 @@ import { ValidationError } from "../errors";
 
 export type AlertRow = { id: string; type: string; title: string; body: string | null; link: string | null; at: Date; read: boolean };
 
-export const ALERTS_PAGE_SIZE = 50;
+const ALERTS_PAGE_SIZE = 50;
 
 /** The actor's own in-app alerts, newest first, 50 per page (1-based). */
 export async function listAlerts(actor: Actor, tx: Tx, page = 1): Promise<AlertRow[]> {

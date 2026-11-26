@@ -5,6 +5,7 @@ import { FormField, Input, Select } from "@/ui/components/FormField";
 import { Notice } from "@/ui/components/Notice";
 import { Icon } from "@/ui/icons";
 import { expandDatesAction } from "./actions";
+import { byNumber, byText } from "@/lib/sort";
 
 /** Calendar-day keys (YYYY-MM-DD) read as plain dates, never shifted by a time zone. */
 const UTC = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...o });
@@ -27,9 +28,9 @@ const TABS: Array<{ key: DateMode; label: string }> = [
 ];
 
 /** Toggle chips for weekdays: real buttons with aria-pressed. */
-function WeekdayChips({ value, onChange, label }: { value: number[]; onChange: (v: number[]) => void; label: string }) {
+function WeekdayChips({ value, onChange, label }: Readonly<{ value: number[]; onChange: (v: number[]) => void; label: string }>) {
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+    <fieldset aria-label={label} className="min-w-0 flex flex-wrap gap-1.5">
       {WEEKDAYS.map((w, i) => {
         const on = value.includes(i);
         return (
@@ -37,7 +38,7 @@ function WeekdayChips({ value, onChange, label }: { value: number[]; onChange: (
             key={w}
             type="button"
             aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((x) => x !== i) : [...value, i].sort())}
+            onClick={() => onChange(on ? value.filter((x) => x !== i) : [...value, i].sort(byNumber))}
             className={`h-9 min-w-12 rounded-full border px-3 text-sm pointer-coarse:h-11 ${on ? "border-ink bg-ink font-semibold text-surface" : "border-line bg-surface text-ink hover:bg-subtle"}`}
           >
             <span aria-hidden>{w}</span>
@@ -45,21 +46,27 @@ function WeekdayChips({ value, onChange, label }: { value: number[]; onChange: (
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 
+/** A month-grid day: filled when picked, outlined when it is today. */
+function dayButtonClass(picked: boolean, isToday: boolean): string {
+  if (picked) return "border-accent bg-accent font-semibold text-on-accent";
+  return isToday ? "border-accent-outline bg-surface text-ink hover:bg-subtle" : "border-line bg-surface text-ink hover:bg-subtle";
+}
+
 /** A month grid; each day is a toggle button. */
-function MonthPicker({ selected, onToggle, today, weekStartsOn, minDate }: { selected: Set<string>; onToggle: (key: string) => void; today: string; weekStartsOn: number; minDate?: string }) {
+function MonthPicker({ selected, onToggle, today, weekStartsOn, minDate }: Readonly<{ selected: Set<string>; onToggle: (key: string) => void; today: string; weekStartsOn: number; minDate?: string }>) {
   const [ym, setYm] = useState(() => {
-    const first = [...selected].sort()[0] ?? today;
+    const first = [...selected].sort(byText)[0] ?? today;
     return { y: Number(first.slice(0, 4)), m: Number(first.slice(5, 7)) };
   });
   const headingId = useId();
   const days = new Date(Date.UTC(ym.y, ym.m, 0)).getUTCDate();
   const lead = (new Date(Date.UTC(ym.y, ym.m - 1, 1)).getUTCDay() - weekStartsOn + 7) % 7;
   const shift = (n: number) => setYm(({ y, m }) => ({ y: Math.floor((y * 12 + m - 1 + n) / 12), m: ((m - 1 + n + 1200) % 12) + 1 }));
-  const cells: Array<string | null> = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => toKey(ym.y, ym.m, i + 1))];
+  const cells = Array.from({ length: days }, (_, i) => toKey(ym.y, ym.m, i + 1));
   const order = Array.from({ length: 7 }, (_, i) => (i + weekStartsOn) % 7);
   return (
     <div className="flex flex-col gap-2">
@@ -74,38 +81,70 @@ function MonthPicker({ selected, onToggle, today, weekStartsOn, minDate }: { sel
           <Icon name="chevronRight" size={18} />
         </button>
       </div>
-      <div role="group" aria-labelledby={headingId} className="grid grid-cols-7 gap-1">
+      <fieldset aria-labelledby={headingId} className="min-w-0 grid grid-cols-7 gap-1">
         {order.map((d) => (
           <span key={d} className="py-1 text-center text-xs font-semibold text-muted" aria-hidden>
             {WEEKDAYS[d].slice(0, 2)}
           </span>
         ))}
-        {cells.map((k, i) =>
-          k ? (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={selected.has(k)}
-              aria-label={keyLabel(k)}
-              disabled={!!minDate && k < minDate}
-              onClick={() => onToggle(k)}
-              className={`flex h-11 items-center justify-center rounded-xs border text-body disabled:cursor-not-allowed disabled:border-transparent disabled:bg-transparent disabled:text-muted ${
-                selected.has(k) ? "border-accent bg-accent font-semibold text-on-accent" : k === today ? "border-accent-outline bg-surface text-ink hover:bg-subtle" : "border-line bg-surface text-ink hover:bg-subtle"
-              }`}
-              data-numeric
-            >
-              {Number(k.slice(8))}
-            </button>
-          ) : (
-            <span key={`lead-${i}`} aria-hidden />
-          ),
-        )}
-      </div>
+        {lead ? <span aria-hidden style={{ gridColumn: `span ${lead}` }} /> : null}
+        {cells.map((k) => (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={selected.has(k)}
+            aria-label={keyLabel(k)}
+            disabled={!!minDate && k < minDate}
+            onClick={() => onToggle(k)}
+            className={`flex h-11 items-center justify-center rounded-xs border text-body disabled:cursor-not-allowed disabled:border-transparent disabled:bg-transparent disabled:text-muted ${dayButtonClass(selected.has(k), k === today)}`}
+            data-numeric
+          >
+            {Number(k.slice(8))}
+          </button>
+        ))}
+      </fieldset>
     </div>
   );
 }
 
 type Repeat = { start: string; kind: "daily" | "weekly" | "monthly"; every: string; weekdays: number[]; endKind: "count" | "until"; count: string; until: string };
+type ExpandCall = Parameters<typeof expandDatesAction>;
+
+const EVERY_LABEL: Record<Repeat["kind"], string> = { daily: "Every how many days", weekly: "Every how many weeks", monthly: "Every how many months" };
+
+/** The server call for a range, once both ends are set. */
+function rangeCall(range: { from: string; to: string; weekdays: number[] }): ExpandCall | null {
+  if (!range.from || !range.to) return null;
+  return [{ kind: "range", from: range.from, to: range.to, ...(range.weekdays.length ? { weekdays: range.weekdays } : {}) }, range.from];
+}
+
+/** The server call for a repeat, once it has a start and an end (a count, or an until date). */
+function repeatCall(repeat: Repeat): ExpandCall | null {
+  if (!repeat.start) return null;
+  const every = Number(repeat.every) || 1;
+  const end = repeat.endKind === "count" ? { count: Number(repeat.count) || 1 } : { until: repeat.until as unknown as Date };
+  let recurrence;
+  if (repeat.kind === "daily") recurrence = { kind: "daily" as const, every, end };
+  else if (repeat.kind === "weekly") recurrence = { kind: "weekly" as const, every, weekdays: repeat.weekdays.length ? repeat.weekdays : [keyDate(repeat.start).getUTCDay()], end };
+  else recurrence = { kind: "monthly" as const, every, dayOfMonth: Number(repeat.start.slice(8)), end };
+  return repeat.endKind === "count" || repeat.until ? [{ kind: "pattern", recurrence }, repeat.start] : null;
+}
+
+/** Arrow keys, Home and End move between the tabs; any other key does nothing (null). */
+function tabTarget(key: string, i: number, last: number): number | null {
+  switch (key) {
+    case "ArrowRight":
+      return i + 1;
+    case "ArrowLeft":
+      return i - 1;
+    case "Home":
+      return 0;
+    case "End":
+      return last;
+    default:
+      return null;
+  }
+}
 
 /**
  * The Dates step: one date, a range (with optional weekdays), dates picked on a month calendar, or a repeat
@@ -119,7 +158,7 @@ export function DatesStep({
   initial = "one",
   minDate,
   expand = expandDatesAction,
-}: {
+}: Readonly<{
   /** Expands a range or repeat on the server; the vendor portal passes its own action. */
   expand?: typeof expandDatesAction;
   today: string;
@@ -129,7 +168,7 @@ export function DatesStep({
   initial?: DateMode;
   /** Earliest date that may be chosen (copies refuse past dates). */
   minDate?: string;
-}) {
+}>) {
   const [mode, setMode] = useState<DateMode>(initial);
   const [one, setOne] = useState("");
   const [range, setRange] = useState({ from: "", to: "", weekdays: [] as number[] });
@@ -151,24 +190,10 @@ export function DatesStep({
       return;
     }
     if (mode === "pick") {
-      done([...picked].sort());
+      done([...picked].sort(byText));
       return;
     }
-    let call: Parameters<typeof expandDatesAction> | null = null;
-    if (mode === "range" && range.from && range.to) {
-      call = [{ kind: "range", from: range.from, to: range.to, ...(range.weekdays.length ? { weekdays: range.weekdays } : {}) }, range.from];
-    }
-    if (mode === "repeat" && repeat.start) {
-      const every = Number(repeat.every) || 1;
-      const end = repeat.endKind === "count" ? { count: Number(repeat.count) || 1 } : { until: repeat.until as unknown as Date };
-      const recurrence =
-        repeat.kind === "daily"
-          ? { kind: "daily" as const, every, end }
-          : repeat.kind === "weekly"
-            ? { kind: "weekly" as const, every, weekdays: repeat.weekdays.length ? repeat.weekdays : [keyDate(repeat.start).getUTCDay()], end }
-            : { kind: "monthly" as const, every, dayOfMonth: Number(repeat.start.slice(8)), end };
-      if (repeat.endKind === "count" || repeat.until) call = [{ kind: "pattern", recurrence }, repeat.start];
-    }
+    const call = mode === "range" ? rangeCall(range) : repeatCall(repeat);
     if (!call) {
       done([]);
       return;
@@ -197,7 +222,7 @@ export function DatesStep({
   }, [mode, one, range, picked, repeat, minDate, expand]);
 
   const onKey = (e: React.KeyboardEvent, i: number) => {
-    const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
+    const next = tabTarget(e.key, i, tabs.length - 1);
     if (next === null) return;
     e.preventDefault();
     const j = (next + tabs.length) % tabs.length;
@@ -278,7 +303,7 @@ export function DatesStep({
                 <option value="monthly">Monthly, same day of the month</option>
               </Select>
             </FormField>
-            <FormField label={repeat.kind === "daily" ? "Every how many days" : repeat.kind === "weekly" ? "Every how many weeks" : "Every how many months"}>
+            <FormField label={EVERY_LABEL[repeat.kind]}>
               <Input type="number" inputMode="numeric" min={1} max={52} value={repeat.every} onChange={(e) => setRepeat({ ...repeat, every: e.target.value })} />
             </FormField>
             {repeat.kind === "weekly" ? (
@@ -291,16 +316,14 @@ export function DatesStep({
               <legend className="mb-1.5 text-sm font-medium text-muted">Ends</legend>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex min-h-11 items-center gap-2">
-                  <input type="radio" name={`${baseId}-end`} checked={repeat.endKind === "count"} onChange={() => setRepeat({ ...repeat, endKind: "count" })} className="size-4.5 accent-accent" />
-                  After
+                  <input type="radio" name={`${baseId}-end`} checked={repeat.endKind === "count"} onChange={() => setRepeat({ ...repeat, endKind: "count" })} className="size-4.5 accent-accent" />After
                 </label>
                 <Input aria-label="Number of details" type="number" inputMode="numeric" min={1} max={366} value={repeat.count} onChange={(e) => setRepeat({ ...repeat, count: e.target.value, endKind: "count" })} className="max-w-24" />
                 <span className="text-muted">times</span>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex min-h-11 items-center gap-2">
-                  <input type="radio" name={`${baseId}-end`} checked={repeat.endKind === "until"} onChange={() => setRepeat({ ...repeat, endKind: "until" })} className="size-4.5 accent-accent" />
-                  On
+                  <input type="radio" name={`${baseId}-end`} checked={repeat.endKind === "until"} onChange={() => setRepeat({ ...repeat, endKind: "until" })} className="size-4.5 accent-accent" />On
                 </label>
                 <Input aria-label="Last date" type="date" value={repeat.until} onChange={(e) => setRepeat({ ...repeat, until: e.target.value, endKind: "until" })} className="w-auto" />
               </div>

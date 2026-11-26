@@ -6,11 +6,21 @@ import { FormField, Input } from "@/ui/components/FormField";
 import { revokeFeedAction, rotateFeedAction } from "../_personnel/actions";
 import { ActionStatus, useAction } from "../_personnel/use-action";
 
+/** Whether a link is active, since when, and when a calendar app last read it. */
+function FeedState({ active, since, lastUsed }: Readonly<{ active: boolean; since: string | null; lastUsed: string | null }>) {
+  if (!active) return <p className="m-0 text-sm">No calendar link is active.</p>;
+  return (
+    <p className="m-0 text-sm">
+      A link is active{since ? ` since ${since}` : ""}.{lastUsed ? ` Last read by a calendar app ${lastUsed}.` : " No calendar app has read it yet."}
+    </p>
+  );
+}
+
 /**
  * The personal calendar feed. The link is shown once, right after it is made (only a hash is kept); making a
  * new one ends the old one, and turning it off stops every app subscribed to it.
  */
-export function FeedCard({ origin, active, since, lastUsed }: { origin: string; active: boolean; since: string | null; lastUsed: string | null }) {
+export function FeedCard({ origin, active, since, lastUsed }: Readonly<{ origin: string; active: boolean; since: string | null; lastUsed: string | null }>) {
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const { run, busy, result } = useAction();
@@ -34,12 +44,8 @@ export function FeedCard({ origin, active, since, lastUsed }: { origin: string; 
             {copied ? "Copied" : "Copy link"}
           </Button>
         </div>
-      ) : active ? (
-        <p className="m-0 text-sm">
-          A link is active{since ? ` since ${since}` : ""}.{lastUsed ? ` Last read by a calendar app ${lastUsed}.` : " No calendar app has read it yet."}
-        </p>
       ) : (
-        <p className="m-0 text-sm">No calendar link is active.</p>
+        <FeedState active={active} since={since} lastUsed={lastUsed} />
       )}
       <div className="flex flex-wrap gap-2">
         <Button busy={busy} onClick={() => run(() => rotateFeedAction(), (r) => r.value && setUrl(`${origin}/api/v1/calendar.ics?token=${encodeURIComponent(r.value)}`))}>

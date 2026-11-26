@@ -35,12 +35,15 @@ export async function handleInvoiceBatchJob(job: QueuedJob<InvoiceBatchJob>): Pr
 /** Works `boss`'s email queues; `mode` is the database the boss is bound to, and every job runs in it. */
 export async function registerEmailHandlers(boss: PgBoss, mode: DataMode = "live"): Promise<void> {
   await boss.work<EmailJob>(EMAIL_QUEUE, { includeMetadata: true }, async (jobs) => {
+    // Sequential: emails go out one at a time, in queue order.
     for (const job of jobs) await runInMode(mode, () => handleEmailJob(job));
   });
   await boss.work<InvoiceEmailJob>(INVOICE_EMAIL_QUEUE, { includeMetadata: true }, async (jobs) => {
+    // Sequential: emails go out one at a time, in queue order.
     for (const job of jobs) await runInMode(mode, () => handleInvoiceEmailJob(job));
   });
   await boss.work<InvoiceBatchJob>(INVOICE_BATCH_QUEUE, { includeMetadata: true }, async (jobs) => {
+    // Sequential: emails go out one at a time, in queue order.
     for (const job of jobs) await runInMode(mode, () => handleInvoiceBatchJob(job));
   });
 }

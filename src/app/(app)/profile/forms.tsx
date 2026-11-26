@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { AddressField, addressValue } from "@/ui/components/AddressField";
 import { Button } from "@/ui/components/Button";
 import { FormField, Input, Select } from "@/ui/components/FormField";
@@ -19,14 +19,23 @@ import {
   syncCalendarAction,
 } from "../_personnel/actions";
 import type { ActionResult } from "../_personnel/result";
-import { ActionStatus, useAction } from "../_personnel/use-action";
+import { ActionStatus, uploadResult, useAction } from "../_personnel/use-action";
+import { byNumber } from "@/lib/sort";
 
+/** A chip that holds a hidden native radio: the pointer and the focus ring work as on a button. */
+const radioChip = "relative cursor-pointer has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus";
+/** Enter on a focused radio would submit the form half-edited; it picks the radio instead, as the old chip buttons did. */
+const pickOnEnter = (pick: () => void) => (e: KeyboardEvent<HTMLInputElement>) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  pick();
+};
 const chip = (on: boolean) =>
   `inline-flex h-8.5 items-center rounded-full border px-3.5 text-sm transition-colors duration-150 pointer-coarse:h-11 ${
     on ? "border-ink bg-ink font-semibold text-surface" : "border-line bg-surface font-medium text-ink hover:bg-subtle"
   }`;
 
-export function ContactForm({ phone, mailingAddress }: { phone: string; mailingAddress: string }) {
+export function ContactForm({ phone, mailingAddress }: Readonly<{ phone: string; mailingAddress: string }>) {
   const [p, setP] = useState(phone);
   const [a, setA] = useState(() => addressValue(mailingAddress));
   const { run, busy, result } = useAction();
@@ -50,7 +59,7 @@ export function ContactForm({ phone, mailingAddress }: { phone: string; mailingA
   );
 }
 
-export function W9Upload({ hasW9 }: { hasW9: boolean }) {
+export function W9Upload({ hasW9 }: Readonly<{ hasW9: boolean }>) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,7 +92,7 @@ export function W9Upload({ hasW9 }: { hasW9: boolean }) {
       <Button type="submit" variant="secondary" busy={busy} disabled={!file} className="w-fit">
         Upload W-9
       </Button>
-      <ActionStatus result={msg ? (msg.ok ? { ok: true, message: msg.text } : { ok: false, error: msg.text }) : null} />
+      <ActionStatus result={uploadResult(msg)} />
     </form>
   );
 }
@@ -105,7 +114,7 @@ const BUFFERS = [
 
 export type ScheduleValue = { kind: "weekly" | "rotation"; weekdays: number[]; cycle: string; anchorDate: string; shiftStart: string; shiftEnd: string; bufferMinutes: number; active: boolean };
 
-export function ScheduleEditor({ initial }: { initial: ScheduleValue }) {
+export function ScheduleEditor({ initial }: Readonly<{ initial: ScheduleValue }>) {
   const [s, setS] = useState(initial);
   const preset = PATTERNS.some((p) => p.value === s.cycle) ? s.cycle : "custom";
   const [pattern, setPattern] = useState(preset);
@@ -127,9 +136,10 @@ export function ScheduleEditor({ initial }: { initial: ScheduleValue }) {
     >
       <div role="radiogroup" aria-label="Schedule type" className="flex gap-2">
         {(["weekly", "rotation"] as const).map((k) => (
-          <button key={k} type="button" role="radio" aria-checked={s.kind === k} className={chip(s.kind === k)} onClick={() => set({ kind: k })}>
+          <label key={k} className={`${chip(s.kind === k)} ${radioChip}`}>
+            <input type="radio" name="schedule-kind" value={k} checked={s.kind === k} onChange={() => set({ kind: k })} onKeyDown={pickOnEnter(() => set({ kind: k }))} className="sr-only" />
             {k === "weekly" ? "Weekly" : "Rotation"}
-          </button>
+          </label>
         ))}
       </div>
       {s.kind === "weekly" ? (
@@ -142,7 +152,7 @@ export function ScheduleEditor({ initial }: { initial: ScheduleValue }) {
                 type="button"
                 aria-pressed={s.weekdays.includes(i)}
                 className={chip(s.weekdays.includes(i))}
-                onClick={() => set({ weekdays: s.weekdays.includes(i) ? s.weekdays.filter((x) => x !== i) : [...s.weekdays, i].sort() })}
+                onClick={() => set({ weekdays: s.weekdays.includes(i) ? s.weekdays.filter((x) => x !== i) : [...s.weekdays, i].sort(byNumber) })}
               >
                 {d}
               </button>
@@ -190,9 +200,10 @@ export function ScheduleEditor({ initial }: { initial: ScheduleValue }) {
         <legend className="mb-1.5 text-sm font-medium text-muted">Travel buffer before and after shifts</legend>
         <div role="radiogroup" aria-label="Travel buffer" className="flex flex-wrap gap-2">
           {BUFFERS.map((b) => (
-            <button key={b.v} type="button" role="radio" aria-checked={s.bufferMinutes === b.v} className={chip(s.bufferMinutes === b.v)} onClick={() => set({ bufferMinutes: b.v })}>
+            <label key={b.v} className={`${chip(s.bufferMinutes === b.v)} ${radioChip}`}>
+              <input type="radio" name="travel-buffer" value={b.v} checked={s.bufferMinutes === b.v} onChange={() => set({ bufferMinutes: b.v })} onKeyDown={pickOnEnter(() => set({ bufferMinutes: b.v }))} className="sr-only" />
               {b.l}
-            </button>
+            </label>
           ))}
         </div>
       </fieldset>
@@ -211,7 +222,7 @@ export function ScheduleEditor({ initial }: { initial: ScheduleValue }) {
   );
 }
 
-export function ExceptionForm({ today }: { today: string }) {
+export function ExceptionForm({ today }: Readonly<{ today: string }>) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(today);
   const [kind, setKind] = useState<"off" | "extra">("off");
@@ -269,7 +280,7 @@ export function ExceptionForm({ today }: { today: string }) {
   );
 }
 
-export function RemoveException({ id, label }: { id: string; label: string }) {
+export function RemoveException({ id, label }: Readonly<{ id: string; label: string }>) {
   const { run, busy, result } = useAction();
   return (
     <span className="flex flex-col items-end gap-1">
@@ -281,7 +292,7 @@ export function RemoveException({ id, label }: { id: string; label: string }) {
   );
 }
 
-export function CalendarLinkForm({ connected }: { connected: boolean }) {
+export function CalendarLinkForm({ connected }: Readonly<{ connected: boolean }>) {
   const [url, setUrl] = useState("");
   const { run, busy, result } = useAction();
   return (
@@ -315,7 +326,7 @@ export function CalendarLinkForm({ connected }: { connected: boolean }) {
   );
 }
 
-export function GoalForm({ dollars }: { dollars: string }) {
+export function GoalForm({ dollars }: Readonly<{ dollars: string }>) {
   const [v, setV] = useState(dollars);
   const { run, busy, result } = useAction();
   return (
@@ -347,12 +358,12 @@ export function AlertPrefs({
   types,
   prefs,
   agencyOff = {},
-}: {
+}: Readonly<{
   types: Array<{ type: string; label: string }>;
   prefs: Record<string, { email: boolean; push: boolean }>;
   /** Channels the agency turned off for everyone in the person's group: shown off and disabled, with a note. */
   agencyOff?: Partial<Record<string, { email: boolean; push: boolean }>>;
-}) {
+}>) {
   const [state, setState] = useState(prefs);
   const [saving, setSaving] = useState<string | null>(null);
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -426,7 +437,7 @@ export function AlertPrefs({
   );
 }
 
-export function QuietHoursForm({ enabled, start, end }: { enabled: boolean; start: string; end: string }) {
+export function QuietHoursForm({ enabled, start, end }: Readonly<{ enabled: boolean; start: string; end: string }>) {
   const [on, setOn] = useState(enabled);
   const [s, setS] = useState(start);
   const [e2, setE] = useState(end);
@@ -440,8 +451,7 @@ export function QuietHoursForm({ enabled, start, end }: { enabled: boolean; star
       }}
     >
       <label className="flex min-h-11 items-center gap-2.5">
-        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} className="size-4.5 accent-accent" />
-        Hold push alerts during quiet hours
+        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} className="size-4.5 accent-accent" />Hold push alerts during quiet hours
       </label>
       {on ? (
         <div className="grid grid-cols-2 gap-3">
@@ -462,20 +472,25 @@ export function QuietHoursForm({ enabled, start, end }: { enabled: boolean; star
 }
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
-  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replaceAll("-", "+").replaceAll("_", "/");
   const raw = atob(padded);
   const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.codePointAt(i)!;
   return out;
 }
 
-export function PushEnable({ vapidKey, devices }: { vapidKey: string | null; devices: number }) {
+function pushState(devices: number): string {
+  if (devices > 0) return `Push is on for ${devices} ${devices === 1 ? "device" : "devices"}.`;
+  return "Push is off on all your devices.";
+}
+
+export function PushEnable({ vapidKey, devices }: Readonly<{ vapidKey: string | null; devices: number }>) {
   const { run, busy, result } = useAction();
   const [error, setError] = useState<string | null>(null);
   if (!vapidKey) return <p className="m-0 text-sm text-muted">Push alerts are not set up for this agency yet. You still get email and in-app alerts.</p>;
   return (
     <div className="flex flex-col gap-2.5">
-      <p className="m-0 text-sm text-muted">{devices > 0 ? `Push is on for ${devices} ${devices === 1 ? "device" : "devices"}.` : "Push is off on all your devices."} Turn it on for each phone or computer you use.</p>
+      <p className="m-0 text-sm text-muted">{pushState(devices)} Turn it on for each phone or computer you use.</p>
       <Button
         variant="secondary"
         busy={busy}

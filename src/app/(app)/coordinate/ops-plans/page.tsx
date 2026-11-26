@@ -10,18 +10,20 @@ import { Input, Select } from "@/ui/components/FormField";
 import { Notice } from "@/ui/components/Notice";
 import { Icon } from "@/ui/icons";
 import { PageTitle } from "../../_personnel/TabLinks";
-import { dateLabel, dateTime } from "../../_personnel/format";
+import { dateLabel, dateTime, prefixed } from "../../_personnel/format";
 import { coordinatorActor } from "../_coordinator/session";
 import { CountSection, Row, Rows } from "../_coordinator/ui";
 import { OpsPlanReview } from "../details/[id]/DetailActions";
 
 export const metadata: Metadata = { title: "Ops plans" };
 
+const icSentence = (icName: string | null) => (icName ? `Incident Commander ${icName}.` : "No Incident Commander yet.");
+
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 
 /** Ops plans that need a coordinator (overdue, waiting for review) and the library of agreed plans from past details. */
-export default async function OpsPlansPage({ searchParams }: Props) {
+export default async function OpsPlansPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const text = one(sp.q).slice(0, 200);
@@ -61,7 +63,7 @@ export default async function OpsPlansPage({ searchParams }: Props) {
                 key={o.jobId}
                 title={o.title}
                 href={`/coordinate/details/${o.jobId}#ops-plan`}
-                meta={`${o.vendorName}, starts ${dateTime(o.startAt)}. ${o.icName ? `Incident Commander ${o.icName}.` : "No Incident Commander yet."}`}
+                meta={`${o.vendorName}, starts ${dateTime(o.startAt)}. ${icSentence(o.icName)}`}
                 actions={<Chip tone="danger">Due {o.dueAt ? dateTime(o.dueAt) : "before the start"}</Chip>}
               />
             ))}
@@ -81,7 +83,7 @@ export default async function OpsPlansPage({ searchParams }: Props) {
                 key={o.jobId}
                 title={`${o.title}, version ${o.version}`}
                 href={`/coordinate/details/${o.jobId}#ops-plan`}
-                meta={`${o.vendorName}. Submitted ${o.waitingSince ? dateTime(o.waitingSince) : ""}${o.icName ? ` by IC ${o.icName}` : ""}.`}
+                meta={`${o.vendorName}. Submitted ${o.waitingSince ? dateTime(o.waitingSince) : ""}${prefixed(" by IC ", o.icName)}.`}
                 actions={o.canReview && o.opsPlanId && o.versionId ? <OpsPlanReview opsPlanId={o.opsPlanId} versionId={o.versionId} /> : <Chip>Another reviewer</Chip>}
               />
             ))}
@@ -125,7 +127,7 @@ export default async function OpsPlansPage({ searchParams }: Props) {
                 key={r.opsPlanId}
                 title={r.jobTitle}
                 href={`/coordinate/details/${r.jobId}#ops-plan`}
-                meta={`${r.vendorName}${r.location ? `, ${r.location}` : ""}. ${dateLabel(r.startAt)}${r.icName ? `. IC ${r.icName}` : ""}.`}
+                meta={`${r.vendorName}${prefixed(", ", r.location)}. ${dateLabel(r.startAt)}${prefixed(". IC ", r.icName)}.`}
                 actions={
                   <a href={`/api/v1/ops-plans/versions/${r.versionId}/file`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold" aria-label={`Download ${r.filename}`} download>
                     <Icon name="download" size={16} />

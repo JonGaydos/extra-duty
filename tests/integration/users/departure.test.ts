@@ -101,7 +101,7 @@ describe("departure: deactivating someone who leaves the agency", () => {
     await expect(f.run((tx) => departureChecklist(f.coord, tx, dana.userId, "2035-06-16", NOW))).rejects.toThrow("The last day cannot be in the future.");
     // Today is allowed.
     const preview = await f.run((tx) => departureChecklist(f.coord, tx, dana.userId, "2035-06-15", NOW));
-    expect(preview.upcoming.length).toBe(3);
+    expect(preview.upcoming).toHaveLength(3);
   });
 
   test("the checklist lists upcoming sign-ups, unbilled past details and unpaid invoices, and writes nothing", async () => {
@@ -122,7 +122,7 @@ describe("departure: deactivating someone who leaves the agency", () => {
     ]);
     expect(c.unbilled[0]).toMatchObject({ jobId: ids.lateJob, vendorName: "dep Vendor" });
     expect(c.unpaid).toEqual([expect.objectContaining({ invoiceId: ids.invoice, status: "pending_review", totalCents: 42000, vendorName: "dep Vendor", jobId: ids.billedJob })]);
-    expect((await db.select().from(auditLog)).length).toBe(audits);
+    expect(await db.select().from(auditLog)).toHaveLength(audits);
     expect(await statusOf(ids.backedRow)).toBe("signed_up");
   });
 
@@ -167,7 +167,7 @@ describe("departure: deactivating someone who leaves the agency", () => {
     expect(lonelyDetail.positions[0].filled).toBe(0);
 
     // The person gets no alert: the account is off.
-    expect((await db.select().from(notifications).where(eq(notifications.userId, dana.userId))).length).toBe(notesBefore);
+    expect(await db.select().from(notifications).where(eq(notifications.userId, dana.userId))).toHaveLength(notesBefore);
   });
 
   test("the vendor and other deputies are never told why", async () => {

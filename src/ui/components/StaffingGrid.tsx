@@ -1,3 +1,5 @@
+import { keyedByContent } from "@/lib/list-keys";
+
 export type StaffingPosition = {
   /** Stable key when two positions share a name. */
   id?: string;
@@ -21,7 +23,7 @@ function counts(p: StaffingPosition) {
  * "17 of 17 spots filled, 2 backups waiting", or with open spots
  * "15 of 17 spots filled: Deputy Sheriff 2 open. 2 backups waiting".
  */
-export function staffingSummary(positions: StaffingPosition[]): string {
+function staffingSummary(positions: StaffingPosition[]): string {
   const all = positions.map((p) => ({ name: p.name, ...counts(p) }));
   const filled = all.reduce((n, p) => n + p.filled, 0);
   const requested = all.reduce((n, p) => n + p.requested, 0);
@@ -47,23 +49,23 @@ const SQUARE: Record<Kind, string> = {
  * summary, naming each position with open spots; the roster table carries
  * the names of the people.
  */
-export function StaffingGrid({ positions, legend = true }: { positions: StaffingPosition[]; legend?: boolean }) {
+export function StaffingGrid({ positions, legend = true }: Readonly<{ positions: StaffingPosition[]; legend?: boolean }>) {
   return (
     <div className="flex flex-col gap-3">
       <div role="img" aria-label={staffingSummary(positions)} className="flex flex-col gap-2">
-        {positions.map((p, row) => {
+        {keyedByContent(positions, (p) => p.id ?? p.name).map(({ key: rowKey, item: p }) => {
           const c = counts(p);
           const squares: Kind[] = [
-            ...Array<Kind>(c.filled).fill("filled"),
-            ...Array<Kind>(c.open).fill("open"),
-            ...Array<Kind>(c.backups).fill("backup"),
+            ...new Array<Kind>(c.filled).fill("filled"),
+            ...new Array<Kind>(c.open).fill("open"),
+            ...new Array<Kind>(c.backups).fill("backup"),
           ];
           return (
-            <div key={p.id ?? `${row}-${p.name}`} data-staffing-row={p.name} className="flex items-start gap-2.5">
+            <div key={rowKey} data-staffing-row={p.name} className="flex items-start gap-2.5">
               <span className="w-27.5 shrink-0 text-sm leading-5.5 text-muted">{p.name}</span>
               <span className="flex flex-wrap gap-1.5">
-                {squares.map((k, i) => (
-                  <span key={i} data-square={k} className={`size-5.5 rounded-xs ${SQUARE[k]}`} />
+                {keyedByContent(squares, (k) => k).map(({ key, item: k }) => (
+                  <span key={key} data-square={k} className={`size-5.5 rounded-xs ${SQUARE[k]}`} />
                 ))}
               </span>
             </div>

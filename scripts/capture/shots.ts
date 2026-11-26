@@ -5,6 +5,7 @@ import sharp from "sharp";
 import type { Locator, Page } from "@playwright/test";
 import type { ManualId } from "../../src/domain/manuals/manuals";
 import { PRACTICE_USER_EMAILS, type PracticeRole } from "../../src/domain/training/mode";
+import { demoPassword } from "../demo-password";
 import type { Size, Source } from "./browser";
 
 export type ShotCtx = {
@@ -61,6 +62,11 @@ const top = async (locator: Locator) => {
   await locator.first().scrollIntoViewIfNeeded();
   await locator.first().evaluate((el) => el.scrollIntoView({ block: "start" }));
 };
+/** Waits for an address lookup to answer: its status names the search and no longer says it is looking. */
+async function lookupDone(page: Page): Promise<void> {
+  await main(page).getByText("Address search by").first().waitFor();
+  await main(page).getByText("Looking up the address.").waitFor({ state: "hidden" });
+}
 /** Opens the first link under main whose href starts with `prefix`, on `list`. */
 async function first(page: Page, list: string, prefix: string, has?: string | RegExp, hasNot?: string): Promise<void> {
   await page.goto(list);
@@ -92,8 +98,8 @@ async function openPayable(page: Page): Promise<Locator> {
   return payableNow(page);
 }
 const payable = (page: Page) => main(page).getByRole("article", { name: payableLabel, exact: true }).first();
-/** Set on the practice deputy by the capture, on staging only, so the sign-in pages can be shown for real. */
-export const DEMO_PASSWORD = "Practice-Only-2026";
+/** Set on the practice deputy by the capture, on staging only, so the sign-in pages can be shown for real. From DEMO_PASSWORD, or random for each run. */
+export const DEMO_PASSWORD = demoPassword();
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Deputy manual                                                                                                       */
@@ -181,7 +187,10 @@ deputy("14-billing-a-detail", 3, B, async (page) => {
 deputy("14-billing-a-detail", 4, B, async (page) => {
   await page.goto("/billing");
   const link = main(page).getByRole("link", { name: "Review and send invoice" });
-  if (!(await link.count())) return void (await page.goto("/billing?tab=waiting"));
+  if (!(await link.count())) {
+    await page.goto("/billing?tab=waiting");
+    return;
+  }
   await page.goto((await link.first().getAttribute("href"))!);
   await main(page).getByRole("button", { name: /^(Send invoice|Submit for review)$/ }).click();
   await page.waitForURL(/\/billing(\?|$)/, { timeout: 20_000 }).catch(() => undefined);
@@ -226,7 +235,15 @@ deputy(
   { stagingOnly: true },
 );
 
-deputy("16-marking-paid", 1, B, async (page) => void (await openPayable(page)), { target: payable });
+deputy(
+  "16-marking-paid",
+  1,
+  B,
+  async (page) => {
+    await openPayable(page);
+  },
+  { target: payable },
+);
 deputy("16-marking-paid", 2, B, async (page) => {
   await (await openPayable(page)).getByRole("button", { name: /^Mark received/ }).click();
 }, { target: payable });
@@ -369,7 +386,7 @@ coord("05-address-field", 1, D, async (page) => {
   const field = main(page).getByLabel("Address").first();
   await field.fill("100 Harbor Blvd, Bayside, FL");
   await field.blur();
-  await page.waitForTimeout(1500);
+  await lookupDone(page);
   await top(field);
 });
 
@@ -378,7 +395,8 @@ coord("06-site-contacts", 2, D, async (page) => {
   await page.goto("/coordinate/details/new");
   const vendorSelect = main(page).getByLabel("Vendor");
   await vendorSelect.selectOption({ index: 1 });
-  await page.waitForTimeout(500);
+  // The vendor's contacts are offered once a vendor is chosen.
+  await main(page).getByLabel("Site contact").and(page.locator(":enabled")).waitFor();
 }, { target: card("Vendor and place") });
 
 coord("07-attach-contract", 1, D, async (page, ctx) => {
@@ -457,8 +475,9 @@ coord("16-vendors-and-payment-holds", 2, D, (page) => first(page, "/coordinate/v
 coord("17-locations-and-pins", 1, D, async (page) => {
   await first(page, "/coordinate/vendors", "/coordinate/vendors/0");
   await main(page).getByRole("button", { name: "Edit Main site" }).click();
-  await page.waitForTimeout(1000);
-  await top(main(page).getByLabel("Address").first());
+  const address = main(page).getByLabel("Address").first();
+  await address.waitFor();
+  await top(address);
 });
 
 coord("18-invoice-review", 1, D, visit("/coordinate"), { target: region(/^Invoices to review/) });
@@ -544,8 +563,10 @@ async function demoLogo(): Promise<string> {
 admin("27-agency-logo", 1, D, async (page) => {
   await page.goto("/admin/agency");
   await main(page).locator('input[type="file"]').first().setInputFiles(await demoLogo());
-  await main(page).getByRole("button", { name: "Upload logo" }).click();
-  await page.waitForTimeout(1500);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/v1/agency/logo") && r.request().method() === "POST"),
+    main(page).getByRole("button", { name: "Upload logo" }).click(),
+  ]);
   await page.reload();
 }, { target: card("Logo") });
 admin("27-agency-logo", 2, D, visit("/coordinate"), { target: (page) => page.locator('[data-shell="top-nav"]') });

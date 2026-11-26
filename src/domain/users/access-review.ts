@@ -9,9 +9,9 @@ import { getSettings } from "../settings/settings";
 import { agencyDateParts } from "../time/agency-time";
 import { deactivateUser } from "./users";
 
-export const ACCESS_REVIEW_DUE_DAYS = 30;
+const ACCESS_REVIEW_DUE_DAYS = 30;
 /** The departure reason when the access review turns an account off. */
-export const ACCESS_REVIEW_REASON = "Access review";
+const ACCESS_REVIEW_REASON = "Access review";
 const DAY_MS = 86_400_000;
 
 type Review = typeof accessReviews.$inferSelect;

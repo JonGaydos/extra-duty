@@ -45,6 +45,12 @@ export type EmailForm = {
   region: string;
 };
 
+/** A write-only secret's patch: cleared, replaced when something was typed, or left out (kept) when empty. */
+function secretPatch<K extends string>(key: K, clear: boolean, typed: string): Partial<Record<K, string>> {
+  if (clear) return { [key]: "" } as Record<K, string>;
+  return typed ? ({ [key]: typed } as Record<K, string>) : {};
+}
+
 /** Saves the email provider. Secrets are write-only: a blank field keeps what is saved; the screen never gets them back. */
 export async function saveEmailAction(f: EmailForm): Promise<ActionResult> {
   return systemAct(async (actor, tx) => {
@@ -69,9 +75,9 @@ export async function saveEmailAction(f: EmailForm): Promise<ActionResult> {
           port: f.provider === "smtp" ? port : current.smtp.port,
           secure: f.secure,
           user: f.user.trim(),
-          ...(f.clearPassword ? { password: "" } : f.password ? { password: f.password } : {}),
+          ...secretPatch("password", f.clearPassword, f.password),
         },
-        ...(f.clearApiKey ? { apiKey: "" } : f.apiKey ? { apiKey: f.apiKey.trim() } : {}),
+        ...secretPatch("apiKey", f.clearApiKey, f.apiKey.trim()),
       },
     });
     return { ok: true, message: "Email settings saved." };

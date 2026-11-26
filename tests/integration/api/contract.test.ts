@@ -16,6 +16,8 @@ import { GET as getJob } from "@/app/api/v1/jobs/[id]/route";
 import { getJob as getJobService } from "@/domain/jobs/jobs";
 import { vendorViewJob } from "@/domain/vendor-portal/requests";
 
+// Test handlers are async to match apiHandler; they answer at once.
+
 const ROOT = join(process.cwd(), "src/app/api/v1");
 
 function routeFiles(dir: string): string[] {
@@ -64,7 +66,7 @@ describe("the API contract", () => {
   test("a RuleViolation is 409 with the checks; other domain errors keep their status", async () => {
     const def = { method: "POST", path: "/test", summary: "Test", response: z.unknown() } as const;
     const checks = [{ check: "cap_week" as const, ok: false, message: "Over the weekly cap." }];
-    const rule = await call(apiHandler(def, async () => { throw new RuleViolation(checks); }), "/api/v1/test", { method: "POST", headers: bearer(token) });
+    const rule = await call(apiHandler(def, () => Promise.reject(new RuleViolation(checks))), "/api/v1/test", { method: "POST", headers: bearer(token) });
     expect(rule.status).toBe(409);
     expect(await rule.json()).toEqual({ error: { code: "rule_violation", message: "One or more rules were not met.", checks } });
     const cases: Array<[Error, number]> = [
@@ -74,21 +76,26 @@ describe("the API contract", () => {
       [new TooLargeError(), 413],
     ];
     for (const [err, status] of cases) {
-      const res = await call(apiHandler(def, async () => { throw err; }), "/api/v1/test", { method: "POST", headers: bearer(token) });
+      const res = await call(apiHandler(def, () => Promise.reject(err)), "/api/v1/test", { method: "POST", headers: bearer(token) });
       expect(res.status, err.name).toBe(status);
     }
-    const anon = await call(apiHandler(def, async () => ({ ok: true })), "/api/v1/test", { method: "POST" });
+    const anon = await call(apiHandler(def, () => Promise.resolve({ ok: true })), "/api/v1/test", { method: "POST" });
     expect(anon.status).toBe(401);
   });
 
   test("a body that fails its schema is 400, not a crash", async () => {
     const def = { method: "POST", path: "/test", summary: "Test", body: z.object({ n: z.number() }), response: z.unknown() } as const;
-    const h = apiHandler(def, async ({ body }) => body);
+    const h = apiHandler(def, ({ body }) => Promise.resolve(body));
     const bad = await call(h, "/api/v1/test", { method: "POST", headers: { ...bearer(token), "content-type": "application/json" }, body: JSON.stringify({ n: "x" }) });
     expect(bad.status).toBe(400);
     expect((await bad.json()).error.message).toMatch(/^n: /);
     const notJson = await call(h, "/api/v1/test", { method: "POST", headers: bearer(token), body: "{" });
     expect(notJson.status).toBe(400);
+    expect((await notJson.json()).error.message).toBe("Send the details as JSON.");
+    const good = await call(h, "/api/v1/test", { method: "POST", headers: bearer(token), body: JSON.stringify({ n: 3 }) });
+    expect(await good.json()).toEqual({ data: { n: 3 } });
+    const optional = apiHandler({ ...def, body: z.object({ n: z.number() }).optional() }, ({ body }) => Promise.resolve({ empty: body === undefined }));
+    expect(await (await call(optional, "/api/v1/test", { method: "POST", headers: bearer(token), body: "" })).json()).toEqual({ data: { empty: true } });
   });
 
   test("a unique-constraint violation is a 400 validation error, not a 500", async () => {

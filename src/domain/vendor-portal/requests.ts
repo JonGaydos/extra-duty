@@ -30,7 +30,7 @@ import { expandDates, previewBulk, type DateSelection, type TimeOverrides } from
 import type { SafetyInput } from "../jobs/safety";
 import { coordinatorAudience, jobAudience, vendorAudience } from "../notifications/audiences";
 import { emit } from "../notifications/notify";
-import { getSettings } from "../settings/settings";
+import { getSettings, type AgencySettings } from "../settings/settings";
 import type { ConflictOverride } from "../jobs/schedule-conflicts";
 import { AGENCY_TZ, agencyDayKey } from "../time/agency-time";
 import type { Cents } from "../types";
@@ -39,14 +39,15 @@ import { addLocation, cleanUrl, type LocationInput } from "../vendors/vendors";
 import { isJobLocked } from "./holds";
 import { VENDOR_FILLED, vendorEditAllowed, type VendorChange } from "./rules";
 
-export { isJobLocked, lockedDetailsForTodo, openHold } from "./holds";
-export { lateCancelMinutes, vendorEditAllowed } from "./rules";
+export { isJobLocked, lockedDetailsForTodo } from "./holds";
 
 export type JobChangeRequest = typeof jobChangeRequests.$inferSelect;
 
 const HOUR_MS = 3_600_000;
 const HOLD_MESSAGE = "Vendor on payment hold";
 const when = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: AGENCY_TZ, dateStyle: "medium", timeStyle: "short" }).format(d);
+/** "on <start>" for one detail, or "<n> dates starting <start>" for a series. */
+const requestDates = (count: number, start: string) => (count === 1 ? `on ${start}` : `${count} dates starting ${start}`);
 const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
 function violation(check: CheckResult["check"], message: string): RuleViolation {
@@ -77,7 +78,7 @@ async function requestablePositions(tx: Tx, given: PositionInput[]): Promise<Pos
   const byId = new Map(types.map((t) => [t.id, t]));
   for (const p of given) {
     const t = byId.get(p.positionTypeId);
-    if (!t || !t.active) throw new ValidationError("Position type not found.");
+    if (!t?.active) throw new ValidationError("Position type not found.");
     if (!t.vendorRequestable) throw new ValidationError(`${t.name} cannot be requested by a vendor. Call the coordinators.`);
   }
   return given.map((p) => ({ positionTypeId: p.positionTypeId, count: p.count }));
@@ -107,7 +108,7 @@ export type VendorRequestInput = {
   rateCents?: Cents | null;
   /** Defaults to one position of the default position type. */
   positions?: PositionInput[];
-  flex?: JobInput["flex"];
+  flex?: Exclude<JobInput["flex"], undefined>;
   /** Look pins up first with resolveSafetyPins, outside the transaction. */
   safety?: SafetyInput;
   contract?: { label: string; url?: string; file?: { body: Buffer; filename: string; contentType: string } };
@@ -121,11 +122,8 @@ export type VendorRequestInput = {
   overrides?: TimeOverrides;
 };
 
-/**
- * A vendor (or a coordinator for it) asks for a detail. The jobs start `requested` and go to the
- * coordinators; refused inside the minimum notice, for unrequestable positions and while the vendor is on hold.
- */
-export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestInput, now: Date = new Date()): Promise<Job[]> {
+/** The vendor the request is for: the vendor's own, or the one a coordinator chose. Refused while inactive or on hold. */
+async function requestVendor(actor: Actor, tx: Tx, input: VendorRequestInput): Promise<typeof vendors.$inferSelect> {
   if (actor.role === "vendor" && input.vendorId && input.vendorId !== actor.vendorId) throw new NotFoundError("Vendor not found.");
   const vendorId = actor.role === "vendor" ? actor.vendorId : (input.vendorId ?? null);
   assertCan(actor, "vendorRequest.submit", { vendorId: vendorId ?? undefined });
@@ -135,6 +133,39 @@ export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestIn
   if (!vendor.active) throw new ValidationError("That vendor is inactive.");
   if (vendor.paymentHold) throw violation("vendor_hold", HOLD_MESSAGE);
   if (input.locationId && input.newLocation) throw new ValidationError("Pick a location or add a new one, not both.");
+  return vendor;
+}
+
+/** The positions asked for, or one of the default position type when none were. */
+function givenPositions(given: VendorRequestInput["positions"], settings: AgencySettings) {
+  if (given?.length) return given;
+  if (!settings.defaultPositionTypeId) throw new ValidationError("Add at least one position.");
+  return [{ positionTypeId: settings.defaultPositionTypeId, count: 1 }];
+}
+
+/** The request's contract: a stored file or a link, with its label. */
+async function requestContract(
+  actor: Actor,
+  tx: Tx,
+  input: NonNullable<VendorRequestInput["contract"]>,
+): Promise<{ label: string; fileId: string | null; url: string | null }> {
+  const label = input.label?.trim();
+  if (!label) throw new ValidationError("A contract needs a label.");
+  if (!!input.file === !!input.url) throw new ValidationError("Attach a contract file or a link, not both and not neither.");
+  if (input.file) {
+    const f = await uploadFile(actor, tx, { kind: "contract", ...input.file });
+    return { label, fileId: f.id, url: null };
+  }
+  return { label, fileId: null, url: cleanUrl(input.url!) };
+}
+
+/**
+ * A vendor (or a coordinator for it) asks for a detail. The jobs start `requested` and go to the
+ * coordinators; refused inside the minimum notice, for unrequestable positions and while the vendor is on hold.
+ */
+export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestInput, now: Date = new Date()): Promise<Job[]> {
+  const vendor = await requestVendor(actor, tx, input);
+  const vendorId = vendor.id;
 
   const settings = await getSettings(tx);
   const dates = input.dates ? expandDates(input.dates, agencyDayKey(input.startAt)) : null;
@@ -142,29 +173,13 @@ export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestIn
   // Coordinators submitting for a vendor are not held to the vendor notice.
   if (actor.role === "vendor") assertNotice(starts, now, settings.vendorMinNoticeHours);
 
-  let given = input.positions ?? [];
-  if (given.length === 0) {
-    if (!settings.defaultPositionTypeId) throw new ValidationError("Add at least one position.");
-    given = [{ positionTypeId: settings.defaultPositionTypeId, count: 1 }];
-  }
-  const positions = await requestablePositions(tx, given);
+  const positions = await requestablePositions(tx, givenPositions(input.positions, settings));
 
   let locationId = input.locationId ?? null;
   if (input.newLocation) locationId = (await addLocation(actor, tx, vendorId, input.newLocation)).id;
   const contact = input.newContact ? await addVendorContact(actor, tx, vendorId, input.newContact) : null;
 
-  let contract: { label: string; fileId: string | null; url: string | null } | null = null;
-  if (input.contract) {
-    const label = input.contract.label?.trim();
-    if (!label) throw new ValidationError("A contract needs a label.");
-    if (!!input.contract.file === !!input.contract.url) throw new ValidationError("Attach a contract file or a link, not both and not neither.");
-    if (input.contract.file) {
-      const f = await uploadFile(actor, tx, { kind: "contract", ...input.contract.file });
-      contract = { label, fileId: f.id, url: null };
-    } else {
-      contract = { label, fileId: null, url: cleanUrl(input.contract.url!) };
-    }
-  }
+  const contract = input.contract ? await requestContract(actor, tx, input.contract) : null;
 
   const job: JobInput = {
     vendorId,
@@ -198,7 +213,7 @@ export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestIn
     recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
     type: "vendor.request_submitted",
     title: `Vendor request: ${vendor.name}`,
-    body: `${first.title}, ${created.length === 1 ? `on ${when(first.startAt)}` : `${created.length} dates starting ${when(first.startAt)}`}.`,
+    body: `${first.title}, ${requestDates(created.length, when(first.startAt))}.`,
     link: `/jobs/${first.id}`,
   });
   return created;
@@ -227,6 +242,7 @@ export async function approveRequest(actor: Actor, tx: Tx, jobId: string, edits?
     throw new ValidationError("Change times one detail at a time.");
   }
   const out: Job[] = [];
+  // Sequential: each detail is approved with its writes and audit in this transaction.
   for (const j of set) {
     if (hasEdits) await updateJobUnchecked(actor, tx, j.id, edits, "one");
     const [before] = await tx.select().from(jobs).where(eq(jobs.id, j.id));
@@ -250,6 +266,7 @@ export async function declineRequest(actor: Actor, tx: Tx, jobId: string, reason
   if (!why) throw new ValidationError("A reason is required to decline a request.");
   const set = await requestSet(tx, jobId);
   const out: Job[] = [];
+  // Sequential: each detail is declined with its writes and audit in this transaction.
   for (const j of set) {
     const [after] = await tx.update(jobs).set({ state: "declined", cancelReason: why }).where(eq(jobs.id, j.id)).returning();
     await recordAudit(tx, { actor, action: "job.request_decline", entityType: "job", entityId: j.id, before: j, after, reason: why });
@@ -339,6 +356,45 @@ async function applyPatch(actor: Actor, tx: Tx, job: Job, patch: Partial<JobInpu
   return after;
 }
 
+type EditChange = Awaited<ReturnType<typeof classify>>[number];
+
+/** A still-requested detail: a vendor's edit is held to the request rules and notice, then applied, and the coordinators are told. */
+async function editRequest(actor: Actor, tx: Tx, job: Job, clean: VendorEditPatch, changes: EditChange[], now: Date): Promise<VendorEditResult> {
+  if (actor.role === "vendor") {
+    const settings = await getSettings(tx);
+    for (const change of changes) {
+      const r = vendorEditAllowed({ now, job: { startAt: job.startAt, signedUpCount: 0 }, change, s: settings });
+      if (!r.allowed) throw violation("vendor.edit", r.reason ?? "This change is not allowed.");
+    }
+    if (clean.startAt) assertNotice([clean.startAt], now, settings.vendorMinNoticeHours);
+  }
+  const after = await applyPatch(actor, tx, job, fromStored(toStored(clean)), changes);
+  await emit(tx, {
+    recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
+    type: "vendor.request_edited",
+    title: `Vendor request edited: ${after.title}`,
+    body: `The request now starts ${when(after.startAt)}.`,
+    link: `/jobs/${after.id}`,
+  });
+  return { applied: true, job: jobFieldsFor(actor, after) };
+}
+
+/** Whether a vendor's change to a scheduled detail needs a coordinator's approval; a change the rules refuse throws. */
+async function vendorChangeNeedsApproval(tx: Tx, job: Job, changes: EditChange[], now: Date): Promise<boolean> {
+  const settings = await getSettings(tx);
+  const held = await tx
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(and(eq(assignments.jobId, job.id), inArray(assignments.status, ["signed_up", "pending_short"])));
+  let needsApproval = false;
+  for (const change of changes) {
+    const r = vendorEditAllowed({ now, job: { startAt: job.startAt, signedUpCount: held.length }, change, s: settings });
+    if (!r.allowed) throw violation("vendor.edit", r.reason ?? "This change is not allowed.");
+    needsApproval ||= r.needsApproval;
+  }
+  return needsApproval;
+}
+
 /**
  * A vendor edit of its own detail. Inside the admin settings it applies at once (description) or becomes a
  * pending change for a coordinator (time, date, headcount); a coordinator acting for the vendor applies directly.
@@ -354,39 +410,9 @@ export async function vendorEditJob(actor: Actor, tx: Tx, jobId: string, patch: 
   const changes = await classify(tx, job, clean);
   if (changes.length === 0) return { applied: true, job: jobFieldsFor(actor, job) };
 
-  if (job.state === "requested") {
-    if (vendorActor) {
-      const settings = await getSettings(tx);
-      for (const change of changes) {
-        const r = vendorEditAllowed({ now, job: { startAt: job.startAt, signedUpCount: 0 }, change, s: settings });
-        if (!r.allowed) throw violation("vendor.edit", r.reason ?? "This change is not allowed.");
-      }
-      if (clean.startAt) assertNotice([clean.startAt], now, settings.vendorMinNoticeHours);
-    }
-    const after = await applyPatch(actor, tx, job, fromStored(toStored(clean)), changes);
-    await emit(tx, {
-      recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
-      type: "vendor.request_edited",
-      title: `Vendor request edited: ${after.title}`,
-      body: `The request now starts ${when(after.startAt)}.`,
-      link: `/jobs/${after.id}`,
-    });
-    return { applied: true, job: jobFieldsFor(actor, after) };
-  }
+  if (job.state === "requested") return editRequest(actor, tx, job, clean, changes, now);
 
-  let needsApproval = false;
-  if (vendorActor) {
-    const settings = await getSettings(tx);
-    const held = await tx
-      .select({ id: assignments.id })
-      .from(assignments)
-      .where(and(eq(assignments.jobId, job.id), inArray(assignments.status, ["signed_up", "pending_short"])));
-    for (const change of changes) {
-      const r = vendorEditAllowed({ now, job: { startAt: job.startAt, signedUpCount: held.length }, change, s: settings });
-      if (!r.allowed) throw violation("vendor.edit", r.reason ?? "This change is not allowed.");
-      needsApproval ||= r.needsApproval;
-    }
-  }
+  const needsApproval = vendorActor && (await vendorChangeNeedsApproval(tx, job, changes, now));
   if (!needsApproval) return { applied: true, job: jobFieldsFor(actor, await applyPatch(actor, tx, job, fromStored(toStored(clean)), changes)) };
 
   const [request] = await tx.insert(jobChangeRequests).values({ jobId: job.id, requestedBy: actor.userId, patch: toStored(clean) }).returning();
@@ -486,6 +512,7 @@ export async function waiveLateCancelPay(actor: Actor, tx: Tx, jobId: string, re
     .where(and(eq(assignments.jobId, jobId), eq(assignments.status, "late_canceled")))
     .returning();
   await tx.update(jobs).set({ lateCancelWaivedReason: why }).where(eq(jobs.id, jobId));
+  // Sequential: writes and alerts in this transaction.
   for (const a of waived) {
     await recordAudit(tx, { actor, action: "assignment.late_cancel_waive", entityType: "assignment", entityId: a.id, before: { ...a, status: "late_canceled" }, after: a, reason: why });
   }

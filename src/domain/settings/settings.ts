@@ -121,10 +121,10 @@ export const agencySettingsSchema = z.object({
 });
 
 export type AgencySettings = z.infer<typeof agencySettingsSchema>;
-export type SettingKey = keyof AgencySettings;
+type SettingKey = keyof AgencySettings;
 
 /** Keys only admins may change. Every other key is open to coordinators and admins. */
-export const ADMIN_SETTING_KEYS = ["email", "security"] as const satisfies readonly SettingKey[];
+const ADMIN_SETTING_KEYS = ["email", "security"] as const satisfies readonly SettingKey[];
 
 type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -179,7 +179,10 @@ export async function getSettings(tx: Tx): Promise<AgencySettings> {
 
 /** Secrets never reach the audit log; `prev` marks the ones this save changed, so the log still shows it. */
 function maskSecrets(s: AgencySettings, prev?: AgencySettings): AgencySettings {
-  const mask = (v: string, was?: string) => (v ? (was !== undefined && was !== v ? "[encrypted, changed]" : "[encrypted]") : "");
+  const mask = (v: string, was?: string) => {
+    if (!v) return "";
+    return was !== undefined && was !== v ? "[encrypted, changed]" : "[encrypted]";
+  };
   return {
     ...s,
     email: { ...s.email, apiKeyEnc: mask(s.email.apiKeyEnc, prev?.email.apiKeyEnc), smtp: { ...s.email.smtp, passwordEnc: mask(s.email.smtp.passwordEnc, prev?.email.smtp.passwordEnc) } },
@@ -261,15 +264,12 @@ export async function updateSettings(actor: Actor, tx: Tx, patch: SettingsPatch)
   return (await saveSettings(actor, tx, patch)).settings;
 }
 
-/**
- * updateSettings with its side effects reported: when the release day or time changes, details that have not
- * opened yet get new release dates and `releaseDatesMoved` says how many (null when release did not change).
- */
-export async function saveSettings(actor: Actor, tx: Tx, patch: SettingsPatch): Promise<{ settings: AgencySettings; releaseDatesMoved: number | null }> {
+/** Refuses a patch with unknown settings, or admin-only settings from a coordinator. */
+function assertSettingKeys(actor: Actor, patch: SettingsPatch): void {
   if (actor.role !== "admin" && actor.role !== "coordinator") {
     throw new ForbiddenError("Only coordinators and admins can change settings.");
   }
-  const keys = Object.entries(patch)
+  const keys = Object.entries(patch as Record<string, unknown>)
     .filter(([, v]) => v !== undefined)
     .map(([k]) => k);
   const known = new Set<string>(Object.keys(agencySettingsSchema.shape));
@@ -279,23 +279,34 @@ export async function saveSettings(actor: Actor, tx: Tx, patch: SettingsPatch): 
   if (actor.role !== "admin" && adminOnly.length) {
     throw new ForbiddenError(`Only admins can change: ${adminOnly.join(", ")}.`);
   }
+}
+
+/** The email patch as stored: a new API key or SMTP password encrypted, an empty one cleared. */
+function storedEmail(patchEmail: NonNullable<SettingsPatch["email"]>): Record<string, unknown> {
+  const { apiKey, smtp, ...restEmail } = patchEmail;
+  const email: Record<string, unknown> = { ...restEmail };
+  if (apiKey !== undefined) email.apiKeyEnc = apiKey ? encryptSecret(apiKey) : "";
+  if (smtp) {
+    const { password, ...restSmtp } = smtp;
+    const smtpOut: Record<string, unknown> = { ...restSmtp };
+    if (password !== undefined) smtpOut.passwordEnc = password ? encryptSecret(password) : "";
+    email.smtp = smtpOut;
+  }
+  return email;
+}
+
+/**
+ * updateSettings with its side effects reported: when the release day or time changes, details that have not
+ * opened yet get new release dates and `releaseDatesMoved` says how many (null when release did not change).
+ */
+export async function saveSettings(actor: Actor, tx: Tx, patch: SettingsPatch): Promise<{ settings: AgencySettings; releaseDatesMoved: number | null }> {
+  assertSettingKeys(actor, patch);
 
   const { rowId, value: before } = await current(tx);
 
   const toMerge: Record<string, unknown> = { ...patch };
   if (patch.agency?.phone !== undefined) toMerge.agency = { ...patch.agency, phone: cleanChangedPhone(patch.agency.phone, before.agency.phone) ?? "" };
-  if (patch.email) {
-    const { apiKey, smtp, ...restEmail } = patch.email;
-    const email: Record<string, unknown> = { ...restEmail };
-    if (apiKey !== undefined) email.apiKeyEnc = apiKey ? encryptSecret(apiKey) : "";
-    if (smtp) {
-      const { password, ...restSmtp } = smtp;
-      const smtpOut: Record<string, unknown> = { ...restSmtp };
-      if (password !== undefined) smtpOut.passwordEnc = password ? encryptSecret(password) : "";
-      email.smtp = smtpOut;
-    }
-    toMerge.email = email;
-  }
+  if (patch.email) toMerge.email = storedEmail(patch.email);
 
   const merged = deepMerge(before as unknown as Record<string, unknown>, toMerge);
   if (merged.signupWarningText !== before.signupWarningText) {

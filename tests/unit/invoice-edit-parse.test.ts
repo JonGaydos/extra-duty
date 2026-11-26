@@ -4,7 +4,7 @@ import { parseEditBody } from "@/app/api/v1/invoices/parse";
 
 describe("parseEditBody", () => {
   test("malformed or mistyped bodies are ValidationErrors", () => {
-    for (const bad of [undefined, null, "x", [], { rateCents: "70" }, { minimumBillableMinutes: NaN }, { reason: 5 }, { endAt: "nope" }, { startAt: 3 }]) {
+    for (const bad of [undefined, null, "x", [], { rateCents: "70" }, { minimumBillableMinutes: Number.NaN }, { reason: 5 }, { endAt: "nope" }, { startAt: 3 }]) {
       expect(() => parseEditBody(bad)).toThrow(ValidationError);
     }
   });

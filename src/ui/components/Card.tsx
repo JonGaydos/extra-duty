@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { withClass } from "./with-class";
 
 export type CardTone = "default" | "accent" | "warning" | "danger";
 
@@ -20,15 +21,16 @@ export function Card({
   className,
   ...rest
 }: { as?: "section" | "div" | "article" | "li"; tone?: CardTone; pad?: boolean } & HTMLAttributes<HTMLElement>) {
+  const padding = pad ? " gap-3 p-4 md:p-5.5" : "";
   return (
     <Tag
-      className={`flex flex-col rounded-xl md:rounded-2xl ${TONES[tone]}${pad ? " gap-3 p-4 md:p-5.5" : ""}${className ? ` ${className}` : ""}`}
+      className={withClass(`flex flex-col rounded-xl md:rounded-2xl ${TONES[tone]}${padding}`, className)}
       {...rest}
     />
   );
 }
 
 /** Card heading: 15 px on phones, 16 px on desktop, semibold. */
-export function CardTitle({ children, as: Tag = "h2" }: { children: ReactNode; as?: "h2" | "h3" }) {
+export function CardTitle({ children, as: Tag = "h2" }: Readonly<{ children: ReactNode; as?: "h2" | "h3" }>) {
   return <Tag className="m-0 flex items-center gap-2 text-title font-semibold md:text-base">{children}</Tag>;
 }

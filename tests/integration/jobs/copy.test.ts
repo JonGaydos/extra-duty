@@ -11,6 +11,9 @@ import { createJob, getJob, updateJob, type JobInput } from "@/domain/jobs/jobs"
 import { updateSettings } from "@/domain/settings/settings";
 import { agencyDateParts, agencyInstant } from "@/domain/time/agency-time";
 import { resetGeocoder } from "@/domain/vendors/geocode";
+import { byText } from "@/lib/sort";
+
+// Fake fetches are async to match fetch; they answer at once.
 
 describe("bulk dates, copy and series", () => {
   const get = useTestDb();
@@ -49,7 +52,7 @@ describe("bulk dates, copy and series", () => {
     ...over,
   });
   const positionsOf = async (id: string) =>
-    (await get().db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((p) => `${p.positionTypeId}:${p.count}`).sort();
+    (await get().db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((p) => `${p.positionTypeId}:${p.count}`).sort(byText);
 
   beforeAll(async () => {
     const { db } = get();
@@ -83,8 +86,8 @@ describe("bulk dates, copy and series", () => {
     const seriesBefore = (await get().db.select().from(jobSeries)).length;
     await expect(run((tx) => createJobsOnDates(coord, tx, base(), dates, { "2035-07-06": { startTime: "25:00" } }))).rejects.toBeInstanceOf(ValidationError);
     await expect(run((tx) => createJobsOnDates(coord, tx, base({ positions: [{ positionTypeId: pos["CSO"], count: 0 }] }), dates))).rejects.toBeInstanceOf(ValidationError);
-    expect((await get().db.select().from(jobs)).length).toBe(before);
-    expect((await get().db.select().from(jobSeries)).length).toBe(seriesBefore);
+    expect(await get().db.select().from(jobs)).toHaveLength(before);
+    expect(await get().db.select().from(jobSeries)).toHaveLength(seriesBefore);
     await expect(run((tx) => createJobsOnDates(coord, tx, base(), []))).rejects.toBeInstanceOf(ValidationError);
     await expect(run((tx) => createJobsOnDates(deputy, tx, base(), dates))).rejects.toBeInstanceOf(ForbiddenError);
   });
@@ -111,7 +114,7 @@ describe("bulk dates, copy and series", () => {
   });
 
   test("safety addresses are looked up once for the whole batch", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{ lat: "30.5", lon: "-86.1" }]), { status: 200 }));
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify([{ lat: "30.5", lon: "-86.1" }]), { status: 200 })));
     vi.stubGlobal("fetch", fetchMock);
     try {
       const out = await run((tx) =>
@@ -169,7 +172,7 @@ describe("bulk dates, copy and series", () => {
     expect(out).toHaveLength(2);
     expect(new Set(out.map((j) => j.seriesId)).size).toBe(1);
     const source = await run((tx) => getJob(coord, tx, src.id));
-    const diffs = async (id: string) => (await db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((p) => `${p.positionTypeId}:${p.count}:${p.rateDifferentialCents}`).sort();
+    const diffs = async (id: string) => (await db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((p) => `${p.positionTypeId}:${p.count}:${p.rateDifferentialCents}`).sort(byText);
     for (const j of out) {
       const d = await run((tx) => getJob(coord, tx, j.id));
       expect(d).toMatchObject({
@@ -188,13 +191,13 @@ describe("bulk dates, copy and series", () => {
       expect(d.safety?.addresses.map((a) => [a.address, a.description, a.lat, a.lng])).toEqual(source.safety!.addresses.map((a) => [a.address, a.description, a.lat, a.lng]));
       expect(d.flexEarliestStartAt!.getTime()).toBe(j.startAt.getTime() - 3_600_000);
       expect(d.flexLatestEndAt!.getTime()).toBe(j.endAt.getTime() + 3_600_000);
-      expect(d.attachments.map((a) => [a.label, a.isContract, a.fileId, a.url]).sort()).toEqual([
+      expect(d.attachments.map((a) => [a.label, a.isContract, a.fileId, a.url]).sort((a, b) => byText(String(a), String(b)))).toEqual([
         ["Contract", true, file.id, null],
         ["Map", false, null, "https://example.test/map"],
       ]);
     }
     // The copies point at the same stored file: no file data is duplicated.
-    expect((await db.select().from(files)).length).toBe(filesBefore);
+    expect(await db.select().from(files)).toHaveLength(filesBefore);
   });
 
   test("Repeat keeps the source's differentials and attachments, carries no people, and refuses past dates", async () => {
@@ -205,7 +208,7 @@ describe("bulk dates, copy and series", () => {
     const p = await deputyUser("rep-a@example.test");
     const [spot] = await db.select().from(jobPositions).where(and(eq(jobPositions.jobId, src.id), eq(jobPositions.positionTypeId, pos["Deputy Sheriff"])));
     await db.insert(assignments).values({ jobId: src.id, jobPositionId: spot.id, userId: p.userId, status: "signed_up" });
-    const diffs = async (id: string) => (await db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((x) => `${x.positionTypeId}:${x.count}:${x.rateDifferentialCents}`).sort();
+    const diffs = async (id: string) => (await db.select().from(jobPositions).where(eq(jobPositions.jobId, id))).map((x) => `${x.positionTypeId}:${x.count}:${x.rateDifferentialCents}`).sort(byText);
 
     const out = await run((tx) => createRecurringJobs(coord, tx, src.id, { kind: "weekly", every: 1, weekdays: [0], end: { count: 3 } }, NOW));
     expect(out).toHaveLength(2);
@@ -221,7 +224,7 @@ describe("bulk dates, copy and series", () => {
     const err = await run((tx) => createRecurringJobs(coord, tx, old.id, { kind: "weekly", every: 1, weekdays: [0], end: { count: 3 } }, agencyInstant(2035, 5, 15, 9, 0))).catch((e) => e);
     expect(err).toBeInstanceOf(ValidationError);
     expect(err.message).toBe("2035-05-13: A copy cannot be made on a past date. Choose today or a later date.");
-    expect((await db.select().from(jobs)).length).toBe(before);
+    expect(await db.select().from(jobs)).toHaveLength(before);
   });
 
   test("a copy never carries people: signed-up, backup and billed people stay on the source, and nobody gets an alert", async () => {
@@ -241,8 +244,8 @@ describe("bulk dates, copy and series", () => {
     const single = await run((tx) => copyJob(coord, tx, src.id, { kind: "dates", dates: ["2035-09-01", "2035-09-02"] }, legacy));
     const repeated = await run((tx) => createRecurringJobs(coord, tx, src.id, { kind: "weekly", every: 1, weekdays: [6], end: { count: 2 } }));
     for (const j of [...single.jobs, ...repeated]) expect(await db.select().from(assignments).where(eq(assignments.jobId, j.id))).toEqual([]);
-    expect((await db.select().from(assignments).where(eq(assignments.jobId, src.id))).length).toBe(3);
-    expect((await db.select().from(notifications).where(inArray(notifications.userId, people))).length).toBe(alertsBefore);
+    expect(await db.select().from(assignments).where(eq(assignments.jobId, src.id))).toHaveLength(3);
+    expect(await db.select().from(notifications).where(inArray(notifications.userId, people))).toHaveLength(alertsBefore);
     expect(await db.select().from(auditLog).where(eq(auditLog.action, "assignment.copy"))).toEqual([]);
   });
 
@@ -256,7 +259,7 @@ describe("bulk dates, copy and series", () => {
     const err = await run((tx) => copyJob(coord, tx, src.id, { kind: "dates", dates: ["2035-09-12", "2035-09-08"] }, { now })).catch((e) => e);
     expect(err).toBeInstanceOf(ValidationError);
     expect(err.message).toBe("2035-09-08: A copy cannot be made on a past date. Choose today or a later date.");
-    expect((await get().db.select().from(jobs)).length).toBe(before);
+    expect(await get().db.select().from(jobs)).toHaveLength(before);
     const ok = await run((tx) => copyJob(coord, tx, src.id, { kind: "dates", dates: ["2035-09-09"] }, { now }));
     expect(ok.jobs).toHaveLength(1);
   });
@@ -272,7 +275,7 @@ describe("bulk dates, copy and series", () => {
   test("a series made here updates through scope series", async () => {
     const out = await run((tx) => createJobsOnDates(coord, tx, base({ title: "Series edit" }), dates));
     const changed = await run((tx) => updateJob(coord, tx, out[2].id, { title: "Renamed" }, "series"));
-    expect(changed.map((j) => j.id).sort()).toEqual(out.slice(2).map((j) => j.id).sort());
+    expect(changed.map((j) => j.id).sort(byText)).toEqual(out.slice(2).map((j) => j.id).sort(byText));
     const rows = await get().db.select().from(jobs).where(eq(jobs.seriesId, out[0].seriesId!));
     expect(rows.filter((r) => r.title === "Renamed")).toHaveLength(4);
     expect(rows.filter((r) => r.title === "Series edit")).toHaveLength(2);

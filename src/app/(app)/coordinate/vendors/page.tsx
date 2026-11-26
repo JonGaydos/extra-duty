@@ -15,16 +15,32 @@ import { NewVendor } from "./VendorActions";
 export const metadata: Metadata = { title: "Vendors" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+type Show = "active" | "hold" | "inactive";
+type DirectoryVendor = Awaited<ReturnType<typeof vendorDirectory>>[number];
+
+const IN_LIST: Record<Show, (v: DirectoryVendor) => boolean> = {
+  active: (v) => v.active,
+  hold: (v) => v.paymentHold,
+  inactive: (v) => !v.active,
+};
+
+const contactLead = (v: DirectoryVendor) => (v.contactName ? `${v.contactName}. ` : "");
+
+/** Payment hold, or Inactive for a vendor in good standing that is turned off. */
+function VendorChip({ v }: Readonly<{ v: DirectoryVendor }>) {
+  return v.paymentHold ? <Chip tone="danger">Payment hold</Chip> : <Chip>Inactive</Chip>;
+}
 
 /** Every vendor, active first, with holds and upcoming detail counts; add a vendor. */
-export default async function VendorsPage({ searchParams }: Props) {
+export default async function VendorsPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase() : "";
-  const show = sp.show === "inactive" ? "inactive" : sp.show === "hold" ? "hold" : "active";
+  const show: Show = sp.show === "inactive" || sp.show === "hold" ? sp.show : "active";
   const all = await withTx((tx) => vendorDirectory(actor, tx));
-  const list = all.filter((v) => (show === "inactive" ? !v.active : show === "hold" ? v.paymentHold : v.active)).filter((v) => !q || v.name.toLowerCase().includes(q));
-  const href = (s: string) => `/coordinate/vendors?show=${s}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+  const list = all.filter(IN_LIST[show]).filter((v) => !q || v.name.toLowerCase().includes(q));
+  const search = q ? `&q=${encodeURIComponent(q)}` : "";
+  const href = (s: string) => `/coordinate/vendors?show=${s}${search}`;
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -59,8 +75,8 @@ export default async function VendorsPage({ searchParams }: Props) {
               key={v.id}
               title={v.name}
               href={`/coordinate/vendors/${v.id}`}
-              meta={`${v.contactName ? `${v.contactName}. ` : ""}${plural(v.upcoming, "upcoming detail")}`}
-              actions={v.paymentHold ? <Chip tone="danger">Payment hold</Chip> : !v.active ? <Chip>Inactive</Chip> : null}
+              meta={`${contactLead(v)}${plural(v.upcoming, "upcoming detail")}`}
+              actions={v.paymentHold || !v.active ? <VendorChip v={v} /> : null}
             />
           ))}
         </Rows>

@@ -6,7 +6,7 @@ import { auditLog, users } from "@/db/schema";
 export const GAVE_AWAY_ACTION = "assignment.cancel";
 
 /** The audit action written for each sign-up a job cancel ended (cancelJobUnchecked). */
-export const JOB_CANCELED_ACTION = "assignment.job_canceled";
+const JOB_CANCELED_ACTION = "assignment.job_canceled";
 
 /** The audit action written for late-cancel pay a reactivation cancels (reactivateJob): the late cancel did not happen. */
 export const LATE_CANCEL_VOID_ACTION = "assignment.late_cancel_void";
@@ -18,7 +18,7 @@ export const SUSPENSION_REMOVE_ACTION = "assignment.suspension_remove";
  * removals too. A coordinator removal stores the same comment on both, so it can never match both. */
 export const SUSPENSION_REMOVAL_REASON = "Suspended";
 const LEGACY_SUSPENSION_AUDIT_REASON = `${SUSPENSION_REMOVAL_REASON}: %`;
-export const REMOVED_BY_SUSPENSION = "Removed by suspension";
+const REMOVED_BY_SUSPENSION = "Removed by suspension";
 
 /** The audit action written when someone leaves the agency and their sign-ups after the last day go (deactivateUser). */
 export const DEPARTURE_REMOVE_ACTION = "assignment.departure_remove";
@@ -52,7 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** Rows that no longer hold a spot or a place in line. */
-export const ENDED_STATUSES: readonly string[] = ["canceled", "removed", "no_show", "late_canceled"];
+const ENDED_STATUSES: readonly string[] = ["canceled", "removed", "no_show", "late_canceled"];
 
 /**
  * Which of these removed rows a suspension removed: by its audit action, or (older rows) by the suspension's marker
@@ -98,7 +98,7 @@ export async function canceledWithJob(tx: Tx, rows: Array<{ id: string; status: 
   return new Set(hits.map((h) => h.id!));
 }
 
-export type Ending = { by: string | null; at: Date; reason: string | null };
+type Ending = { by: string | null; at: Date; reason: string | null };
 export type HistoryEntry = { label: string; active: boolean; ended: Ending | null };
 
 /**
@@ -122,9 +122,12 @@ export async function signupHistory(tx: Tx, rows: Array<{ id: string; status: st
     rows.map((r) => {
       const active = !ENDED_STATUSES.includes(r.status);
       const e = active ? undefined : latest.get(r.id);
-      const label = bySuspension.has(r.id) ? REMOVED_BY_SUSPENSION : e ? ENDING[e.action] : (STATUS_LABEL[r.status] ?? r.status);
+      let label: string;
+      if (bySuspension.has(r.id)) label = REMOVED_BY_SUSPENSION;
+      else label = e ? ENDING[e.action] : (STATUS_LABEL[r.status] ?? r.status);
       // Without an audit row, fall back to when the row last changed and the reason stored on it.
-      const ending = active ? null : e ? { by: e.by, at: e.at, reason: e.reason } : { by: null, at: r.updatedAt, reason: r.removalReason };
+      let ending: Ending | null = null;
+      if (!active) ending = e ? { by: e.by, at: e.at, reason: e.reason } : { by: null, at: r.updatedAt, reason: r.removalReason };
       return [r.id, { label, active, ended: ending }];
     }),
   );

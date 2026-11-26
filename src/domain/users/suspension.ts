@@ -61,6 +61,7 @@ export async function suspendUser(actor: Actor, tx: Tx, id: string, input: Suspe
       .innerJoin(jobs, eq(jobs.id, assignments.jobId))
       .where(and(eq(assignments.userId, id), inArray(assignments.status, ["signed_up", "backup", "pending_short"]), gt(jobs.startAt, now)))
       .orderBy(asc(assignments.jobId), asc(assignments.id));
+    // Sequential: each sign-up is ended in this transaction, in order.
     for (const a of future) {
       // Suspension is a personnel matter: the person's notice about each detail reads as a plain cancellation.
       await leaveAssignment(actor, tx, a.id, {
@@ -104,6 +105,7 @@ export async function liftExpiredSuspensions(tx: Tx, now: Date): Promise<number>
     .select({ id: users.id })
     .from(users)
     .where(and(isNotNull(users.suspensionReason), isNotNull(users.suspendedUntil), lte(users.suspendedUntil, now)));
+  // Sequential: writes in this transaction.
   for (const u of due) await liftSuspension("system", tx, u.id);
   return due.length;
 }
@@ -120,6 +122,7 @@ export async function inactivityLockTick(tx: Tx, now: Date): Promise<number> {
     .leftJoin(accounts, and(eq(accounts.userId, users.id), eq(accounts.providerId, "credential")))
     .where(and(eq(users.active, true), isNull(users.lockedAt)));
   let locked = 0;
+  // Sequential: locks and audits written in this transaction.
   for (const { user, passwordSetAt } of rows) {
     const dates = { lastSignInAt: user.lastSignInAt, createdAt: user.createdAt, passwordSetAt };
     if (!isInactive(dates, inactivityLockDays, now)) continue;

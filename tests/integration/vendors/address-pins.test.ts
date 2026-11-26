@@ -14,6 +14,8 @@ import { agencyInstant } from "@/domain/time/agency-time";
 import { resetGeocoder } from "@/domain/vendors/geocode";
 import { addLocation, updateLocation } from "@/domain/vendors/vendors";
 
+// Fake fetches are async to match fetch; they answer at once.
+
 const nominatim = (lat: string, lon: string) => new Response(JSON.stringify([{ lat, lon }]), { status: 200 });
 
 describe("pins from the address field", () => {
@@ -35,7 +37,7 @@ describe("pins from the address field", () => {
   });
   beforeEach(() => {
     resetGeocoder({ intervalMs: 0 });
-    fetchMock = vi.fn(async () => nominatim("41.5", "-90.5"));
+    fetchMock = vi.fn(() => Promise.resolve(nominatim("41.5", "-90.5")));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());

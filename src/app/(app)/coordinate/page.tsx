@@ -14,7 +14,7 @@ import { EmptyState } from "@/ui/components/EmptyState";
 import { dollars } from "@/ui/components/PayLabel";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
-import { clock, dateTime, dayLabel, hoursText, longDay, plural, relativeDay, timeRange, whenText } from "../_personnel/format";
+import { clock, dateTime, dayLabel, hoursText, longDay, plural, prefixed, relativeDay, timeRange, whenText } from "../_personnel/format";
 import { coordinatorActor } from "./_coordinator/session";
 import { CountSection, Row, Rows } from "./_coordinator/ui";
 import { ApproveInvoiceButton, FlagDecision, LiftLock, LockedCancel, NoteReview } from "./TodoActions";
@@ -25,11 +25,14 @@ const LIST_LIMIT = 6;
 
 function greeting(now: Date): string {
   const h = agencyDateParts(now).hour;
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  if (h < 12) return "Good morning";
+  return h < 17 ? "Good afternoon" : "Good evening";
 }
 
+const missingW9Text = (missing: Array<{ name: string }>) => (missing.length ? ` No W-9 on file: ${missing.map((m) => m.name).join(", ")}.` : "");
+
 /** Rows past the first few fold into a disclosure, so a long list does not push the rest of the to-do down. */
-function Capped<T>({ items, render }: { items: T[]; render: (item: T) => React.ReactNode }) {
+function Capped<T>({ items, render }: Readonly<{ items: T[]; render: (item: T) => React.ReactNode }>) {
   const rest = items.slice(LIST_LIMIT);
   return (
     <>
@@ -43,17 +46,11 @@ function Capped<T>({ items, render }: { items: T[]; render: (item: T) => React.R
   );
 }
 
-/**
- * The coordinator's to-do list: everything waiting on a coordinator, most urgent first. Sections with nothing in
- * them are left out.
- */
-export default async function TodoPage() {
-  const actor = await coordinatorActor();
-  const shell = await loadShell();
-  const now = new Date();
-  const t = await withTx((tx) => coordinatorTodo(actor, tx, now));
-  const first = shell?.profile.name.split(" ")[0] ?? "";
-  const total =
+type Todo = Awaited<ReturnType<typeof coordinatorTodo>>;
+
+/** Every item waiting on a coordinator; an open access review counts as one. */
+function todoCount(t: Todo): number {
+  return (
     (t.accessReview ? 1 : 0) +
     t.lockedStarted.length +
     t.lockedSoon.length +
@@ -70,7 +67,114 @@ export default async function TodoPage() {
     t.locks.length +
     t.ratesOutOfRange.length +
     t.sendInvoices.length +
-    t.departed.length;
+    t.departed.length
+  );
+}
+
+/** Locked details that have started: cancel each, with or without late cancellation pay. */
+function LockedStartedSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
+  if (t.lockedStarted.length === 0) return null;
+  return (
+    <CountSection title="Locked detail started: cancel" count={t.lockedStarted.length}>
+      <Card tone="danger" pad={false} as="div" className="border-2">
+        <ul className="m-0 list-none divide-y divide-danger-line p-0">
+          {t.lockedStarted.map((j) => (
+            <li key={j.jobId} className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-start md:justify-between">
+              <div className="flex min-w-0 flex-col gap-1">
+                <Link href={`/coordinate/details/${j.jobId}`} className="font-semibold text-danger-ink hover:text-danger-ink">
+                  #{j.number} {j.title}, {j.vendorName}
+                </Link>
+                <p className="m-0 text-sm text-danger-ink">
+                  {whenText(j.startAt, j.endAt, now)}. Vendor on payment hold since {dateTime(j.holdPlacedAt)}
+                  {j.latePay
+                    ? ` (within the late cancellation window): ${plural(j.signedUp, "person signed up gets", "people signed up get")} the late cancellation minimum.`
+                    : ". The hold came earlier, so no pay unless you apply it."}
+                </p>
+              </div>
+              <LockedCancel jobId={j.jobId} title={j.title} reason={`Vendor on payment hold: ${j.vendorName}`} latePay={j.latePay} signedUp={j.signedUp} />
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </CountSection>
+  );
+}
+
+/** Vendor requests and change requests waiting for a decision. */
+function RequestsSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
+  if (t.requests.length === 0 && t.changes.length === 0) return null;
+  return (
+    <CountSection title="Vendor requests" count={t.requests.length + t.changes.length}>
+      <Rows>
+        {t.requests.map((r) => (
+          <Row
+            key={r.jobId}
+            title={`${r.vendorName}: ${r.title}`}
+            href={`/coordinate/details/${r.jobId}`}
+            meta={
+              <>
+                {whenText(r.startAt, r.endAt, now)}
+                {r.dates > 1 ? `, and ${plural(r.dates - 1, "more date")}` : ""}. {r.positions}.
+                {r.flex ? ` Flexible ${timeRange(r.flex.earliestStartAt, r.flex.latestEndAt)}.` : ""}
+                {r.locationName ? ` ${r.locationName}.` : ""}
+              </>
+            }
+            actions={
+              <ButtonLink href={`/coordinate/details/${r.jobId}`} size="sm" variant="secondary" aria-label={`Review request, ${r.title}`}>
+                Review
+              </ButtonLink>
+            }
+          />
+        ))}
+        {t.changes.map((c) => (
+          <Row
+            key={c.requestId}
+            title={`${c.vendorName}: change to ${c.title}`}
+            href={`/coordinate/details/${c.jobId}`}
+            meta={`Asked ${dateTime(c.requestedAt)}`}
+            actions={
+              <ButtonLink href={`/coordinate/details/${c.jobId}`} size="sm" variant="secondary" aria-label={`Review change, ${c.title}`}>
+                Review
+              </ButtonLink>
+            }
+          />
+        ))}
+      </Rows>
+    </CountSection>
+  );
+}
+
+/** An open access review: how far along it is and when it is due. */
+function AccessReviewSection({ review }: Readonly<{ review: NonNullable<Todo["accessReview"]> }>) {
+  return (
+    <CountSection title="Access review">
+      <Card tone="warning">
+        <p className="m-0 font-semibold text-warning-ink">
+          {review.decided} of {review.total} accounts reviewed
+        </p>
+        <div className="h-2 overflow-hidden rounded-full bg-sunken" aria-hidden>
+          <div className="h-full bg-accent" style={{ width: `${Math.round((review.decided / Math.max(1, review.total)) * 100)}%` }} />
+        </div>
+        <p className="m-0 text-sm text-warning-ink">Due {dateTime(review.dueAt)}. Keep, change or deactivate each account.</p>
+        <ButtonLink href="/admin" variant="secondary" size="sm" className="w-fit">
+          Continue review
+        </ButtonLink>
+      </Card>
+    </CountSection>
+  );
+}
+
+/**
+ * The coordinator's to-do list: everything waiting on a coordinator, most urgent first. Sections with nothing in
+ * them are left out.
+ */
+export default async function TodoPage() {
+  const actor = await coordinatorActor();
+  const shell = await loadShell();
+  const now = new Date();
+  const t = await withTx((tx) => coordinatorTodo(actor, tx, now));
+  const first = shell?.profile.name.split(" ")[0] ?? "";
+  const total = todoCount(t);
 
   return (
     <div className="flex flex-col gap-5.5">
@@ -95,47 +199,9 @@ export default async function TodoPage() {
         </Card>
       ) : null}
 
-      {t.accessReview ? (
-        <CountSection title="Access review">
-          <Card tone="warning">
-            <p className="m-0 font-semibold text-warning-ink">
-              {t.accessReview.decided} of {t.accessReview.total} accounts reviewed
-            </p>
-            <div className="h-2 overflow-hidden rounded-full bg-sunken" aria-hidden>
-              <div className="h-full bg-accent" style={{ width: `${Math.round((t.accessReview.decided / Math.max(1, t.accessReview.total)) * 100)}%` }} />
-            </div>
-            <p className="m-0 text-sm text-warning-ink">Due {dateTime(t.accessReview.dueAt)}. Keep, change or deactivate each account.</p>
-            <ButtonLink href="/admin" variant="secondary" size="sm" className="w-fit">
-              Continue review
-            </ButtonLink>
-          </Card>
-        </CountSection>
-      ) : null}
+      {t.accessReview ? <AccessReviewSection review={t.accessReview} /> : null}
 
-      {t.lockedStarted.length ? (
-        <CountSection title="Locked detail started: cancel" count={t.lockedStarted.length}>
-          <Card tone="danger" pad={false} as="div" className="border-2">
-            <ul className="m-0 list-none divide-y divide-danger-line p-0">
-              {t.lockedStarted.map((j) => (
-                <li key={j.jobId} className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-start md:justify-between">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <Link href={`/coordinate/details/${j.jobId}`} className="font-semibold text-danger-ink hover:text-danger-ink">
-                      #{j.number} {j.title}, {j.vendorName}
-                    </Link>
-                    <p className="m-0 text-sm text-danger-ink">
-                      {whenText(j.startAt, j.endAt, now)}. Vendor on payment hold since {dateTime(j.holdPlacedAt)}
-                      {j.latePay
-                        ? ` (within the late cancellation window): ${plural(j.signedUp, "person signed up gets", "people signed up get")} the late cancellation minimum.`
-                        : ". The hold came earlier, so no pay unless you apply it."}
-                    </p>
-                  </div>
-                  <LockedCancel jobId={j.jobId} title={j.title} reason={`Vendor on payment hold: ${j.vendorName}`} latePay={j.latePay} signedUp={j.signedUp} />
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </CountSection>
-      ) : null}
+      <LockedStartedSection t={t} now={now} />
 
       {t.lockedSoon.length ? (
         <CountSection title="Locked, starting within 24 hours" count={t.lockedSoon.length}>
@@ -147,45 +213,7 @@ export default async function TodoPage() {
         </CountSection>
       ) : null}
 
-      {t.requests.length || t.changes.length ? (
-        <CountSection title="Vendor requests" count={t.requests.length + t.changes.length}>
-          <Rows>
-            {t.requests.map((r) => (
-              <Row
-                key={r.jobId}
-                title={`${r.vendorName}: ${r.title}`}
-                href={`/coordinate/details/${r.jobId}`}
-                meta={
-                  <>
-                    {whenText(r.startAt, r.endAt, now)}
-                    {r.dates > 1 ? `, and ${plural(r.dates - 1, "more date")}` : ""}. {r.positions}.
-                    {r.flex ? ` Flexible ${timeRange(r.flex.earliestStartAt, r.flex.latestEndAt)}.` : ""}
-                    {r.locationName ? ` ${r.locationName}.` : ""}
-                  </>
-                }
-                actions={
-                  <ButtonLink href={`/coordinate/details/${r.jobId}`} size="sm" variant="secondary" aria-label={`Review request, ${r.title}`}>
-                    Review
-                  </ButtonLink>
-                }
-              />
-            ))}
-            {t.changes.map((c) => (
-              <Row
-                key={c.requestId}
-                title={`${c.vendorName}: change to ${c.title}`}
-                href={`/coordinate/details/${c.jobId}`}
-                meta={`Asked ${dateTime(c.requestedAt)}`}
-                actions={
-                  <ButtonLink href={`/coordinate/details/${c.jobId}`} size="sm" variant="secondary" aria-label={`Review change, ${c.title}`}>
-                    Review
-                  </ButtonLink>
-                }
-              />
-            ))}
-          </Rows>
-        </CountSection>
-      ) : null}
+      <RequestsSection t={t} now={now} />
 
       {t.notes.length ? (
         <CountSection title="Deputy notes to review" count={t.notes.length}>
@@ -262,7 +290,7 @@ export default async function TodoPage() {
                   key={b.vendorId}
                   title={`${b.vendorName}, ${plural(ready, "invoice")}, ${dollars(b.totalCents)}`}
                   href={`/coordinate/send-invoices#vendor-${b.vendorId}`}
-                  meta={`Due ${sendDayLabel(b.sendDay)}.${b.missingW9.length ? ` No W-9 on file: ${b.missingW9.map((m) => m.name).join(", ")}.` : ""}`}
+                  meta={`Due ${sendDayLabel(b.sendDay)}.${missingW9Text(b.missingW9)}`}
                   actions={
                     <ButtonLink href={`/coordinate/send-invoices#vendor-${b.vendorId}`} size="sm" aria-label={`Review and send, ${b.vendorName}`}>
                       Review and send
@@ -313,7 +341,7 @@ export default async function TodoPage() {
             {t.opsOverdue.map((o) => (
               <Row
                 key={o.jobId}
-                title={`${o.title}${o.icName ? `, IC ${o.icName}` : ""}`}
+                title={`${o.title}${prefixed(", IC ", o.icName)}`}
                 href={`/coordinate/details/${o.jobId}#ops-plan`}
                 meta={o.vendorName}
                 actions={<Chip tone="danger">Overdue, due {o.dueAt ? dateTime(o.dueAt) : "before the start"}</Chip>}

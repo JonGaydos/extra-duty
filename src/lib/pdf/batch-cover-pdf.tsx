@@ -1,8 +1,9 @@
 import { Document, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { TrainingMark } from "./training-mark";
 import { AgencyHeader, formatDate, formatMoney, type AgencyHeaderData } from "./invoice-pdf";
+import { keyedByContent } from "@/lib/list-keys";
 
-export type BatchCoverRow = {
+type BatchCoverRow = {
   /** Display number, for example ED-000001. */
   number: string;
   jobNumber: number;
@@ -54,16 +55,16 @@ const LATER_PAGE_LINES = 32;
 const CLOSING_LINES = 5;
 
 /** Splits the rows into pages so each page carries its own table header and the total closes the last page. */
-export function paginateCoverRows(rows: BatchCoverRow[]): BatchCoverRow[][] {
+function paginateCoverRows(rows: BatchCoverRow[]): BatchCoverRow[][] {
   const pages: BatchCoverRow[][] = [[]];
   let left = FIRST_PAGE_LINES;
   for (const r of rows) {
     const cost = rowLines(r);
-    if (cost > left && pages[pages.length - 1].length > 0) {
+    if (cost > left && pages.at(-1)!.length > 0) {
       pages.push([]);
       left = LATER_PAGE_LINES;
     }
-    pages[pages.length - 1].push(r);
+    pages.at(-1)!.push(r);
     left -= cost;
   }
   if (left < CLOSING_LINES) pages.push([]);
@@ -82,16 +83,16 @@ function TableHeader() {
   );
 }
 
-function CoverDocument({ d }: { d: BatchCoverData }) {
+function CoverDocument({ d }: Readonly<{ d: BatchCoverData }>) {
   const total = d.rows.reduce((sum, r) => sum + (r.paid ? 0 : r.totalCents), 0);
   const count = `${d.rows.length} ${d.rows.length === 1 ? "invoice" : "invoices"}`;
   const pages = paginateCoverRows(d.rows);
   return (
     <Document title={`Invoice summary for ${d.vendorName}`}>
-      {pages.map((rows, i) => {
+      {keyedByContent(pages).map(({ key, item: rows, index: i }) => {
         const last = i === pages.length - 1;
         return (
-          <Page key={i} size="LETTER" style={s.page} wrap={false}>
+          <Page key={key} size="LETTER" style={s.page} wrap={false}>
             <TrainingMark />
             {i === 0 ? (
               <>

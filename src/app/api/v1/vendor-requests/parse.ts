@@ -2,6 +2,7 @@ import { detailInput, type DetailWire } from "@/app/(app)/coordinate/_coordinato
 import { ValidationError } from "@/domain/errors";
 import type { TimeOverrides } from "@/domain/jobs/recurrence";
 import type { VendorRequestInput } from "@/domain/vendor-portal/requests";
+import { byText } from "@/lib/sort";
 
 /**
  * A vendor's detail request as the browser sends it: agency dates (YYYY-MM-DD), clock times (HH:MM) and dollars as
@@ -39,25 +40,19 @@ const BAD = "The request could not be read. Reload the page and try again.";
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 /** A coordinate as sent: a number, null, or left out. Anything else is refused later as an invalid pin. */
-const coord = (v: unknown): number | null | undefined => (v === null || typeof v === "number" ? v : v === undefined ? undefined : NaN);
+function coord(v: unknown): number | null | undefined {
+  if (v === null || typeof v === "number") return v;
+  return v === undefined ? undefined : Number.NaN;
+}
 const pointOf = (raw: Record<string, unknown>) => {
   const lat = coord(raw.lat);
   const lng = coord(raw.lng);
   return lat === undefined || lng === undefined ? {} : { lat, lng, source: raw.source === "auto" ? ("auto" as const) : ("manual" as const) };
 };
 
-/** Checks the shape of the wire and turns it into the service's input, using the coordinator form's time rules. */
-export function parseVendorRequest(raw: unknown, file?: ContractFile): VendorRequestInput {
-  if (!isObj(raw)) throw new ValidationError(BAD);
-  if (!Array.isArray(raw.positions) || !Array.isArray(raw.dates ?? []) || !Array.isArray(raw.safetyAddresses ?? [])) throw new ValidationError(BAD);
-  const w = raw as unknown as VendorRequestWire;
-  const title = str(w.title).trim();
-  if (!title) throw new ValidationError("Give the detail a short title.");
-  const positions = w.positions.map((p) => ({ positionTypeId: str(p?.positionTypeId), count: Number(p?.count) }));
-  if (positions.some((p) => !Number.isInteger(p.count) || p.count < 1 || p.count > 99)) throw new ValidationError("Enter how many people, from 1 to 99.");
-
-  const date = str(w.date);
-  const detail: DetailWire = {
+/** The request as the coordinator form's wire, so the same time and pay rules read it. */
+function detailOf(w: VendorRequestWire, title: string, positions: DetailWire["positions"]): DetailWire {
+  return {
     vendorId: "",
     locationId: str(w.locationId),
     typeId: str(w.typeId),
@@ -76,25 +71,58 @@ export function parseVendorRequest(raw: unknown, file?: ContractFile): VendorReq
     safetyNotes: str(w.safetyNotes),
     safetyAddresses: (w.safetyAddresses ?? []).map((a) => ({ address: str(a?.address), description: str(a?.description), ...(isObj(a) ? pointOf(a) : {}) })),
   };
-  const job = detailInput(detail, date);
+}
 
-  const all = [...new Set([date, ...(w.dates ?? []).map(str)])].sort();
+/** Each listed date's own start or end time; dates not in the request are ignored. */
+function overridesFor(w: VendorRequestWire, all: string[]): TimeOverrides {
   const overrides: TimeOverrides = {};
-  if (isObj(w.overrides)) {
-    for (const [k, o] of Object.entries(w.overrides)) {
-      if (!all.includes(k) || !isObj(o)) continue;
-      overrides[k] = { ...(o.startTime ? { startTime: str(o.startTime) } : {}), ...(o.endTime ? { endTime: str(o.endTime) } : {}) };
-    }
+  if (!isObj(w.overrides)) return overrides;
+  for (const [k, o] of Object.entries(w.overrides)) {
+    if (!all.includes(k) || !isObj(o)) continue;
+    overrides[k] = { ...(o.startTime ? { startTime: str(o.startTime) } : {}), ...(o.endTime ? { endTime: str(o.endTime) } : {}) };
   }
+  return overrides;
+}
 
+/** The contract: an uploaded file first, else a link, else none. */
+function contractOf(w: VendorRequestWire, file: ContractFile | undefined): VendorRequestInput["contract"] {
   const label = isObj(w.contract) ? str(w.contract.label).trim() : "";
   const url = isObj(w.contract) ? str(w.contract.url).trim() : "";
-  const contract = file ? { label: label || file.filename, file } : url ? { label: label || "Contract", url } : undefined;
+  if (file) return { label: label || file.filename, file };
+  return url ? { label: label || "Contract", url } : undefined;
+}
 
+/** A new location's pin: a point, null for none, or undefined to look the address up. */
+function pinOf(rawPin: unknown) {
+  if (rawPin === null) return null;
+  if (!isObj(rawPin)) return undefined;
+  return { lat: Number(rawPin.lat), lng: Number(rawPin.lng), source: rawPin.source === "manual" ? ("manual" as const) : ("auto" as const) };
+}
+
+function newLocationOf(w: VendorRequestWire) {
+  if (!isObj(w.newLocation)) return undefined;
+  const pin = pinOf(w.newLocation.pin);
+  return { name: str(w.newLocation.name), address: str(w.newLocation.address) || null, ...(pin === undefined ? {} : { pin }) };
+}
+
+/** Checks the shape of the wire and turns it into the service's input, using the coordinator form's time rules. */
+export function parseVendorRequest(raw: unknown, file?: ContractFile): VendorRequestInput {
+  if (!isObj(raw)) throw new ValidationError(BAD);
+  if (!Array.isArray(raw.positions) || !Array.isArray(raw.dates ?? []) || !Array.isArray(raw.safetyAddresses ?? [])) throw new ValidationError(BAD);
+  const w = raw as unknown as VendorRequestWire;
+  const title = str(w.title).trim();
+  if (!title) throw new ValidationError("Give the detail a short title.");
+  const positions = w.positions.map((p) => ({ positionTypeId: str(p?.positionTypeId), count: Number(p?.count) }));
+  if (positions.some((p) => !Number.isInteger(p.count) || p.count < 1 || p.count > 99)) throw new ValidationError("Enter how many people, from 1 to 99.");
+
+  const date = str(w.date);
+  const job = detailInput(detailOf(w, title, positions), date);
+
+  const all = [...new Set([date, ...(w.dates ?? []).map(str)])].sort(byText);
+  const overrides = overridesFor(w, all);
+  const contract = contractOf(w, file);
   const newContact = isObj(w.newContact) ? { name: str(w.newContact.name), phone: str(w.newContact.phone), email: str(w.newContact.email) } : undefined;
-  const rawPin = isObj(w.newLocation) ? w.newLocation.pin : undefined;
-  const pin = rawPin === null ? null : isObj(rawPin) ? { lat: Number(rawPin.lat), lng: Number(rawPin.lng), source: rawPin.source === "manual" ? ("manual" as const) : ("auto" as const) } : undefined;
-  const newLocation = isObj(w.newLocation) ? { name: str(w.newLocation.name), address: str(w.newLocation.address) || null, ...(pin === undefined ? {} : { pin }) } : undefined;
+  const newLocation = newLocationOf(w);
   return {
     locationId: newLocation ? null : job.locationId,
     ...(newLocation ? { newLocation } : {}),

@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * Every table as a zip of JSON or CSV files, streamed from one read-only snapshot. W-9 and other files are listed
- * by id, not included. Admins and API keys only.
+ * by id, not included. Admins and API keys only. apiHandler takes a promise; the stream does the waiting, so the
+ * response is returned already resolved.
  */
-export const GET = apiHandler(routes["GET /export"], async ({ actor, query, run }) => {
+export const GET = apiHandler(routes["GET /export"], ({ actor, query, run }) => {
   assertCan(actor, "data.readAll");
   const body = streamFrom((emit) =>
     run(async (tx) => {
@@ -20,12 +21,14 @@ export const GET = apiHandler(routes["GET /export"], async ({ actor, query, run 
     }),
   );
   const day = new Date().toISOString().slice(0, 10);
-  return new Response(body, {
-    headers: {
-      "content-type": "application/zip",
-      "content-disposition": `attachment; filename="extra-duty-export-${day}-${query.format}.zip"`,
-      "x-content-type-options": "nosniff",
-      "cache-control": "no-store",
-    },
-  });
+  return Promise.resolve(
+    new Response(body, {
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="extra-duty-export-${day}-${query.format}.zip"`,
+        "x-content-type-options": "nosniff",
+        "cache-control": "no-store",
+      },
+    }),
+  );
 });

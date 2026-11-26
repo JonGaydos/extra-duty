@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Set a new password" };
 
 type Props = { searchParams: Promise<{ token?: string; error?: string }> };
 
-export default async function ResetPasswordPage({ searchParams }: Props) {
+export default async function ResetPasswordPage({ searchParams }: Readonly<Props>) {
   const { token, error } = await searchParams;
   const { security, agency } = await loadSettings();
   const logo = await loadLogo();

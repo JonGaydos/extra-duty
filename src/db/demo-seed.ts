@@ -53,17 +53,17 @@ type PositionName = "Posse" | "CSO" | "Deputy Sheriff" | "Incident Commander" | 
 type Ins<T extends { $inferInsert: unknown }> = T["$inferInsert"];
 type WithId<T> = T & { id: string };
 
-export type DemoUser = WithId<Omit<Ins<typeof users>, "id" | "rankId">> & { rank: RankName | null; qualifications: string[] };
-export type DemoJob = WithId<Omit<Ins<typeof jobs>, "id" | "typeId" | "number">> & { type: string };
-export type DemoPosition = WithId<Omit<Ins<typeof jobPositions>, "id" | "positionTypeId">> & { positionType: PositionName };
-export type DemoInvoice = WithId<Omit<Ins<typeof invoices>, "id" | "number" | "deputyMethodId" | "vendorPaidMethodId">> & {
+type DemoUser = WithId<Omit<Ins<typeof users>, "id" | "rankId">> & { rank: RankName | null; qualifications: string[] };
+type DemoJob = WithId<Omit<Ins<typeof jobs>, "id" | "typeId" | "number">> & { type: string };
+type DemoPosition = WithId<Omit<Ins<typeof jobPositions>, "id" | "positionTypeId">> & { positionType: PositionName };
+type DemoInvoice = WithId<Omit<Ins<typeof invoices>, "id" | "number" | "deputyMethodId" | "vendorPaidMethodId">> & {
   deputyMethod?: string;
   vendorMethod?: string;
 };
-export type DemoOpsPlan = WithId<Omit<Ins<typeof opsPlans>, "id">> & {
+type DemoOpsPlan = WithId<Omit<Ins<typeof opsPlans>, "id">> & {
   version: { submittedBy: string; submittedAt: Date; decision: "agreed" | "pending"; decidedBy: string | null; decidedAt: Date | null } | null;
 };
-export type DemoAudit = { action: string; entityType: string; entityId: string; actorUserId: string | null; at: Date; reason?: string; before?: unknown; after?: unknown };
+type DemoAudit = { action: string; entityType: string; entityId: string; actorUserId: string | null; at: Date; reason?: string; before?: unknown; after?: unknown };
 
 export type DemoData = {
   vendorTypes: WithId<Ins<typeof vendorTypes>>[];
@@ -123,7 +123,7 @@ const phone = (n: number) => `850-555-${String(100 + n).padStart(4, "0")}`;
 const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 /** A tiny PDF for the demo ops plans. */
-export const DEMO_PDF = Buffer.from("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% Demo ops plan (training data)\n%%EOF\n");
+const DEMO_PDF = Buffer.from("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% Demo ops plan (training data)\n%%EOF\n");
 
 type Past =
   | "paid"
@@ -201,18 +201,19 @@ export function buildDemoData(today: Date): DemoData {
   const vendorUser = person("Vic Practice", PRACTICE_USER_EMAILS.vendor, "vendor", null, 4);
   const coordinator2 = person("Dana Holloway", "dana.holloway@training.example", "coordinator", null, 5);
 
-  const rankPlan: RankName[] = [...Array(15).fill("Deputy Sheriff"), ...Array(8).fill("CSO"), ...Array(6).fill("Posse"), ...Array(2).fill("Dispatcher")];
+  const rankPlan: RankName[] = [...new Array(15).fill("Deputy Sheriff"), ...new Array(8).fill("CSO"), ...new Array(6).fill("Posse"), ...new Array(2).fill("Dispatcher")];
   const personnel: DemoUser[] = [practiceDeputy];
   rankPlan.forEach((rank, i) => {
     const name = `${FIRST[i % FIRST.length]} ${LAST[(i * 7) % LAST.length]}`;
     const email = `${slug(name).replace("-", ".")}@training.example`;
     personnel.push(person(name, email, "personnel", rank, 10 + i, { qualifications: rank === "Deputy Sheriff" && i < 4 ? ["Incident Commander"] : [] }));
   });
-  const suspended = personnel[personnel.length - 5]; // a Posse member
+  const suspended = personnel.at(-5)!; // a Posse member
   suspended.suspensionReason = "Administrative review";
   suspended.suspendedUntil = new Date(today.getTime() + 20 * DAY);
 
   // Vendors, each with a location and site contacts; one on payment hold, one batched weekly, one approve-only.
+  const BATCHED_VENDORS: Partial<Record<number, "weekly" | "monthly">> = { 4: "weekly", 7: "monthly" };
   VENDOR_NAMES.forEach((name, i) => {
     const id = uuidv7();
     d.vendors.push({
@@ -225,7 +226,7 @@ export function buildDemoData(today: Date): DemoData {
       defaultRateCents: 5000 + (i % 5) * 500,
       paymentHold: i === 2,
       paymentHoldReason: i === 2 ? "Invoices more than 90 days unpaid" : null,
-      invoiceSendSchedule: i === 4 ? "weekly" : i === 7 ? "monthly" : null,
+      invoiceSendSchedule: BATCHED_VENDORS[i] ?? null,
       emailApprovedInvoices: i !== 5,
       createdAt: created,
     });
@@ -273,7 +274,8 @@ export function buildDemoData(today: Date): DemoData {
   const pick = (pos: PositionName, taken: Set<string>): DemoUser => {
     const pool = pools[pos];
     for (let k = 0; k < pool.length; k++) {
-      const u = pool[(turn[pos] = ((turn[pos] ?? -1) + 1) % pool.length)];
+      turn[pos] = ((turn[pos] ?? -1) + 1) % pool.length;
+      const u = pool[turn[pos]];
       if (!taken.has(u.id)) return u;
     }
     throw new Error(`No one left for ${pos}`);
@@ -431,7 +433,7 @@ export function buildDemoData(today: Date): DemoData {
       }
       case "ops_plan_agreed": {
         const b = job(start, 6, { title: "Harbor Fest crowd control", positions: [["Incident Commander", 1], ["Deputy Sheriff", 2]], extra: { opsPlanRequired: true, opsPlanDueAt: new Date(start.getTime() - 3 * DAY) } });
-        const ic = assign(b, 0, "paid", me && me.qualifications.includes("Incident Commander") ? me : undefined);
+        const ic = assign(b, 0, "paid", me?.qualifications.includes("Incident Commander") ? me : undefined);
         invoice(b, ic, "paid");
         worked(b, 1, "paid");
         d.opsPlans.push({
@@ -607,6 +609,7 @@ export async function loadDemoData(tx: Tx, data: DemoData): Promise<void> {
     return v;
   };
   const chunks = async <T>(rows: T[], insert: (part: T[]) => Promise<unknown>) => {
+    // Sequential: the chunks are inserted in one transaction, in order.
     for (let i = 0; i < rows.length; i += 500) await insert(rows.slice(i, i + 500));
   };
 
@@ -647,6 +650,7 @@ export async function loadDemoData(tx: Tx, data: DemoData): Promise<void> {
   await chunks(invoiceRows, (part) => tx.insert(invoices).values(part));
   if (data.paymentIssues.length) await tx.insert(paymentIssues).values(data.paymentIssues);
   if (data.paymentIssueNotes.length) await tx.insert(paymentIssueNotes).values(data.paymentIssueNotes);
+  // Sequential: each plan and its file are written in this transaction, the version after its plan.
   for (const { version, ...plan } of data.opsPlans) {
     await tx.insert(opsPlans).values(plan);
     if (!version) continue;

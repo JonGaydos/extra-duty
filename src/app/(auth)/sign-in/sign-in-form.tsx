@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Button } from "@/ui/components/Button";
 import { FormField, Input } from "@/ui/components/FormField";
 import { FormMessage, type Message } from "../form-message";
 import { postAuth, tooManyText } from "../post-json";
+import { formText } from "@/lib/form-text";
 
 export function SignInForm() {
   const [message, setMessage] = useState<Message>(null);
   const [busy, setBusy] = useState(false);
   const error = (text: string) => setMessage({ text, tone: "danger" });
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email") ?? "");
-    const password = String(form.get("password") ?? "");
+    const email = formText(form, "email");
+    const password = formText(form, "password");
     setBusy(true);
     setMessage(null);
     try {

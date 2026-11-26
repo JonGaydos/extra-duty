@@ -1,5 +1,5 @@
 /** What each invoice timeline event says, for staff. The payee's own page swaps in second-person wording. */
-export const INVOICE_EVENT: Record<string, string> = {
+const INVOICE_EVENT: Record<string, string> = {
   sent: "Invoice sent",
   ready_to_send: "Approved, queued for the next send",
   approved_unsent: "Approved, not sent to the vendor",
@@ -29,4 +29,4 @@ export const PAYEE_INVOICE_EVENT: Record<string, string> = {
   issue_waiting_on: "Waiting on changed",
 };
 
-export const eventLabel = (event: string, map: Record<string, string> = INVOICE_EVENT) => map[event] ?? event.replace(/_/g, " ");
+export const eventLabel = (event: string, map: Record<string, string> = INVOICE_EVENT) => map[event] ?? event.replaceAll("_", " ");

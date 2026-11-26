@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Role } from "@/domain/actor";
 import { parseMarkdown, type Block } from "./markdown";
+import { byText } from "@/lib/sort";
 
 /**
  * The user manuals: Markdown chapters in docs/manuals/<manual>/NN-slug.md with screenshots in
@@ -45,7 +46,7 @@ export function chapterFiles(root: string, id: ManualId): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => CHAPTER_FILE.test(f))
-    .sort();
+    .sort(byText);
 }
 
 /** "03-profile-and-w9.md" is at /help/<manual>/profile-and-w9. */

@@ -24,6 +24,9 @@ import { invoiceTimeline, vendorMarkPaid } from "@/domain/billing/payments";
 import { deliverInvoiceBatchEmail, redactProviderError } from "@/domain/invoices/batch";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
+
+// Fake email senders are async to match the real one; they answer at once.
 
 /** A made-up provider key, built in pieces so secret scanners do not mistake it for a real one. */
 const FAKE_PROVIDER_KEY = ["sk", "live", "4f9a8b7c6d5e4f3a2b1c0d9e"].join("_");
@@ -170,7 +173,7 @@ describe("batched invoice sending", () => {
     expect(b.schedule).toBe("weekly");
     expect(b.sendDay).toBe("2036-01-04");
     expect(b.due).toBe(false);
-    expect(b.invoices.map((i) => i.id).sort()).toEqual([i1.id, i2.id].sort());
+    expect(b.invoices.map((i) => i.id).sort(byText)).toEqual([i1.id, i2.id].sort(byText));
     expect(b.totalCents).toBe(i1.totalCents + i2.totalCents);
 
     expect((await db.transaction((tx) => coordinatorTodo(fx.coord, tx, WEDNESDAY))).sendInvoices).toHaveLength(0);
@@ -295,7 +298,7 @@ describe("batched invoice sending", () => {
     await db.transaction((tx) => approveInvoice(fx.coord, tx, i2.id, BILL));
     [b] = await db.transaction((tx) => listInvoiceBatches(fx.coord, tx, FRIDAY));
     expect(b.waiting).toEqual([]);
-    expect(b.invoices.map((i) => i.id).sort()).toEqual([i1.id, i2.id].sort());
+    expect(b.invoices.map((i) => i.id).sort(byText)).toEqual([i1.id, i2.id].sort(byText));
   });
 
   test("an invoice in review can still be sent early with a reason, leaving the one in review behind", async () => {
@@ -464,7 +467,7 @@ describe("batched invoice sending", () => {
     const d = await detail([p]);
     const inv = await bill(p, d.rows[0].id, d.job);
     const r = await db.transaction((tx) => sendInvoiceBatch(fx.coord, tx, fx.vendorId, SEND, FRIDAY));
-    setEmailSender({ send: async () => { throw new Error(`554 5.7.1 <ap@vendor.example>: relay rejected, api_key=${FAKE_PROVIDER_KEY}`); } });
+    setEmailSender({ send: () => Promise.reject(new Error(`554 5.7.1 <ap@vendor.example>: relay rejected, api_key=${FAKE_PROVIDER_KEY}`)) });
     await expect(deliverInvoiceBatchEmail(r.batchId, { finalAttempt: true })).rejects.toThrow("554");
     setEmailSender(mail);
     const back = await row(inv.id);
@@ -495,7 +498,7 @@ describe("batched invoice sending", () => {
     await drain();
     expect(mail.sent).toHaveLength(1);
     expect((await row(inv.id)).status).toBe("sent");
-    expect((await db.transaction((tx) => listInvoiceBatches(fx.coord, tx, FRIDAY))).length).toBe(0);
+    expect(await db.transaction((tx) => listInvoiceBatches(fx.coord, tx, FRIDAY))).toHaveLength(0);
     // The vendor sees one send, dated at the one that reached them; staff keep the failed one, marked superseded.
     const vendorUser = await makeUser(db, "vendor", "bat-vendor-resend@example.test");
     const vendor: Actor = { ...vendorUser.actor, vendorId: fx.vendorId };
@@ -523,7 +526,7 @@ describe("batched invoice sending", () => {
     const [method] = await db.select().from(paymentMethods).where(eq(paymentMethods.active, true)).limit(1);
     await db.transaction((tx) => vendorMarkPaid(vendor, tx, paid.id, { paymentMethodId: method.id, reference: "CHK 1001", paidAt: FRIDAY }, FRIDAY));
     const beforeFail = await row(paid.id);
-    setEmailSender({ send: async () => { throw new Error("451 try later"); } });
+    setEmailSender({ send: () => Promise.reject(new Error("451 try later")) });
     await expect(deliverInvoiceBatchEmail(r.batchId, { finalAttempt: true })).rejects.toThrow("451");
     setEmailSender(mail);
     const kept = await row(paid.id);
@@ -550,7 +553,7 @@ describe("batched invoice sending", () => {
     expect(inv).toMatchObject({ status: "paid", paidSendQueued: true });
     expect(inv.deputyPaidAt).not.toBeNull();
     const r = await db.transaction((tx) => sendInvoiceBatch(fx.coord, tx, fx.vendorId, SEND, FRIDAY));
-    setEmailSender({ send: async () => { throw new Error("421 service unavailable"); } });
+    setEmailSender({ send: () => Promise.reject(new Error("421 service unavailable")) });
     await expect(deliverInvoiceBatchEmail(r.batchId, { finalAttempt: true })).rejects.toThrow("421");
     setEmailSender(mail);
     const back = await row(inv.id);

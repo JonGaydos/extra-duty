@@ -37,13 +37,7 @@ export type BillingLockReader = (
   now: Date,
 ) => Promise<{ locked: boolean; unbilledCount: number; unacknowledgedCount: number }>;
 
-/** Tests that need no lock install this. */
-export const noBillingLock: BillingLockReader = async () => ({ locked: false, unbilledCount: 0, unacknowledgedCount: 0 });
-
-let readBillingLock: BillingLockReader = realBillingLockReader;
-export function setBillingLockReader(reader: BillingLockReader): void {
-  readBillingLock = reader;
-}
+const readBillingLock: BillingLockReader = realBillingLockReader;
 
 const ALREADY_ON_JOB: CheckResult = { check: "already_on_job", ok: false, message: "You are already on this detail" };
 export const FULL_CHECK: CheckResult = { check: "state", ok: false, message: "This position is full" };
@@ -236,16 +230,6 @@ export async function buildContext(tx: Tx, a: ContextArgs): Promise<EligibilityC
 
 export type SpotOffer = typeof spotOffers.$inferSelect;
 
-export async function findOpenOffer(tx: Tx, positionId: string): Promise<SpotOffer | null> {
-  const [row] = await tx
-    .select()
-    .from(spotOffers)
-    .where(and(eq(spotOffers.jobPositionId, positionId), eq(spotOffers.status, "open")))
-    .orderBy(asc(spotOffers.createdAt), asc(spotOffers.id))
-    .limit(1);
-  return row ?? null;
-}
-
 /** Whether the person is entitled to the open offer: the offered backup (sequential) or any backup (all_backups). */
 export async function entitledToOffer(tx: Tx, offer: SpotOffer, userId: string): Promise<boolean> {
   const [mine] = await tx
@@ -266,6 +250,7 @@ export async function heldByOffers(tx: Tx, positionId: string, userId: string): 
     .from(spotOffers)
     .where(and(eq(spotOffers.jobPositionId, positionId), eq(spotOffers.status, "open")));
   let held = 0;
+  // Sequential: reads in the caller's transaction (one connection).
   for (const o of open) if (!(await entitledToOffer(tx, o, userId))) held++;
   return held;
 }
@@ -314,6 +299,7 @@ export async function endOpenWatches(tx: Tx, actor: Actor, jobId: string, now: D
     .set({ endedAt: now })
     .where(and(eq(jobWatches.userId, userId), eq(jobWatches.jobId, jobId), isNull(jobWatches.endedAt)))
     .returning();
+  // Sequential: audit writes in this transaction.
   for (const w of ended) {
     await recordAudit(tx, { actor, action: "job.watch_end", entityType: "job_watch", entityId: w.id, before: w, after: { ...w, endedAt: now } });
   }
@@ -426,6 +412,7 @@ export async function eligibilityByPosition(actor: Actor, tx: Tx, jobId: string,
   const planned = { startAt: job.startAt, endAt: job.endAt };
 
   const evaluated: Array<JobEligibility> = [];
+  // Sequential: reads in this transaction (one connection), in position order.
   for (const p of positions) {
     const position = await loadPosition(tx, p.id);
     const free = position.count - (await signedUpCount(tx, position.id));
@@ -540,6 +527,38 @@ export async function settlePending(tx: Tx, job: Job, settings: AgencySettings, 
   if (any) await confirmJob(tx, job, settings, now);
 }
 
+/** Why the overlap and cap checks refuse a pending_short row at its planned times, or null when they pass. */
+async function shortTimeProblems(
+  tx: Tx,
+  a: typeof assignments.$inferSelect,
+  ctx: { job: Job; position: Awaited<ReturnType<typeof loadPosition>>; free: number; settings: AgencySettings; now: Date },
+): Promise<string | null> {
+  const { job, position, free, settings, now } = ctx;
+  const planned = { startAt: a.plannedStartAt ?? job.startAt, endAt: a.plannedEndAt ?? job.endAt };
+  const result = evaluateSignup(
+    await buildContext(tx, { userId: a.userId, job, position, free, planned, now, settings, excludeAssignmentId: a.id, includePending: false }),
+  );
+  const problems = failing(result).filter((c) => TIME_CHECKS.has(c.check));
+  return problems.length > 0 ? problems.map((c) => c.message).join(" ") : null;
+}
+
+async function declineShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect, reason: string, now: Date): Promise<void> {
+  const [after] = await tx.update(assignments).set({ status: "canceled", removalReason: reason, updatedAt: now }).where(eq(assignments.id, a.id)).returning();
+  await recordAudit(tx, { actor: "system", action: "assignment.short_declined", entityType: "assignment", entityId: a.id, before: a, after, reason });
+  await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: ${job.title}`, body: reason, link: `/jobs/${job.id}` });
+}
+
+async function confirmShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect, now: Date): Promise<void> {
+  const [after] = await tx.update(assignments).set({ status: "signed_up", updatedAt: now }).where(eq(assignments.id, a.id)).returning();
+  await recordAudit(tx, { actor: "system", action: "assignment.short_confirmed", entityType: "assignment", entityId: a.id, before: a, after });
+  await emit(tx, { recipients: [a.userId],
+    type: "signup.short_confirmed",
+    title: `Shorter shift confirmed: ${job.title}`,
+    body: "Your shorter shift is confirmed.",
+    link: `/jobs/${job.id}`,
+  });
+}
+
 /**
  * Confirms pending_short sign-ups on a locked job in request order while spots are free and overlap and caps
  * still pass; the rest are canceled. Rows on a started job are declined. A row whose person is busy in another
@@ -553,6 +572,7 @@ async function confirmJob(tx: Tx, job: Job, settings: AgencySettings, now: Date)
     .from(assignments)
     .where(and(eq(assignments.jobId, job.id), eq(assignments.status, "pending_short")))
     .orderBy(asc(assignments.requestedAt), asc(assignments.id));
+  // Sequential: each row locks its person and writes in this transaction, in request order.
   for (const a of pending) {
     if (!(await tryLockUser(tx, a.userId))) continue;
     const position = await loadPosition(tx, a.jobPositionId);
@@ -561,29 +581,12 @@ async function confirmJob(tx: Tx, job: Job, settings: AgencySettings, now: Date)
     if (job.startAt.getTime() <= now.getTime()) reason = "This detail has started";
     else if (free <= 0) reason = SHORT_DECLINED;
     if (!reason && free - (await heldByOffers(tx, position.id, a.userId)) <= 0) continue; // backups have first chance; retried by the tick
-    if (!reason) {
-      const planned = { startAt: a.plannedStartAt ?? job.startAt, endAt: a.plannedEndAt ?? job.endAt };
-      const result = evaluateSignup(
-        await buildContext(tx, { userId: a.userId, job, position, free, planned, now, settings, excludeAssignmentId: a.id, includePending: false }),
-      );
-      const problems = failing(result).filter((c) => TIME_CHECKS.has(c.check));
-      if (problems.length > 0) reason = problems.map((c) => c.message).join(" ");
-    }
-    const link = `/jobs/${job.id}`;
+    reason ??= await shortTimeProblems(tx, a, { job, position, free, settings, now });
     if (reason) {
-      const [after] = await tx.update(assignments).set({ status: "canceled", removalReason: reason, updatedAt: now }).where(eq(assignments.id, a.id)).returning();
-      await recordAudit(tx, { actor: "system", action: "assignment.short_declined", entityType: "assignment", entityId: a.id, before: a, after, reason });
-      await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: ${job.title}`, body: reason, link });
+      await declineShort(tx, job, a, reason, now);
       declined++;
     } else {
-      const [after] = await tx.update(assignments).set({ status: "signed_up", updatedAt: now }).where(eq(assignments.id, a.id)).returning();
-      await recordAudit(tx, { actor: "system", action: "assignment.short_confirmed", entityType: "assignment", entityId: a.id, before: a, after });
-      await emit(tx, { recipients: [a.userId],
-        type: "signup.short_confirmed",
-        title: `Shorter shift confirmed: ${job.title}`,
-        body: "Your shorter shift is confirmed.",
-        link,
-      });
+      await confirmShort(tx, job, a, now);
       confirmed++;
     }
   }
@@ -613,6 +616,7 @@ export async function confirmPendingShortTick(now: Date, tx?: Tx): Promise<{ con
       .orderBy(asc(assignments.jobId));
   const due = await (tx ? dueQuery(tx) : withTx(dueQuery));
   const total = { confirmed: 0, declined: 0 };
+  // Sequential: one transaction per job, so one failure does not undo the others.
   for (const { jobId } of due) {
     const r = await (tx ? processDueJob(tx, jobId, now) : withTx((t) => processDueJob(t, jobId, now)));
     total.confirmed += r.confirmed;

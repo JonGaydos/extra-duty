@@ -754,7 +754,7 @@ Rules: inbox always gets the row; email and push follow preferences; `mandatory`
 
 ## Phase 5: Interface
 
-Visual reference: mockup row D (docs/mockups/project/). Each screen task ends with a Playwright test of its main path at 390x844 and 1280x900, in day and night themes, plus an axe accessibility check with no serious violations.
+Visual reference: DESIGN.md (mockup row D) and the manual screenshots in docs/manuals/images/. Each screen task ends with a Playwright test of its main path at 390x844 and 1280x900, in day and night themes, plus an axe accessibility check with no serious violations.
 
 ### Task 36: Design system, themes, shells, PWA
 

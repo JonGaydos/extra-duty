@@ -16,7 +16,7 @@ export const THROTTLE_WINDOW_MS = 15 * 60_000;
  * People who share an IP (an office) never count against each other. A success clears both.
  * `code_send`: emailed codes per user. `code_verify`: code checks per user, across codes and sign-ins.
  */
-export const THROTTLE_LIMITS = { password_ip: 5, password: 10, code_send: 5, code_verify: 10 } as const;
+const THROTTLE_LIMITS = { password_ip: 5, password: 10, code_send: 5, code_verify: 10 } as const;
 export type ThrottleKind = keyof typeof THROTTLE_LIMITS;
 export type ThrottleResult = { ok: true } | { ok: false; retryAfterMs: number };
 
@@ -41,7 +41,8 @@ export function normalizeEmail(value: unknown): string | null {
 export async function takeAttempt(db: Db, kind: ThrottleKind, key: string, now = new Date()): Promise<ThrottleResult> {
   const cutoff = new Date(now.getTime() - THROTTLE_WINDOW_MS);
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${kind}:${key}`}, 0))`);
+    const lockKey = `${kind}:${key}`;
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
     const where = and(eq(authThrottle.kind, kind), eq(authThrottle.key, key));
     await tx.delete(authThrottle).where(and(where, lte(authThrottle.at, cutoff)));
     const [row] = await tx.select({ n: count(), oldest: min(authThrottle.at) }).from(authThrottle).where(where);
@@ -88,7 +89,7 @@ async function passwordSetAt(tx: Tx, userId: string): Promise<Date | null> {
 export async function checkSessionAllowed(db: Db, userId: string, now = new Date()): Promise<SessionBlock | null> {
   return db.transaction(async (tx) => {
     const [u] = await tx.select().from(users).where(eq(users.id, userId));
-    if (!u || !u.active) return "ACCOUNT_DISABLED";
+    if (!u?.active) return "ACCOUNT_DISABLED";
     if (u.lockedAt) return "ACCOUNT_LOCKED";
     const { inactivityLockDays } = await getSettings(tx);
     const dates = { lastSignInAt: u.lastSignInAt, createdAt: u.createdAt, passwordSetAt: await passwordSetAt(tx, userId) };

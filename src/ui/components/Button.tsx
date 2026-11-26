@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Icon, type IconName } from "../icons";
 import type { ButtonHTMLAttributes, ComponentProps } from "react";
+import { withClass } from "./with-class";
 
-export type ButtonVariant = "primary" | "secondary" | "danger";
-export type ButtonSize = "sm" | "md" | "lg";
+type ButtonVariant = "primary" | "secondary" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
 
 const BASE =
   "inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap select-none " +
@@ -22,7 +23,7 @@ const SIZES: Record<ButtonSize, string> = {
   lg: "h-12.5 rounded-lg px-4.5 text-base",
 };
 
-export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", full = false): string {
+function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", full = false): string {
   return `${BASE} ${VARIANTS[variant]} ${SIZES[size]}${full ? " w-full" : ""}`;
 }
 
@@ -44,7 +45,7 @@ export function Button({
       type={type}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`${buttonClass(variant, size, full)}${className ? ` ${className}` : ""}`}
+      className={withClass(buttonClass(variant, size, full), className)}
       {...rest}
     />
   );
@@ -52,7 +53,7 @@ export function Button({
 
 /** Navigation that looks like a button (it is still a link). Buttons carry no underline. */
 export function ButtonLink({ variant, size, full, className, ...rest }: Common & ComponentProps<typeof Link>) {
-  return <Link data-button-link className={`${buttonClass(variant, size, full)} no-underline${className ? ` ${className}` : ""}`} {...rest} />;
+  return <Link data-button-link className={withClass(`${buttonClass(variant, size, full)} no-underline`, className)} {...rest} />;
 }
 
 /** The class of a standalone action link: underlined text, 13 px 600, a 44 px tall hit area. */
@@ -65,7 +66,7 @@ export const ACTION_LINK = "inline-flex min-h-11 w-fit items-center gap-1 text-s
 export function ActionLink({ external = false, icon, className, children, ...rest }: { external?: boolean; icon?: IconName } & ComponentProps<typeof Link>) {
   const trailing = <Icon name={icon ?? (external ? "external" : "chevronRight")} size={16} className="shrink-0" />;
   return (
-    <Link className={`${ACTION_LINK}${className ? ` ${className}` : ""}`} {...(external ? { target: "_blank", rel: "noreferrer" } : {})} {...rest}>
+    <Link className={withClass(ACTION_LINK, className)} {...(external ? { target: "_blank", rel: "noreferrer" } : {})} {...rest}>
       {children}
       {trailing}
     </Link>

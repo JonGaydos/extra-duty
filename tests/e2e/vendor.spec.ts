@@ -38,14 +38,16 @@ const monthDay = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: TZ, m
 
 type Screen = { name: string; path: () => Promise<string>; heading: string | RegExp };
 
+// Every path is a promise, since some screens look up a record id first; `at` gives a fixed path in that shape.
+const at = (path: string) => () => Promise.resolve(path);
 const SCREENS: Screen[] = [
-  { name: "details", path: async () => "/vendor", heading: "My details" },
-  { name: "calendar", path: async () => "/vendor?view=calendar", heading: "My details" },
-  { name: "request", path: async () => "/vendor/request", heading: "Request a detail" },
+  { name: "details", path: at("/vendor"), heading: "My details" },
+  { name: "calendar", path: at("/vendor?view=calendar"), heading: "My details" },
+  { name: "request", path: at("/vendor/request"), heading: "Request a detail" },
   { name: "detail", path: async () => `/vendor/details/${await jobId(VENDOR.filledJob)}`, heading: VENDOR.filledJob },
-  { name: "invoices", path: async () => "/vendor/invoices", heading: "Invoices" },
-  { name: "locations", path: async () => "/vendor/locations", heading: "Locations" },
-  { name: "contracts", path: async () => "/vendor/contracts", heading: "Contracts" },
+  { name: "invoices", path: at("/vendor/invoices"), heading: "Invoices" },
+  { name: "locations", path: at("/vendor/locations"), heading: "Locations" },
+  { name: "contracts", path: at("/vendor/contracts"), heading: "Contracts" },
 ];
 
 for (const theme of THEMES) {

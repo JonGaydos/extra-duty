@@ -1,8 +1,9 @@
 import { Document, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { TrainingMark } from "./training-mark";
 import { AgencyHeader, formatMoney, type AgencyHeaderData } from "./invoice-pdf";
+import { keyedByContent } from "@/lib/list-keys";
 
-export type PdfColumn = { label: string; /** Relative width; defaults to 1. */ weight?: number; right?: boolean };
+type PdfColumn = { label: string; /** Relative width; defaults to 1. */ weight?: number; right?: boolean };
 
 const s = StyleSheet.create({
   page: { fontFamily: "Helvetica", fontSize: 9, padding: 40, paddingBottom: 56, color: "#111111" },
@@ -18,22 +19,23 @@ const s = StyleSheet.create({
 });
 
 /** Rows never split across pages, and the header row repeats on each page. */
-function Table({ columns, rows }: { columns: PdfColumn[]; rows: string[][] }) {
+function Table({ columns, rows }: Readonly<{ columns: PdfColumn[]; rows: string[][] }>) {
   const cell = (c: PdfColumn) => ({ flex: c.weight ?? 1, paddingRight: 4 });
+  const keyedColumns = keyedByContent(columns);
   return (
     <View>
       <View style={s.head} fixed>
-        {columns.map((c, i) => (
-          <Text key={i} style={[cell(c), s.bold, c.right ? s.right : {}]}>
+        {keyedColumns.map(({ key, item: c }) => (
+          <Text key={key} style={[cell(c), s.bold, c.right ? s.right : {}]}>
             {c.label}
           </Text>
         ))}
       </View>
-      {rows.map((r, ri) => (
-        <View key={ri} style={s.row} wrap={false}>
-          {columns.map((c, i) => (
-            <Text key={i} style={[cell(c), c.right ? s.right : {}]}>
-              {r[i] ?? ""}
+      {keyedByContent(rows).map(({ key, item: r }) => (
+        <View key={key} style={s.row} wrap={false}>
+          {keyedColumns.map(({ key: column, item: c, index }) => (
+            <Text key={column} style={[cell(c), c.right ? s.right : {}]}>
+              {r[index] ?? ""}
             </Text>
           ))}
         </View>
@@ -42,7 +44,7 @@ function Table({ columns, rows }: { columns: PdfColumn[]; rows: string[][] }) {
   );
 }
 
-function PageFooter({ label }: { label: string }) {
+function PageFooter({ label }: Readonly<{ label: string }>) {
   return (
     <View style={s.footer} fixed>
       <Text>{label}</Text>
@@ -108,8 +110,8 @@ export async function renderTaxSummaryPdf(d: TaxPdfData): Promise<Buffer> {
         <AgencyHeader agency={d.agency} />
         <Text style={s.title}>{title}</Text>
         <Text style={s.sub}>{`Prepared for ${d.payee.name}. Counted in the year payment was received (cash basis).`}</Text>
-        {d.payee.mailingAddress.split("\n").filter((l) => l.trim()).map((line, i) => (
-          <Text key={i}>{line}</Text>
+        {keyedByContent(d.payee.mailingAddress.split("\n").filter((l) => l.trim()), (l) => l).map(({ key, item: line }) => (
+          <Text key={key}>{line}</Text>
         ))}
 
         <Text style={s.heading}>Paid in {d.year}, by vendor</Text>

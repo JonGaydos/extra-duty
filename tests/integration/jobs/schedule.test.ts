@@ -3,6 +3,7 @@ import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { EMAIL_QUEUE, getBoss } from "@/jobs/boss";
 import { registerSchedule, tickQueue, type ScheduledTick } from "@/jobs/schedule";
+import { byText } from "@/lib/sort";
 
 describe("registerSchedule", () => {
   const get = useTestDb();
@@ -12,7 +13,7 @@ describe("registerSchedule", () => {
   test("schedules each tick in its timezone and drops schedules of removed ticks", async () => {
     const boss = await getBoss();
     await registerSchedule(boss, [tick("old"), tick("keep")]);
-    expect((await boss.getSchedules()).map((s) => s.name).sort()).toEqual([tickQueue(tick("keep")), tickQueue(tick("old"))].sort());
+    expect((await boss.getSchedules()).map((s) => s.name).sort(byText)).toEqual([tickQueue(tick("keep")), tickQueue(tick("old"))].sort(byText));
     await registerSchedule(boss, [tick("keep")]);
     const left = await boss.getSchedules();
     expect(left.map((s) => s.name)).toEqual(["tick.keep"]);

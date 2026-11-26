@@ -8,13 +8,12 @@ import { RuleViolation, ValidationError } from "../errors";
 import { CalendarFetchError, fetchCalendarText, normalizeFeedUrl } from "./calendar-fetch";
 import { assertOwn, CalendarLimitError, parseIcsBusy } from "./schedule";
 
-export type CalendarFeed = typeof calendarFeeds.$inferSelect;
 /** Runs a function in its own transaction. Network work happens between two of these, never inside one. */
 export type TxRunner = <T>(fn: (tx: Tx) => Promise<T>) => Promise<T>;
 export type SyncResult = { ok: true } | { ok: false; lastError: string };
 
 const SYNC_WINDOW_DAYS = 90;
-export const SYNC_INTERVAL_MINUTES = 15;
+const SYNC_INTERVAL_MINUTES = 15;
 const DAY_MS = 86_400_000;
 const INSERT_CHUNK = 500;
 
@@ -82,9 +81,10 @@ async function fetchBusy(urlEnc: string, now: Date): Promise<Fetched> {
  */
 async function recordResult(tx: Tx, feedId: string, claimedUrlEnc: string, now: Date, result: Fetched, who: Actor | "system", userId: string): Promise<void> {
   const [feed] = await tx.select().from(calendarFeeds).where(eq(calendarFeeds.id, feedId)).for("update");
-  if (!feed || feed.urlEnc !== claimedUrlEnc) return;
+  if (feed?.urlEnc !== claimedUrlEnc) return;
   if (result.ok) {
     await tx.delete(calendarBusy).where(eq(calendarBusy.feedId, feedId));
+    // Sequential: batched inserts under the feed's row lock, in this transaction.
     for (let i = 0; i < result.busy.length; i += INSERT_CHUNK) {
       await tx.insert(calendarBusy).values(result.busy.slice(i, i + INSERT_CHUNK).map((b) => ({ feedId, startAt: b.startAt, endAt: b.endAt, title: b.title })));
     }

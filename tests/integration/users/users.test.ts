@@ -11,6 +11,7 @@ import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 import { useEmailQueue } from "../../setup/email-queue";
 import { createUser, deactivateUser, updateUser } from "@/domain/users/users";
+import { byText } from "@/lib/sort";
 
 describe("users", () => {
   const get = useTestDb();
@@ -52,7 +53,7 @@ describe("users", () => {
     const q = await db.select().from(userQualifications).where(eq(userQualifications.userId, u.id));
     expect(q).toMatchObject([{ qualificationId: qualId, grantedBy: coordinator.userId }]);
     const audit = await db.transaction((tx) => listAudit(coordinator, tx, { entityId: u.id }, 1));
-    expect(audit.map((a) => a.action).sort()).toEqual(["user.create", "user.invite", "user.qualification_grant"]);
+    expect(audit.map((a) => a.action).sort(byText)).toEqual(["user.create", "user.invite", "user.qualification_grant"]);
   });
 
   test("duplicate email is refused", async () => {

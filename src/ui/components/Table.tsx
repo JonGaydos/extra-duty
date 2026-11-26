@@ -3,7 +3,7 @@ import { ScrollRegion } from "./ScrollRegion";
 
 export type Column<T> = {
   header: string;
-  cell: (row: T) => ReactNode;
+  render: (row: T) => ReactNode;
   /** Numbers and money align to the end. */
   align?: "start" | "end";
 };
@@ -20,14 +20,14 @@ export function Table<T>({
   rows,
   rowKey,
   empty = "Nothing to show.",
-}: {
+}: Readonly<{
   caption: string;
   hideCaption?: boolean;
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   empty?: ReactNode;
-}) {
+}>) {
   const align = (c: Column<T>) => (c.align === "end" ? "text-right" : "text-left");
   return (
     <ScrollRegion label={caption} className="overflow-x-auto rounded-xl border border-line bg-surface md:rounded-2xl">
@@ -56,7 +56,7 @@ export function Table<T>({
               <tr key={rowKey(r)} className="border-t border-divider">
                 {columns.map((c) => (
                   <td key={c.header} className={`px-3.5 py-3 align-top ${align(c)}`}>
-                    {c.cell(r)}
+                    {c.render(r)}
                   </td>
                 ))}
               </tr>

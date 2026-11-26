@@ -8,6 +8,7 @@ import { imageRefs, parseMarkdown } from "@/domain/manuals/markdown";
 import { MANUALS, chapterFiles, type ManualId } from "@/domain/manuals/manuals";
 import { E2E, E2E_EXTRA_USERS, E2E_USERS } from "./env";
 import { signInAs } from "./session";
+import { byText } from "@/lib/sort";
 
 const ROOT = join(process.cwd(), "docs", "manuals");
 const IMAGES = join(ROOT, "images");
@@ -99,7 +100,7 @@ test("the build produces three PDFs with the agency header", () => {
     timeout: 300_000,
   });
   expect(out.status, out.stderr).toBe(0);
-  const pdfs = readdirSync(dir).filter((f) => f.endsWith(".pdf")).sort();
+  const pdfs = readdirSync(dir).filter((f) => f.endsWith(".pdf")).sort(byText);
   expect(pdfs).toHaveLength(3);
   return Promise.all(
     pdfs.map(async (f) => {

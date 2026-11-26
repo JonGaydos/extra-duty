@@ -1,7 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 import { SCHEDULE, runTick, type ScheduledTick } from "@/jobs/schedule";
+import { byText } from "@/lib/sort";
 
-const names = (cron: string) => SCHEDULE.filter((t) => t.cron === cron).map((t) => t.name).sort();
+// Test jobs are async to match the job runner; they answer at once.
+
+const names = (cron: string) => SCHEDULE.filter((t) => t.cron === cron).map((t) => t.name).sort(byText);
 
 describe("job schedule", () => {
   test("every minute: short confirmations, backup offers, watch releases, billing alerts", () => {
@@ -48,7 +51,7 @@ describe("job schedule", () => {
   test("a failing tick is logged and does not throw, so the others still run", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     const ok = vi.fn(async () => {});
-    const bad: ScheduledTick = { name: "bad", cron: "* * * * *", tz: "America/Chicago", run: async () => { throw new Error("boom"); } };
+    const bad: ScheduledTick = { name: "bad", cron: "* * * * *", tz: "America/Chicago", run: () => Promise.reject(new Error("boom")) };
     const good: ScheduledTick = { name: "good", cron: "* * * * *", tz: "America/Chicago", run: ok };
     for (const t of [bad, good]) await runTick(t);
     expect(ok).toHaveBeenCalledTimes(1);

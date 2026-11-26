@@ -29,6 +29,7 @@ import { withTx } from "@/ui/shell/request";
 import { act, actOutsideTx, type ActionResult } from "../../_personnel/result";
 import { detailInput, onDay, overrideSpanOn, parseDollars, type DetailWire } from "./detail-input";
 import { plural } from "../../_personnel/format";
+import { byText } from "@/lib/sort";
 
 /** Server actions for the coordinator screens: each checks the person, calls one service and reports back. */
 
@@ -40,9 +41,10 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Dates for a Range or Repeat selection, as a JSON list of agency date keys. */
 export async function expandDatesAction(selection: DateSelection, firstDate: string): Promise<ActionResult> {
-  return act(async (actor) => {
+  // act() takes a promise-returning callback; nothing here waits, so the result is returned already resolved.
+  return act((actor) => {
     assertCan(actor, "job.create");
-    return { ok: true, value: JSON.stringify(expandSelection(selection, firstDate)) };
+    return Promise.resolve({ ok: true, value: JSON.stringify(expandSelection(selection, firstDate)) });
   });
 }
 
@@ -63,7 +65,7 @@ export async function suggestPlanAction(input: { vendorId: string; title: string
 export async function createDetailsAction(input: { detail: DetailWire; dates: string[]; overrides: Record<string, { startTime?: string; endTime?: string }>; fromJobId?: string }): Promise<ActionResult> {
   return actOutsideTx(async (actor) => {
     assertCan(actor, "job.create");
-    const dates = [...new Set(input.dates)].sort();
+    const dates = [...new Set(input.dates)].sort(byText);
     if (dates.length === 0) throw new ValidationError("Choose at least one date.");
     let base = detailInput(input.detail, dates[0]);
     // A changed time on one date is checked here so the message names that date, as the service's own do.
@@ -156,12 +158,18 @@ export async function holdDetailAction(input: { jobId: string; scope: "one" | "s
   });
 }
 
+/** "Released. Open for sign-up now.", or when the released details open. */
+function releasedMessage(count: number, now: boolean): string {
+  const what = count === 1 ? "Released" : `${count} details released`;
+  if (now) return `${what}. Open for sign-up now.`;
+  return `${what}. ${count === 1 ? "It opens" : "They open"} at the normal release time.`;
+}
+
 /** Clears the hold; `now` also opens details whose release time has not come. */
 export async function releaseDetailAction(input: { jobId: string; scope: "one" | "series"; now: boolean }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     const done = await releaseJob(actor, tx, input.jobId, { scope: input.scope === "series" ? "series" : "one", now: input.now === true });
-    const what = done.length === 1 ? "Released" : `${done.length} details released`;
-    return { ok: true, message: input.now ? `${what}. Open for sign-up now.` : `${what}. ${done.length === 1 ? "It opens" : "They open"} at the normal release time.` };
+    return { ok: true, message: releasedMessage(done.length, input.now) };
   });
 }
 
@@ -280,11 +288,18 @@ export async function decideFlagAction(input: { requestId: string; approve: bool
   });
 }
 
+/** Where an invoice paid on the spot went once approved: sent, queued with the next send, or kept. */
+function paidOnSpotMessage(inv: { sentAt: Date | null; readyAt: Date | null }): string {
+  if (inv.sentAt) return "Invoice was paid on the spot: closed as paid and sent to the vendor marked paid.";
+  if (inv.readyAt) return "Invoice was paid on the spot: closed as paid. The paid invoice goes out with the vendor's next invoice send.";
+  return "Invoice was paid on the spot: closed as paid, not sent.";
+}
+
 export async function approveInvoiceAction(invoiceId: string, opts: { attachW9?: boolean; send?: boolean } = {}): Promise<ActionResult> {
   return act(async (actor, tx) => {
     const inv = await approveInvoice(actor, tx, invoiceId, new Date(), { attachW9: opts.attachW9 === true, send: opts.send === undefined ? undefined : opts.send === true });
     if (inv.status === "approved_unsent") return { ok: true, message: "Invoice approved, not sent. Send it from the invoice when you are ready." };
-    if (inv.status === "paid") return { ok: true, message: inv.sentAt ? "Invoice was paid on the spot: closed as paid and sent to the vendor marked paid." : inv.readyAt ? "Invoice was paid on the spot: closed as paid. The paid invoice goes out with the vendor's next invoice send." : "Invoice was paid on the spot: closed as paid, not sent." };
+    if (inv.status === "paid") return { ok: true, message: paidOnSpotMessage(inv) };
     if (inv.status === "ready_to_send") return { ok: true, message: "Invoice approved. It goes out with the vendor's next invoice send." };
     return { ok: true, message: "Invoice approved and sent to the vendor." };
   });
@@ -392,10 +407,12 @@ export async function issueNoteAction(input: { issueId: string; note: string; in
   });
 }
 
+const CLOSED_MESSAGE: Partial<Record<IssueOutcome, string>> = { paid: "Closed as paid.", written_off: "Written off." };
+
 export async function closeIssueAction(input: { issueId: string; outcome: IssueOutcome; note: string }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     await closeIssue(actor, tx, input.issueId, input.outcome, input.note);
-    return { ok: true, message: input.outcome === "paid" ? "Closed as paid." : input.outcome === "written_off" ? "Written off." : "Issue resolved. The invoice continues." };
+    return { ok: true, message: CLOSED_MESSAGE[input.outcome] ?? "Issue resolved. The invoice continues." };
   });
 }
 
@@ -451,7 +468,7 @@ export async function paymentHoldAction(input: { vendorId: string; place: boolea
   });
 }
 
-export async function addLocationAction(input: { vendorId: string; name: string; address: string; pin?: LocationInput["pin"] }): Promise<ActionResult> {
+export async function addLocationAction(input: { vendorId: string; name: string; address: string; pin?: Exclude<LocationInput["pin"], undefined> }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     await addLocation(actor, tx, input.vendorId, { name: input.name, address: input.address || null, pin: input.pin });
     return { ok: true, message: "Location added." };

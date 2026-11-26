@@ -14,11 +14,12 @@ import type { TimeOverride } from "./detail-summary";
 export type { TimeOverride };
 export type FlexWire = { earliest: string; latest: string; allowShorter: boolean };
 import type { SafetyAddressRow } from "./safety-wire";
+import { useRowKeys } from "@/ui/use-row-keys";
 
 export { safetyRows, safetyWire, type SafetyAddressRow, type SafetyAddressWire } from "./safety-wire";
 
 /** Earliest start, latest finish and shorter shifts. */
-export function FlexFields({ flex, onFlex }: { flex: FlexWire; onFlex: (f: FlexWire) => void }) {
+export function FlexFields({ flex, onFlex }: Readonly<{ flex: FlexWire; onFlex: (f: FlexWire) => void }>) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <FormField label="Earliest start">
@@ -28,20 +29,20 @@ export function FlexFields({ flex, onFlex }: { flex: FlexWire; onFlex: (f: FlexW
         <Input type="time" value={flex.latest} onChange={(e) => onFlex({ ...flex, latest: e.target.value })} required />
       </FormField>
       <label className="flex min-h-11 items-center gap-2 sm:col-span-2">
-        <input type="checkbox" checked={flex.allowShorter} onChange={(e) => onFlex({ ...flex, allowShorter: e.target.checked })} className="size-4.5 accent-accent" />
-        Allow shorter shifts (pending until 24 hours before the start)
+        <input type="checkbox" checked={flex.allowShorter} onChange={(e) => onFlex({ ...flex, allowShorter: e.target.checked })} className="size-4.5 accent-accent" />Allow shorter shifts (pending until 24 hours before the start)
       </label>
     </div>
   );
 }
 
 /** Officer safety addresses of concern, up to 10, each looked up on OpenStreetMap with a pin that can be moved. */
-export function SafetyAddressFields({ addresses, onAddresses }: { addresses: SafetyAddressRow[]; onAddresses: (v: SafetyAddressRow[]) => void }) {
+export function SafetyAddressFields({ addresses, onAddresses }: Readonly<{ addresses: SafetyAddressRow[]; onAddresses: (v: SafetyAddressRow[]) => void }>) {
   const set = (i: number, patch: Partial<SafetyAddressRow>) => onAddresses(addresses.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const keys = useRowKeys(addresses);
   return (
     <>
       {addresses.map((a, i) => (
-        <div key={i} className="flex flex-col gap-2 rounded-md border border-line p-3">
+        <div key={keys[i]} className="flex flex-col gap-2 rounded-md border border-line p-3">
           <AddressField label={`Address of concern ${i + 1}`} value={a.value} onChange={(value) => set(i, { value })} pin />
           <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
             <FormField label="What to know">
@@ -64,7 +65,7 @@ export function SafetyAddressFields({ addresses, onAddresses }: { addresses: Saf
 }
 
 /** One row of the preview: the date, its times (changeable) and Remove. */
-export function PreviewRow({ date, start, end, override, error, onOverride, onRemove }: { date: string; start: string; end: string; override?: TimeOverride; error?: string; onOverride: (o: TimeOverride | null) => void; onRemove: () => void }) {
+export function PreviewRow({ date, start, end, override, error, onOverride, onRemove }: Readonly<{ date: string; start: string; end: string; override?: TimeOverride; error?: string; onOverride: (o: TimeOverride | null) => void; onRemove: () => void }>) {
   const [editing, setEditing] = useState(false);
   const s = override?.startTime ?? start;
   const e = override?.endTime ?? end;

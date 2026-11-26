@@ -9,7 +9,7 @@ import { EmptyState } from "@/ui/components/EmptyState";
 import { Notice } from "@/ui/components/Notice";
 import { Icon } from "@/ui/icons";
 import { PageTitle, TabLinks } from "../../_personnel/TabLinks";
-import { plural, whenText } from "../../_personnel/format";
+import { plural, prefixed, whenText } from "../../_personnel/format";
 import { activeCount, filterParams, resolveFilters } from "../../_shared/detail-filters";
 import { FilterPanel } from "../../_shared/FilterPanel";
 import { coordinatorActor } from "../_coordinator/session";
@@ -35,13 +35,14 @@ const STATE: Record<string, { tone: "success" | "warning" | "danger" | "neutral"
 };
 
 /** Every detail a coordinator manages: upcoming, vendor requests, canceled and past, with the shared filters and bulk edit. */
-export default async function DetailsPage({ searchParams }: Props) {
+export default async function DetailsPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const view: View = typeof sp.view === "string" && sp.view in VIEWS ? (sp.view as View) : "upcoming";
   const now = new Date();
   const v = VIEWS[view];
-  const window = v.past ? { from: new Date(now.getTime() - 365 * DAY), to: now } : { from: view === "canceled" ? new Date(now.getTime() - 90 * DAY) : now, to: new Date(now.getTime() + 730 * DAY) };
+  // Upcoming also lists a detail that started earlier and is still running, until it ends.
+  const window = v.past ? { from: new Date(now.getTime() - 365 * DAY), to: now } : { from: view === "canceled" ? new Date(now.getTime() - 90 * DAY) : now, to: new Date(now.getTime() + 730 * DAY), runningAt: now };
   const prefs = await withTx((tx) => getFilterPrefs(actor, tx));
   const filters = resolveFilters(sp, prefs, { personal: false });
   const data = await withTx(async (tx) => ({
@@ -73,11 +74,11 @@ export default async function DetailsPage({ searchParams }: Props) {
         <FilterPanel path="/coordinate/details" keep={{ view }} filters={filters} options={data.options} remember={prefs.remember} active={activeCount(filters, false)} staff />
         <div className="flex min-w-0 flex-col gap-3">
           <TabLinks label="Which details" current={view} items={Object.entries(VIEWS).map(([k, x]) => ({ key: k, label: x.label, href: href(k) }))} />
-          <p className="m-0 text-sm text-muted" role="status">
+          <output className="block m-0 text-sm text-muted">
             {plural(rows.length, "detail")}
             {activeCount(filters, false) ? ", filtered" : ""}
             {data.truncated ? ". Only the first 2,000 are read; narrow the filters." : "."}
-          </p>
+          </output>
           {rows.length === 0 ? (
             <Card pad={false}>
               <EmptyState title="No details here">{activeCount(filters, false) ? "Nothing matches these filters." : "Details you post show up here."}</EmptyState>
@@ -98,7 +99,7 @@ export default async function DetailsPage({ searchParams }: Props) {
                   id: j.id,
                   href: `/coordinate/details/${j.id}`,
                   title: `#${j.number} ${j.title}`,
-                  meta: `${j.vendorName}${j.locationName ? `, ${j.locationName}` : ""}. ${whenText(j.startAt, j.endAt, now)}`,
+                  meta: `${j.vendorName}${prefixed(", ", j.locationName)}. ${whenText(j.startAt, j.endAt, now)}`,
                   pay: j.pay,
                   chips,
                   blocked: editBlockReason(j, now),

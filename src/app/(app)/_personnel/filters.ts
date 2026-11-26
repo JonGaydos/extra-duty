@@ -11,7 +11,7 @@ export type ListFilters = { q: string; open: boolean; mine: boolean; week: boole
 const SORTS: JobSort[] = ["date", "total_pay", "rate", "vendor"];
 const DAY_MS = 86_400_000;
 /** How far ahead the lists look. */
-export const LIST_DAYS = 120;
+const LIST_DAYS = 120;
 
 type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -58,7 +58,7 @@ export async function filteredJobs(actor: Actor, tx: Tx, f: ListFilters, now: Da
     to = agencyInstant(p.year, p.month, p.day + 7, 0, 0);
   }
   if (f.mine) from = new Date(now.getTime() - DAY_MS);
-  const base = { from, to, text: f.q || undefined, mine: f.mine || undefined, typeIds: f.type ? [f.type] : undefined, sort: f.sort, direction: f.sort === "date" ? ("asc" as const) : ("desc" as const) };
+  const base = { from, to, runningAt: now, text: f.q || undefined, mine: f.mine || undefined, typeIds: f.type ? [f.type] : undefined, sort: f.sort, direction: f.sort === "date" ? ("asc" as const) : ("desc" as const) };
   const shown = await listAllJobs(actor, tx, { ...base, onlyWorkable: f.workable || undefined });
   const keep = async (rows: Job[]) => {
     let cards = await loadJobCards(actor, tx, rows, now);

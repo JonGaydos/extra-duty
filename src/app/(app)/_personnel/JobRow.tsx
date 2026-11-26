@@ -23,7 +23,7 @@ export function jobChips(c: JobCard): Array<{ tone: "success" | "warning" | "dan
 }
 
 /** "1 Deputy Sheriff spot left" for one open position, else "3 spots left". */
-export function openText(c: JobCard): string {
+function openText(c: JobCard): string {
   const open = c.positions.filter((p) => p.count > p.filled);
   if (open.length === 1) {
     const n = open[0].count - open[0].filled;
@@ -36,7 +36,7 @@ export function openText(c: JobCard): string {
  * One detail in a list: vendor, when and where, pay, and its status in words. The whole row is the link to
  * the detail page.
  */
-export function JobRow({ card, now, extra }: { card: JobCard; now: Date; extra?: React.ReactNode }) {
+export function JobRow({ card, now, extra }: Readonly<{ card: JobCard; now: Date; extra?: React.ReactNode }>) {
   const chips = jobChips(card);
   return (
     <div className="flex flex-col gap-2 px-4 py-3.25">
@@ -70,7 +70,7 @@ export function JobRow({ card, now, extra }: { card: JobCard; now: Date; extra?:
 }
 
 /** A plain list of rows inside one card, divided. */
-export function RowList({ children, label }: { children: React.ReactNode; label?: string }) {
+export function RowList({ children, label }: Readonly<{ children: React.ReactNode; label?: string }>) {
   return (
     <ul aria-label={label} className="m-0 flex list-none flex-col divide-y divide-divider p-0">
       {children}

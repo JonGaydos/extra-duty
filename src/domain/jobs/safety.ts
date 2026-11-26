@@ -6,7 +6,7 @@ import { recordAudit } from "../audit/audit";
 import { ValidationError } from "../errors";
 import { geocodeAddress } from "../vendors/geocode";
 
-export type SafetyAddressInput = {
+type SafetyAddressInput = {
   address: string;
   description: string;
   /** Leave undefined to look the address up; null means the lookup already failed. */
@@ -30,7 +30,7 @@ type Stamp = {
   editedAt: Date | null;
 };
 
-export type SafetyAddress = Stamp & {
+type SafetyAddress = Stamp & {
   id: string;
   address: string;
   description: string | null;
@@ -41,7 +41,7 @@ export type SafetyAddress = Stamp & {
 
 export type JobSafetyView = Stamp & { notes: string | null; addresses: SafetyAddress[] };
 
-export const MAX_SAFETY_ADDRESSES = 10;
+const MAX_SAFETY_ADDRESSES = 10;
 
 function assertCount(n: number): void {
   if (n > MAX_SAFETY_ADDRESSES) throw new ValidationError(`A job can hold at most ${MAX_SAFETY_ADDRESSES} safety addresses.`);
@@ -58,6 +58,7 @@ const clean = (s: string | undefined | null) => (s?.trim() ? s.trim() : null);
 export async function resolveSafetyPins(safety: SafetyInput): Promise<SafetyInput> {
   assertCount(safety.addresses.length);
   const addresses: SafetyAddressInput[] = [];
+  // Sequential: the geocoder allows one lookup at a time.
   for (const a of safety.addresses) {
     if (a.lat !== undefined && a.lng !== undefined) {
       const bad = (n: number | null, max: number) => n !== null && (typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > max);
@@ -69,6 +70,57 @@ export async function resolveSafetyPins(safety: SafetyInput): Promise<SafetyInpu
     addresses.push({ ...a, lat: pin?.lat ?? null, lng: pin?.lng ?? null, source: "auto", lookedUp: true });
   }
   return { ...safety, addresses };
+}
+
+/** Adds, or edits, the safety notes; true when they changed. */
+async function saveSafetyNotes(actor: Actor, tx: Tx, jobId: string, row: typeof jobSafety.$inferSelect | undefined, notes: string | null, now: Date): Promise<boolean> {
+  if (!row) {
+    if (notes === null) return false;
+    await tx.insert(jobSafety).values({ jobId, notes, addedBy: actor.userId, addedAt: now });
+    return true;
+  }
+  if ((row.notes ?? null) === notes) return false;
+  await tx.update(jobSafety).set({ notes, editedBy: actor.userId, editedAt: now }).where(eq(jobSafety.id, row.id));
+  return true;
+}
+
+/** Saves a kept address's new description or sent pin; true when it changed. */
+async function updateSafetyAddress(actor: Actor, tx: Tx, match: typeof jobSafetyAddresses.$inferSelect, a: SafetyAddressInput, now: Date): Promise<boolean> {
+  const description = clean(a.description);
+  // Only a point the caller sent replaces the stored pin; a point looked up here (nothing sent) never does,
+  // so a hand-placed pin survives a save that carries no coordinates.
+  const sent = !a.lookedUp && typeof a.lat === "number" && typeof a.lng === "number";
+  const source = a.source === "auto" ? "auto" : "manual";
+  const moved = sent && (a.lat !== match.lat || a.lng !== match.lng || source !== match.geocodeSource);
+  if ((match.description ?? null) === description && !moved) return false;
+  await tx
+    .update(jobSafetyAddresses)
+    .set({ description, ...(moved ? { lat: a.lat, lng: a.lng, geocodeSource: source } : {}), editedBy: actor.userId, editedAt: now })
+    .where(eq(jobSafetyAddresses.id, match.id));
+  return true;
+}
+
+/** Adds a new address, looking up its pin when none was sent. */
+async function insertSafetyAddress(actor: Actor, tx: Tx, jobId: string, a: SafetyAddressInput, now: Date): Promise<void> {
+  let lat = a.lat;
+  let lng = a.lng;
+  let source: "auto" | "manual" = a.lookedUp || a.source === "auto" ? "auto" : "manual";
+  if (lat === undefined || lng === undefined) {
+    const pin = await geocodeAddress(a.address);
+    lat = pin?.lat ?? null;
+    lng = pin?.lng ?? null;
+    source = "auto";
+  }
+  await tx.insert(jobSafetyAddresses).values({
+    jobId,
+    address: a.address.trim(),
+    description: clean(a.description),
+    lat,
+    lng,
+    geocodeSource: lat === null ? "auto" : source,
+    addedBy: actor.userId,
+    addedAt: now,
+  });
 }
 
 /**
@@ -85,60 +137,21 @@ export async function applySafety(actor: Actor, tx: Tx, jobId: string, input: Sa
     .orderBy(asc(jobSafetyAddresses.createdAt), asc(jobSafetyAddresses.id));
   const now = new Date();
   const notes = clean(input.notes);
-  let changed = false;
-
-  if (!row) {
-    if (notes !== null) {
-      await tx.insert(jobSafety).values({ jobId, notes, addedBy: actor.userId, addedAt: now });
-      changed = true;
-    }
-  } else if ((row.notes ?? null) !== notes) {
-    await tx.update(jobSafety).set({ notes, editedBy: actor.userId, editedAt: now }).where(eq(jobSafety.id, row.id));
-    changed = true;
-  }
+  let changed = await saveSafetyNotes(actor, tx, jobId, row, notes, now);
 
   const wanted = input.addresses.filter((a) => a.address.trim());
   assertCount(wanted.length);
   const keep = new Set<string>();
+  // Sequential: each address is matched against the ones kept before it, and writes share this transaction.
   for (const a of wanted) {
     const key = norm(a.address);
     const match = existing.find((e) => !keep.has(e.id) && norm(e.address) === key);
-    const description = clean(a.description);
     if (match) {
       keep.add(match.id);
-      // Only a point the caller sent replaces the stored pin; a point looked up here (nothing sent) never does,
-      // so a hand-placed pin survives a save that carries no coordinates.
-      const sent = !a.lookedUp && typeof a.lat === "number" && typeof a.lng === "number";
-      const source = a.source === "auto" ? "auto" : "manual";
-      const moved = sent && (a.lat !== match.lat || a.lng !== match.lng || source !== match.geocodeSource);
-      if ((match.description ?? null) !== description || moved) {
-        await tx
-          .update(jobSafetyAddresses)
-          .set({ description, ...(moved ? { lat: a.lat, lng: a.lng, geocodeSource: source } : {}), editedBy: actor.userId, editedAt: now })
-          .where(eq(jobSafetyAddresses.id, match.id));
-        changed = true;
-      }
+      if (await updateSafetyAddress(actor, tx, match, a, now)) changed = true;
       continue;
     }
-    let lat = a.lat;
-    let lng = a.lng;
-    let source: "auto" | "manual" = a.lookedUp || a.source === "auto" ? "auto" : "manual";
-    if (lat === undefined || lng === undefined) {
-      const pin = await geocodeAddress(a.address);
-      lat = pin?.lat ?? null;
-      lng = pin?.lng ?? null;
-      source = "auto";
-    }
-    await tx.insert(jobSafetyAddresses).values({
-      jobId,
-      address: a.address.trim(),
-      description,
-      lat,
-      lng,
-      geocodeSource: lat === null ? "auto" : source,
-      addedBy: actor.userId,
-      addedAt: now,
-    });
+    await insertSafetyAddress(actor, tx, jobId, a, now);
     changed = true;
   }
   const removed = existing.filter((e) => !keep.has(e.id));

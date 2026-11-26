@@ -49,7 +49,7 @@ describe("ops plan library", () => {
     const rows = await run((tx) => searchLibrary(person, tx, { text: "Lib " }, 1));
     expect(rows.map((r) => r.jobTitle)).toEqual(["Lib visible parade"]);
     expect(rows[0].opsPlanId).toBe(agreed.plan.id);
-    for (const who of [fx.coord, admin]) expect((await run((tx) => searchLibrary(who, tx, { text: "Lib " }, 1))).length).toBe(1);
+    for (const who of [fx.coord, admin]) expect(await run((tx) => searchLibrary(who, tx, { text: "Lib " }, 1))).toHaveLength(1);
     const vendorActor: Actor = { userId: "x", role: "vendor", rankId: null, vendorId: fx.vendorId };
     await expect(run((tx) => searchLibrary(vendorActor, tx, {}, 1))).rejects.toBeInstanceOf(ForbiddenError);
   });
@@ -75,7 +75,7 @@ describe("ops plan library", () => {
 
   test("search rejects a bad page and over-long text", async () => {
     const person = await fx.person();
-    for (const page of [0, -1, 1.5, NaN, Infinity]) await expect(run((tx) => searchLibrary(person, tx, {}, page))).rejects.toBeInstanceOf(ValidationError);
+    for (const page of [0, -1, 1.5, Number.NaN, Infinity]) await expect(run((tx) => searchLibrary(person, tx, {}, page))).rejects.toBeInstanceOf(ValidationError);
     await expect(run((tx) => searchLibrary(person, tx, { text: "x".repeat(201) }, 1))).rejects.toBeInstanceOf(ValidationError);
     await expect(run((tx) => searchLibrary(person, tx, { location: "x".repeat(201) }, 1))).rejects.toBeInstanceOf(ValidationError);
     await expect(run((tx) => searchLibrary(person, tx, { text: "x".repeat(200) }, 1))).resolves.toEqual([]);

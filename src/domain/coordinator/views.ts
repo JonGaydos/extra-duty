@@ -60,16 +60,16 @@ const HOUR_MS = 3_600_000;
 
 const isStaff = (a: Actor) => a.role === "coordinator" || a.role === "admin";
 
-export type LockedRow = { jobId: string; number: number; title: string; vendorName: string; startAt: Date; endAt: Date; holdPlacedAt: Date; signedUp: number; latePay: boolean };
-export type RequestRow = { jobId: string; title: string; vendorName: string; locationName: string | null; startAt: Date; endAt: Date; dates: number; positions: string; flex: { earliestStartAt: Date; latestEndAt: Date } | null };
-export type ChangeRow = { requestId: string; jobId: string; title: string; vendorName: string; requestedAt: Date };
-export type NoteRow = { id: string; body: string; vendorName: string; locationName: string | null; authorName: string; submittedAt: Date };
-export type FlagRequestRow = { id: string; userName: string; qualificationName: string; note: string | null; requestedAt: Date };
-export type MissingContractRow = { jobId: string; number: number; title: string; vendorId: string; vendorName: string; startAt: Date };
-export type IssueRow = { issueId: string; invoiceId: string; number: string; vendorName: string; payeeName: string; totalCents: Cents; since: Date; day: number; limitDays: number };
+type LockedRow = { jobId: string; number: number; title: string; vendorName: string; startAt: Date; endAt: Date; holdPlacedAt: Date; signedUp: number; latePay: boolean };
+type RequestRow = { jobId: string; title: string; vendorName: string; locationName: string | null; startAt: Date; endAt: Date; dates: number; positions: string; flex: { earliestStartAt: Date; latestEndAt: Date } | null };
+type ChangeRow = { requestId: string; jobId: string; title: string; vendorName: string; requestedAt: Date };
+type NoteRow = { id: string; body: string; vendorName: string; locationName: string | null; authorName: string; submittedAt: Date };
+type FlagRequestRow = { id: string; userName: string; qualificationName: string; note: string | null; requestedAt: Date };
+type MissingContractRow = { jobId: string; number: number; title: string; vendorId: string; vendorName: string; startAt: Date };
+type IssueRow = { issueId: string; invoiceId: string; number: string; vendorName: string; payeeName: string; totalCents: Cents; since: Date; day: number; limitDays: number };
 export type OpsRow = { jobId: string; opsPlanId: string | null; title: string; vendorName: string; startAt: Date; dueAt: Date | null; icName: string | null; version: number; waitingSince: Date | null; canReview: boolean; versionId: string | null };
-export type UnfilledRow = { jobId: string; title: string; vendorName: string; startAt: Date; open: number };
-export type LockRow = { userId: string; name: string; unbilled: number; unacknowledged: number };
+type UnfilledRow = { jobId: string; title: string; vendorName: string; startAt: Date; open: number };
+type LockRow = { userId: string; name: string; unbilled: number; unacknowledged: number };
 
 export type CoordinatorTodo = {
   accessReview: { reviewId: string; decided: number; total: number; dueAt: Date } | null;
@@ -121,7 +121,7 @@ async function signedUpCounts(tx: Tx, jobIds: string[]): Promise<Map<string, num
 }
 
 /** Statuses that hold a spot: the same list the detail page's staffing grid counts as filled. */
-export const HOLDING_STATUSES = ["signed_up", "pending_short", "billed", "paid", "no_show"] as const;
+const HOLDING_STATUSES = ["signed_up", "pending_short", "billed", "paid", "no_show"] as const;
 
 async function holdingCounts(tx: Tx, jobIds: string[]): Promise<Map<string, number>> {
   if (jobIds.length === 0) return new Map();
@@ -479,7 +479,7 @@ export async function paymentsBoard(actor: Actor, tx: Tx, now: Date = new Date()
   return { rows: out, totals };
 }
 
-export type StaffTimelineEvent = { id: string; event: string; party: string | null; note: string | null; at: Date; actorName: string | null };
+type StaffTimelineEvent = { id: string; event: string; party: string | null; note: string | null; at: Date; actorName: string | null };
 
 export type StaffInvoice = {
   id: string;
@@ -599,7 +599,7 @@ export async function staffInvoice(actor: Actor, tx: Tx, id: string, now: Date =
   };
 }
 
-export type JobRosterAdminRow = {
+type JobRosterAdminRow = {
   assignmentId: string;
   userId: string;
   name: string;

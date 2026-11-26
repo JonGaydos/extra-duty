@@ -56,6 +56,8 @@ import { resetGeocoder } from "@/domain/vendors/geocode";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 
+// Fake fetches are async to match fetch; they answer at once.
+
 const HOUR = 3_600_000;
 const GOOD_EMAIL = { provider: "smtp" as const, from: "Sheriff <no-reply@sheriff.example>", smtp: { host: "smtp.test" } };
 const nominatim = () => new Response(JSON.stringify([{ lat: "30.5", lon: "-86.1" }]), { status: 200 });
@@ -156,7 +158,7 @@ describe("vendor portal", () => {
 
   beforeEach(async () => {
     resetGeocoder({ intervalMs: 0 });
-    vi.stubGlobal("fetch", vi.fn(async () => nominatim()));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(nominatim())));
     await setSettings({
       email: GOOD_EMAIL,
       billingReplyToEmail: "billing@sheriff.example",
@@ -338,7 +340,7 @@ describe("vendor portal", () => {
       expect(declined[0].state).toBe("declined");
       expect((await jobRow(job.id)).cancelReason).toBe("Not enough deputies that day");
       const after = await alertsOf(vendorUserId, "vendor.request_decided");
-      expect(after.length).toBe(before + 1);
+      expect(after).toHaveLength(before + 1);
       expect(after.at(-1)!.body).toMatch(/Not enough deputies/);
     });
   });
@@ -451,7 +453,7 @@ describe("vendor portal", () => {
       const r = await run((tx) => vendorEditJob(vendorUser, tx, job.id, { startAt: inHours(130), endAt: inHours(134) }));
       expect(r.applied).toBe(true);
       expect((await jobRow(job.id)).state).toBe("requested");
-      expect((await alertsOf(fx.coord.userId, "vendor.request_edited")).length).toBe(before + 1);
+      expect(await alertsOf(fx.coord.userId, "vendor.request_edited")).toHaveLength(before + 1);
     });
   });
 

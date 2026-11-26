@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 
 /** How long a new connection may take before the attempt fails (a down database answers fast instead of hanging). */
-export const CONNECT_TIMEOUT_MS = 10_000;
+const CONNECT_TIMEOUT_MS = 10_000;
 
 export function createDb(url: string) {
   const pool = new Pool({ connectionString: url, connectionTimeoutMillis: CONNECT_TIMEOUT_MS });
@@ -12,7 +12,8 @@ export function createDb(url: string) {
   // The pool has already discarded that connection and opens a new one on the next query. Only the code and the
   // message are logged: the error object carries the client, connection settings and password included.
   pool.on("error", (err: Error & { code?: string }) => {
-    console.error(`database pool error${err.code ? ` (${err.code})` : ""}: ${err.message}`);
+    const code = err.code ? ` (${err.code})` : "";
+    console.error(`database pool error${code}: ${err.message}`);
   });
   return drizzle(pool, { schema });
 }
@@ -47,7 +48,9 @@ export type TxRunner = <T>(fn: (tx: Tx) => Promise<T>) => Promise<T>;
 // of this module, and the connections and the current mode must be shared inside one Node process.
 const KEY = Symbol.for("extra-duty.data-mode");
 type State = { dbs: Partial<Record<DataMode, { url: string; db: Db }>>; mode: AsyncLocalStorage<DataMode> };
-const state = ((globalThis as Record<symbol, unknown>)[KEY] ??= { dbs: {}, mode: new AsyncLocalStorage<DataMode>() }) as State;
+const globals = globalThis as Record<symbol, unknown>;
+globals[KEY] ??= { dbs: {}, mode: new AsyncLocalStorage<DataMode>() };
+const state = globals[KEY] as State;
 
 /** The mode the current work runs in: set by the one request wrapper (and the worker), live everywhere else. */
 export function currentMode(): DataMode {
@@ -75,7 +78,7 @@ export function databaseUrl(mode: DataMode): string {
 export function dbFor(mode: DataMode): Db {
   const url = databaseUrl(mode);
   const cur = state.dbs[mode];
-  if (cur && cur.url === url && !cur.db.$client.ended) return cur.db;
+  if (cur?.url === url && !cur.db.$client.ended) return cur.db;
   // A replaced pool (its URL changed) is closed, so it holds no idle connections.
   if (cur && !cur.db.$client.ended) cur.db.$client.end().catch(() => {});
   const next = { url, db: createDb(url) };

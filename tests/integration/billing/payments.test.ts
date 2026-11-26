@@ -20,6 +20,7 @@ import {
 import { ForbiddenError, RuleViolation, ValidationError } from "@/domain/errors";
 import { createInvoice } from "@/domain/invoices/invoices";
 import { deriveJobStatus, loadJobStatus } from "@/domain/jobs/status";
+import { byText } from "@/lib/sort";
 
 const DAY = 86_400_000;
 
@@ -131,14 +132,14 @@ describe("payment tracking", () => {
     expect(cur.status).toBe("sent");
     expect(cur.responsibleParty).toBe("vendor");
     expect(cur.responsibleSince!.getTime()).toBe(since);
-    expect((await events(inv.id)).length).toBe(before + 1);
+    expect(await events(inv.id)).toHaveLength(before + 1);
   });
 
   test("applyResponsibility writes one event only when the party changes", async () => {
     const { inv } = await mk();
     const n = (await events(inv.id)).length;
     await tx((t) => applyResponsibility(t, inv.id, new Date(NOW.getTime() + DAY)));
-    expect((await events(inv.id)).length).toBe(n);
+    expect(await events(inv.id)).toHaveLength(n);
     expect((await events(inv.id)).some((e) => e.event === "responsibility" && e.party === "vendor")).toBe(true);
   });
 
@@ -207,7 +208,7 @@ describe("payment tracking", () => {
     await expect(tx((t) => invoiceTimeline(otherVendor, t, inv.id))).rejects.toBeInstanceOf(ForbiddenError);
     const ev = await tx((t) => invoiceTimeline(vendor, t, inv.id));
     expect(ev.length).toBeGreaterThan(0);
-    for (const e of ev) expect(Object.keys(e).sort()).toEqual(["at", "event", "id", "invoiceId", "note", "party"]);
+    for (const e of ev) expect(Object.keys(e).sort(byText)).toEqual(["at", "event", "id", "invoiceId", "note", "party"]);
   });
 
   test("a vendor cannot read the timeline before the invoice was sent", async () => {
@@ -301,7 +302,7 @@ describe("billing history", () => {
     const h = await get().db.transaction((t) => billingHistory(person, t, {}));
     expect(h.totals).toMatchObject({ earnedCents: 153750, paidCents: 45000, waitingCents: 108750 });
     expect(h.rows).toHaveLength(5);
-    expect(h.rows.map((r) => r.status).sort()).toEqual(["paid", "pending_review", "returned", "sent", "written_off"]);
+    expect(h.rows.map((r) => r.status).sort(byText)).toEqual(["paid", "pending_review", "returned", "sent", "written_off"]);
     expect(h.byMonth.reduce((n, m) => n + m.earnedCents, 0)).toBe(153750);
     expect(h.byMonth[0].month).toMatch(/^\d{4}-\d{2}$/);
   });

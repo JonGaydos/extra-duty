@@ -21,6 +21,12 @@ export const metadata: Metadata = { title: "Details" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 const DAY_MS = 86_400_000;
+
+/** The empty list: none of the person's own, or none matching the filters. */
+function NoDetails({ mine }: Readonly<{ mine: boolean }>) {
+  if (mine) return <EmptyState title="You are not on any details">Details you sign up for show here.</EmptyState>;
+  return <EmptyState title="No details match">Clear a filter or check back when new details are released.</EmptyState>;
+}
 /** How far ahead the list looks. */
 const LIST_DAYS = 120;
 
@@ -28,14 +34,14 @@ const LIST_DAYS = 120;
  * The deputy's detail list with the shared per-person filter panel (the Calendar's): status, vendor, vendor type,
  * detail type, location, a person on a roster they can see, job number, search, My details only, Remember.
  */
-export default async function JobsPage({ searchParams }: Props) {
+export default async function JobsPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const staff = actor.role === "coordinator" || actor.role === "admin";
   const sp = await searchParams;
   const now = new Date();
   const prefs = await withTx((tx) => getFilterPrefs(actor, tx));
   const filters = resolveFilters(sp, prefs, { personal: true });
-  const range = { from: filters.mine ? new Date(now.getTime() - DAY_MS) : now, to: new Date(now.getTime() + LIST_DAYS * DAY_MS) };
+  const range = { from: filters.mine ? new Date(now.getTime() - DAY_MS) : now, to: new Date(now.getTime() + LIST_DAYS * DAY_MS), runningAt: now };
   const data = await withTx(async (tx) => ({
     ...(await detailCards(actor, tx, range, filters, now)),
     options: await filterOptions(actor, tx, range),
@@ -43,9 +49,10 @@ export default async function JobsPage({ searchParams }: Props) {
     note: scheduleNoteFor(await getWorkSchedule(actor, tx, actor.userId), (await getCalendarFeedStatus(actor, tx, actor.userId)).connected),
   }));
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+  const mineFilters = filters.mine ? 1 : 0;
   const summary = [
     filters.mine ? `${plural(data.cards.length + data.gone.length, "detail")}, yours only` : plural(data.cards.length, "detail"),
-    activeCount(filters, true) > (filters.mine ? 1 : 0) ? "filtered" : null,
+    activeCount(filters, true) > mineFilters ? "filtered" : null,
     data.hiddenBySchedule > 0 ? `${data.hiddenBySchedule} hidden by your schedule` : null,
     data.hiddenVendors > 0 ? `${plural(data.hiddenVendors, "vendor")} hidden` : null,
     data.truncated ? "showing the first 2,000; narrow the filters to see the rest" : null,
@@ -74,16 +81,12 @@ export default async function JobsPage({ searchParams }: Props) {
       <div className="grid gap-4.5 md:grid-cols-[272px_minmax(0,1fr)] md:items-start md:gap-6">
         <FilterPanel path="/jobs" keep={{}} filters={filters} options={data.options} remember={prefs.remember} active={activeCount(filters, true)} staff={staff} personal={{ scheduleNote: data.note }} />
         <div className="flex min-w-0 flex-col gap-2.5">
-          <p className="m-0 text-sm text-muted" role="status">
+          <output className="block m-0 text-sm text-muted">
             {summary}.
-          </p>
+          </output>
           <Card pad={false}>
             {data.cards.length === 0 && data.gone.length === 0 ? (
-              filters.mine ? (
-                <EmptyState title="You are not on any details">Details you sign up for show here.</EmptyState>
-              ) : (
-                <EmptyState title="No details match">Clear a filter or check back when new details are released.</EmptyState>
-              )
+              <NoDetails mine={filters.mine} />
             ) : (
               <RowList label="Details">
                 {data.cards.map((c) => (

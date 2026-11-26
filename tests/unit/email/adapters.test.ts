@@ -5,6 +5,8 @@ import { emailConfigProblem, REPLY_TO_PROBLEM, senderFromSettings, settingsProbl
 import type { OutgoingEmail } from "@/lib/email/types";
 import { encryptSecret } from "@/lib/crypto/secrets";
 
+// Fake transports and fetches are async to match the real ones; they answer at once.
+
 const PDF = Buffer.from("%PDF-1.4 invoice");
 const W9 = Buffer.from("%PDF-1.4 w9");
 const msg: OutgoingEmail = {
@@ -22,9 +24,9 @@ const FROM = "Sheriff <no-reply@sheriff.example>";
 
 function mockFetch() {
   const calls: { url: string; init: RequestInit }[] = [];
-  const impl: FetchLike = async (url, init) => {
+  const impl: FetchLike = (url, init) => {
     calls.push({ url, init: init ?? {} });
-    return new Response("{}", { status: 200 });
+    return Promise.resolve(new Response("{}", { status: 200 }));
   };
   return { calls, impl };
 }
@@ -94,7 +96,7 @@ describe("email adapters", () => {
   });
 
   test("ses sends one raw message carrying reply-to and both attachments", async () => {
-    const send = vi.fn(async () => ({ MessageId: "1" }));
+    const send = vi.fn(() => Promise.resolve({ MessageId: "1" }));
     await sesSender(FROM, "AKIA:secret", "us-east-2", { send }).send(msg);
     expect(send).toHaveBeenCalledTimes(1);
     const input = (send.mock.calls[0] as unknown as [{ input: { Content: { Raw: { Data: Uint8Array } } } }])[0].input;
@@ -107,12 +109,12 @@ describe("email adapters", () => {
   });
 
   test("an smtp transport that throws surfaces its error from send", async () => {
-    const down = { sendMail: async () => { throw new Error("connect ECONNREFUSED"); } };
+    const down = { sendMail: () => Promise.reject(new Error("connect ECONNREFUSED")) };
     await expect(smtpSender(FROM, { host: "x", port: 587, secure: false, user: "", password: "" }, down).send(msg)).rejects.toThrow("connect ECONNREFUSED");
   });
 
   test("an HTTP error becomes an error naming the provider", async () => {
-    const impl: FetchLike = async () => new Response("bad key", { status: 401 });
+    const impl: FetchLike = () => Promise.resolve(new Response("bad key", { status: 401 }));
     await expect(postmarkSender(FROM, "k", impl).send(msg)).rejects.toThrow("Postmark rejected the message (HTTP 401): bad key");
   });
 

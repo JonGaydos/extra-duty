@@ -12,7 +12,7 @@ import { dollars } from "@/ui/components/PayLabel";
 import { StatTile } from "@/ui/components/StatTile";
 import { Table } from "@/ui/components/Table";
 import { PageTitle, TabLinks } from "../../_personnel/TabLinks";
-import { clock, dateLabel, plural } from "../../_personnel/format";
+import { clock, dateLabel, plural, prefixed } from "../../_personnel/format";
 import { coordinatorActor } from "../_coordinator/session";
 import { turnChip } from "../../invoices/[id]/StaffInvoice";
 import { SendNowButton } from "../TodoActions";
@@ -20,6 +20,12 @@ import { InvoicePdfLink } from "../../invoices/[id]/InvoicePdfLink";
 import { eventLabel } from "../../invoices/[id]/invoice-events";
 
 export const metadata: Metadata = { title: "Payments" };
+
+/** "In review, " or "Late cancellation, " before the days waited. */
+function waitingPrefix(r: { status: string; kind: string }): string {
+  if (r.status === "pending_review") return "In review, ";
+  return r.kind === "late_cancel" ? "Late cancellation, " : "";
+}
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -41,7 +47,7 @@ const GROUPS: Array<{ party: Party; title: string }> = [
  * Every unpaid invoice, grouped by whose turn it is (coordinator, deputy, vendor), with days waiting against the
  * response time. Choosing one shows its timeline beside the list.
  */
-export default async function PaymentsPage({ searchParams }: Props) {
+export default async function PaymentsPage({ searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const sp = await searchParams;
   const filter: Filter = typeof sp.filter === "string" && sp.filter in FILTERS ? (sp.filter as Filter) : "all";
@@ -61,7 +67,7 @@ export default async function PaymentsPage({ searchParams }: Props) {
     return { board, open, unsent };
   });
   const rows = board.rows.filter(FILTERS[filter].test);
-  const href = (f: Filter, o?: string | null) => `/coordinate/payments?filter=${f}${o ? `&open=${o}` : ""}`;
+  const href = (f: Filter, o?: string | null) => `/coordinate/payments?filter=${f}${prefixed("&open=", o)}`;
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -117,16 +123,16 @@ export default async function PaymentsPage({ searchParams }: Props) {
                   columns={[
                     {
                       header: "Invoice",
-                      cell: (r) => (
+                      render: (r) => (
                         <Link href={href(filter, r.invoiceId)} aria-current={r.invoiceId === openId ? "true" : undefined} className="font-semibold whitespace-nowrap">
                           {r.number}
                         </Link>
                       ),
                     },
-                    { header: "Deputy", cell: (r) => r.payeeName },
+                    { header: "Deputy", render: (r) => r.payeeName },
                     {
                       header: "Vendor",
-                      cell: (r) => (
+                      render: (r) => (
                         <span className="flex flex-col gap-1">
                           {r.vendorName}
                           {r.vendorOnHold ? <Chip tone="danger">On hold</Chip> : null}
@@ -134,19 +140,19 @@ export default async function PaymentsPage({ searchParams }: Props) {
                         </span>
                       ),
                     },
-                    { header: "Amount", cell: (r) => dollars(r.totalCents), align: "end" },
+                    { header: "Amount", render: (r) => dollars(r.totalCents), align: "end" },
                     {
                       header: "Waiting",
                       align: "end",
-                      cell: (r) => (
+                      render: (r) => (
                         <span className={r.overdue ? "font-semibold whitespace-nowrap text-danger-ink" : "whitespace-nowrap"}>
-                          {r.status === "pending_review" ? "In review, " : r.kind === "late_cancel" ? "Late cancellation, " : ""}
+                          {waitingPrefix(r)}
                           {r.day} of {r.limitDays} days
                           {r.overdue ? ", overdue" : ""}
                         </span>
                       ),
                     },
-                    { header: "PDF", cell: (r) => <InvoicePdfLink id={r.invoiceId} number={r.number} compact /> },
+                    { header: "PDF", render: (r) => <InvoicePdfLink id={r.invoiceId} number={r.number} compact /> },
                   ]}
                 />
               );
@@ -160,18 +166,18 @@ export default async function PaymentsPage({ searchParams }: Props) {
               columns={[
                 {
                   header: "Invoice",
-                  cell: (r) => (
+                  render: (r) => (
                     <Link href={href(filter, r.id)} aria-current={r.id === openId ? "true" : undefined} className="font-semibold whitespace-nowrap">
                       {r.number}
                     </Link>
                   ),
                 },
-                { header: "Deputy", cell: (r) => r.payeeName },
-                { header: "Vendor", cell: (r) => r.vendorName },
-                { header: "Amount", cell: (r) => dollars(r.totalCents), align: "end" },
-                { header: "Deputy paid", cell: (r) => (r.deputyPaid ? "Yes" : "No") },
-                { header: "PDF", cell: (r) => <InvoicePdfLink id={r.id} number={r.number} compact /> },
-                { header: "Action", cell: (r) => <SendNowButton invoiceId={r.id} number={r.number} /> },
+                { header: "Deputy", render: (r) => r.payeeName },
+                { header: "Vendor", render: (r) => r.vendorName },
+                { header: "Amount", render: (r) => dollars(r.totalCents), align: "end" },
+                { header: "Deputy paid", render: (r) => (r.deputyPaid ? "Yes" : "No") },
+                { header: "PDF", render: (r) => <InvoicePdfLink id={r.id} number={r.number} compact /> },
+                { header: "Action", render: (r) => <SendNowButton invoiceId={r.id} number={r.number} /> },
               ]}
             />
           ) : null}

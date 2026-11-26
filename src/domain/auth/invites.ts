@@ -10,8 +10,9 @@ import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { getSettings } from "../settings/settings";
+import { trimTrailingSlashes } from "@/lib/text";
 
-export const INVITE_VALID_DAYS = 7;
+const INVITE_VALID_DAYS = 7;
 const MAX_PASSWORD_LENGTH = 128;
 const INVALID_INVITE = "This invite link is not valid. It may have expired or already been used. Ask a coordinator for a new invite.";
 
@@ -22,7 +23,7 @@ function hashToken(token: string): string {
 export function appUrl(): string {
   const url = process.env.BETTER_AUTH_URL;
   if (!url) throw new Error("BETTER_AUTH_URL is not set");
-  return url.replace(/\/+$/, "");
+  return trimTrailingSlashes(url);
 }
 
 /** Queues the email (sent after commit) with a one-time link, valid 7 days, for the user to set a password. Coordinators and admins only; only admins invite admins. */

@@ -93,6 +93,7 @@ Compose's own secrets go in `.env` (copy `.env.example`). Never put real secrets
 | `STORAGE_LOCAL_DIR`, `TRAINING_STORAGE_LOCAL_DIR` | For `local` | Folders for live and training files (default `./var/storage`, `./var/training-storage`). |
 | `STAGING_EMAIL_ALLOWLIST` | On staging | Comma-separated addresses that receive sign-in codes, invitations and password reset links on staging. Everything else stays in the outbox. Ignored in production; training mode never sends anything. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web push. Without them push is skipped. |
+| `DEMO_PASSWORD` | No | Local development only: the password of the local preview's demo accounts and the screenshot capture's practice deputy. Unset: random for each run, printed once. Never set it on a live site. |
 | `NODE_OPTIONS` | No | The image sets `--max-old-space-size=768` (heap per process). Raise it with the container's memory. |
 
 Docker Compose's `.env` holds `SITE_DOMAIN`, `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `MINIO_ROOT_USER`,

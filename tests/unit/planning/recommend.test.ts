@@ -61,7 +61,7 @@ describe("recommendDetails", () => {
     const season = { id: "s", name: "All", startMonthDay: "01-01", endMonthDay: "12-31", rollingCapMinutes: 960, weekCapMinutes: null, monthCapMinutes: null, createdAt: new Date(), updatedAt: new Date() };
     const held = [{ startAt: at(11, 3, 6), endAt: at(11, 3, 16) }];
     const capCheck = (picked: Array<{ startAt: Date; endAt: Date }>) => {
-      const candidate = picked[picked.length - 1];
+      const candidate = picked.at(-1)!;
       return evaluateCaps({ existing: [...held, ...picked.slice(0, -1)], candidate, seasons: [season], weekStartsOn: 0, rollingWindowHours: 24 }).every((c) => c.ok);
     };
     const out = recommendDetails({

@@ -47,6 +47,142 @@ const ALERT_TYPES = [
 
 const DAY_MS = 86_400_000;
 
+type Schedule = Awaited<ReturnType<typeof getWorkSchedule>>;
+type ScheduleException = Awaited<ReturnType<typeof listScheduleExceptions>>[number];
+
+/** A preview day: on duty, a day off, or neither. */
+function dayClass(on: boolean, off: boolean): string {
+  if (on) return "bg-accent font-semibold text-on-accent";
+  return off ? "border-2 border-dashed border-warning-strong" : "bg-sunken text-muted";
+}
+
+/** "Day off on Tue, Dec 1" or "Extra shift 6 PM to 2 AM on Tue, Dec 1". */
+function exceptionLabel(e: ScheduleException): string {
+  const what = e.kind === "off" ? "Day off" : `Extra shift ${hhmmText(e.shiftStart ?? "")} to ${hhmmText(e.shiftEnd ?? "")}`;
+  return `${what} on ${dayLabel(agencyDateOnly(e.date)!)}`;
+}
+
+/** The next four weeks of duty and leave, the upcoming days off and extra shifts, and the form to add one. */
+function FourWeeks({
+  days,
+  dutyDays,
+  leave,
+  exceptions,
+  today,
+  weekStartsOn,
+  weeksFrom,
+  schedule,
+}: Readonly<{
+  days: Array<{ key: string; day: number }>;
+  dutyDays: Set<string>;
+  leave: Set<string>;
+  exceptions: ScheduleException[];
+  today: string;
+  weekStartsOn: number;
+  weeksFrom: Date;
+  schedule: Schedule | undefined;
+}>) {
+  const leaveText = leave.size ? `, leave on ${[...leave].filter((k) => days.some((d) => d.key === k)).length} days` : "";
+  return (
+    <Card>
+      <div className="flex items-baseline justify-between gap-2">
+        <CardTitle>Next 4 weeks</CardTitle>
+        <span className="text-sm text-muted">
+          {monthDay(weeksFrom)} to {monthDay(new Date(weeksFrom.getTime() + 27 * DAY_MS))}
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={`Four week preview: ${days.filter((d) => dutyDays.has(d.key)).length} days on duty${leaveText}`}
+        className="grid grid-cols-7 gap-1 text-center text-sm"
+      >
+        {Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7).map((day) => (
+          <span key={day} aria-hidden className="text-xs font-semibold text-muted">
+            {"SMTWTFS"[day]}
+          </span>
+        ))}
+        {days.map((d) => {
+          const on = dutyDays.has(d.key);
+          const off = leave.has(d.key);
+          return (
+            <span
+              key={d.key}
+              aria-hidden
+              className={`flex h-9 items-center justify-center rounded-xs ${dayClass(on, off)} ${d.key === today ? "outline-2 outline-offset-1 outline-ink" : ""}`}
+              data-numeric
+            >
+              {d.day}
+            </span>
+          );
+        })}
+      </div>
+      <p className="m-0 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded-xs bg-accent" /> On duty{schedule?.active ? ` ${hhmmText(schedule.shiftStart)} to ${hhmmText(schedule.shiftEnd)}` : ""}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded-xs border-2 border-dashed border-warning-strong" /> Day off
+        </span>
+      </p>
+      {exceptions.filter((e) => e.date >= today).length > 0 ? (
+        <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
+          {exceptions
+            .filter((e) => e.date >= today)
+            .map((e) => {
+              const label = exceptionLabel(e);
+              return (
+                <li key={e.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                  <span>{label}</span>
+                  <RemoveException id={e.id} label={label} />
+                </li>
+              );
+            })}
+        </ul>
+      ) : null}
+      <ExceptionForm today={today} />
+    </Card>
+  );
+}
+
+/** The linked Outlook calendar: when it last synced and why the last sync failed. */
+function OutlookCard({ calendar }: Readonly<{ calendar: Awaited<ReturnType<typeof getCalendarFeedStatus>> }>) {
+  return (
+    <Card>
+      <CardTitle>Outlook calendar</CardTitle>
+      <p className="m-0 text-sm text-muted">Busy events and their titles are kept so you can see conflicts. Events marked Free are ignored.</p>
+      {calendar.connected ? (
+        <p className="m-0 text-sm">
+          Linked.{" "}
+          {calendar.lastFetchedAt ? `Last synced ${dateTime(calendar.lastFetchedAt)}.` : "Not synced yet."}
+        </p>
+      ) : null}
+      {calendar.lastError ? <Notice tone="danger">Last sync failed: {calendar.lastError}</Notice> : null}
+      <CalendarLinkForm connected={calendar.connected} />
+    </Card>
+  );
+}
+
+/** The W-9 on file, with download and upload. */
+function W9Card({ w9 }: Readonly<{ w9: Awaited<ReturnType<typeof currentW9>> }>) {
+  return (
+    <Card>
+      <CardTitle>W-9</CardTitle>
+      {w9 ? (
+        <p className="m-0 flex flex-wrap items-center gap-x-3 text-sm">
+          Uploaded {dateLabel(w9.uploadedAt)}.
+          <a href="/api/v1/me/w9" className="inline-flex min-h-11 items-center gap-1 font-semibold" download>
+            <Icon name="download" size={16} />
+            Download
+          </a>
+        </p>
+      ) : (
+        <p className="m-0 text-sm text-muted">No W-9 on file. Vendors often need one with your first invoice.</p>
+      )}
+      <W9Upload hasW9={w9 !== null} />
+    </Card>
+  );
+}
+
 /** Profile: contact, W-9, schedule and its preview, calendar link, goal, hidden vendors, alerts, theme. */
 export default async function ProfilePage() {
   const shell = await loadShell();
@@ -115,76 +251,9 @@ export default async function ProfilePage() {
                 />
               </Card>
 
-              <Card>
-                <div className="flex items-baseline justify-between gap-2">
-                  <CardTitle>Next 4 weeks</CardTitle>
-                  <span className="text-sm text-muted">
-                    {monthDay(weeksFrom)} to {monthDay(new Date(weeksFrom.getTime() + 27 * DAY_MS))}
-                  </span>
-                </div>
-                <div
-                  role="img"
-                  aria-label={`Four week preview: ${days.filter((d) => data.dutyDays.has(d.key)).length} days on duty${leave.size ? `, leave on ${[...leave].filter((k) => days.some((d) => d.key === k)).length} days` : ""}`}
-                  className="grid grid-cols-7 gap-1 text-center text-sm"
-                >
-                  {Array.from({ length: 7 }, (_, i) => ["S", "M", "T", "W", "T", "F", "S"][(weekStartsOn + i) % 7]).map((w, i) => (
-                    <span key={i} aria-hidden className="text-xs font-semibold text-muted">
-                      {w}
-                    </span>
-                  ))}
-                  {days.map((d) => {
-                    const on = data.dutyDays.has(d.key);
-                    const off = leave.has(d.key);
-                    return (
-                      <span
-                        key={d.key}
-                        aria-hidden
-                        className={`flex h-9 items-center justify-center rounded-xs ${on ? "bg-accent font-semibold text-on-accent" : off ? "border-2 border-dashed border-warning-strong" : "bg-sunken text-muted"} ${d.key === today ? "outline-2 outline-offset-1 outline-ink" : ""}`}
-                        data-numeric
-                      >
-                        {d.day}
-                      </span>
-                    );
-                  })}
-                </div>
-                <p className="m-0 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-3 rounded-xs bg-accent" /> On duty{sch?.active ? ` ${hhmmText(sch.shiftStart)} to ${hhmmText(sch.shiftEnd)}` : ""}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="size-3 rounded-xs border-2 border-dashed border-warning-strong" /> Day off
-                  </span>
-                </p>
-                {data.exceptions.filter((e) => e.date >= today).length > 0 ? (
-                  <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
-                    {data.exceptions
-                      .filter((e) => e.date >= today)
-                      .map((e) => {
-                        const label = `${e.kind === "off" ? "Day off" : `Extra shift ${hhmmText(e.shiftStart ?? "")} to ${hhmmText(e.shiftEnd ?? "")}`} on ${dayLabel(agencyDateOnly(e.date)!)}`;
-                        return (
-                          <li key={e.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                            <span>{label}</span>
-                            <RemoveException id={e.id} label={label} />
-                          </li>
-                        );
-                      })}
-                  </ul>
-                ) : null}
-                <ExceptionForm today={today} />
-              </Card>
+              <FourWeeks days={days} dutyDays={data.dutyDays} leave={leave} exceptions={data.exceptions} today={today} weekStartsOn={weekStartsOn} weeksFrom={weeksFrom} schedule={sch} />
 
-              <Card>
-                <CardTitle>Outlook calendar</CardTitle>
-                <p className="m-0 text-sm text-muted">Busy events and their titles are kept so you can see conflicts. Events marked Free are ignored.</p>
-                {data.calendar.connected ? (
-                  <p className="m-0 text-sm">
-                    Linked.{" "}
-                    {data.calendar.lastFetchedAt ? `Last synced ${dateTime(data.calendar.lastFetchedAt)}.` : "Not synced yet."}
-                  </p>
-                ) : null}
-                {data.calendar.lastError ? <Notice tone="danger">Last sync failed: {data.calendar.lastError}</Notice> : null}
-                <CalendarLinkForm connected={data.calendar.connected} />
-              </Card>
+              <OutlookCard calendar={data.calendar} />
             </>
           ) : null}
         </div>
@@ -204,21 +273,7 @@ export default async function ProfilePage() {
                 <ContactForm phone={data.contact.phone ?? ""} mailingAddress={data.contact.mailingAddress ?? ""} />
               </Card>
 
-              <Card>
-                <CardTitle>W-9</CardTitle>
-                {data.w9 ? (
-                  <p className="m-0 flex flex-wrap items-center gap-x-3 text-sm">
-                    Uploaded {dateLabel(data.w9.uploadedAt)}.
-                    <a href="/api/v1/me/w9" className="inline-flex min-h-11 items-center gap-1 font-semibold" download>
-                      <Icon name="download" size={16} />
-                      Download
-                    </a>
-                  </p>
-                ) : (
-                  <p className="m-0 text-sm text-muted">No W-9 on file. Vendors often need one with your first invoice.</p>
-                )}
-                <W9Upload hasW9={data.w9 !== null} />
-              </Card>
+              <W9Card w9={data.w9} />
 
               <Card id="goal">
                 <CardTitle>Goal and hidden vendors</CardTitle>

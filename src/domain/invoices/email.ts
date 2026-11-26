@@ -28,8 +28,9 @@ export function invoiceSettingsProblem(email: Parameters<typeof emailConfigProbl
  * Tells coordinators and admins what to set, once per person until they read it. It commits in its own
  * transaction: the caller's transaction rolls back with the error that follows, and the alert must outlive it.
  */
-export async function alertSettingsIncomplete(message: string): Promise<void> {
+async function alertSettingsIncomplete(message: string): Promise<void> {
   await withTx(async (tx) => {
+    // Sequential: the reads and alert writes share this transaction.
     for (const id of await coordinatorAudience(tx)) {
       const [open] = await tx
         .select({ id: notifications.id })
@@ -199,6 +200,7 @@ export async function deliverInvoiceEmail(invoiceId: string, o: { finalAttempt: 
     if (o.finalAttempt) await markFailed(invoiceId, reason, SUMMARY_DELIVERY);
     throw err;
   }
+  // Sequential: each attempt runs only after the previous one failed.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await markSent(invoiceId);

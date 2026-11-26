@@ -14,7 +14,7 @@ export type ContactRow = { id: string; name: string; phone: string; email: strin
 
 const blank: ContactWire = { name: "", phone: "", email: "", notes: "" };
 
-function Fields({ v, set, idPrefix }: { v: ContactWire; set: (v: ContactWire) => void; idPrefix: string }) {
+function Fields({ v, set, idPrefix }: Readonly<{ v: ContactWire; set: (v: ContactWire) => void; idPrefix: string }>) {
   return (
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Name">
@@ -33,7 +33,7 @@ function Fields({ v, set, idPrefix }: { v: ContactWire; set: (v: ContactWire) =>
   );
 }
 
-function AddContact({ vendorId }: { vendorId: string }) {
+function AddContact({ vendorId }: Readonly<{ vendorId: string }>) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState(blank);
   const { run, busy, result } = useAction();
@@ -73,7 +73,7 @@ function AddContact({ vendorId }: { vendorId: string }) {
   );
 }
 
-function ContactItem({ c, staff }: { c: ContactRow; staff: boolean }) {
+function ContactItem({ c, staff }: Readonly<{ c: ContactRow; staff: boolean }>) {
   const initial: ContactWire = { name: c.name, phone: c.phone, email: c.email ?? "", notes: c.notes ?? "" };
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(initial);
@@ -141,7 +141,7 @@ function ContactItem({ c, staff }: { c: ContactRow; staff: boolean }) {
  * A vendor's site contacts: the people deputies ask for on site. Add, edit and deactivate; nothing is deleted, and
  * details keep their own copy of the name and number.
  */
-export function ContactsManager({ vendorId, contacts, staff }: { vendorId: string; contacts: ContactRow[]; staff: boolean }) {
+export function ContactsManager({ vendorId, contacts, staff }: Readonly<{ vendorId: string; contacts: ContactRow[]; staff: boolean }>) {
   return (
     <div className="flex flex-col gap-3">
       {contacts.length === 0 ? (

@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: "Bill this detail" };
 type Props = { params: Promise<{ id: string }> };
 
 /** The billing form for one worked (or late-canceled) detail of the person's own, or, for staff, of someone they bill for. */
-export default async function BillPage({ params }: Props) {
+export default async function BillPage({ params }: Readonly<Props>) {
   const actor = await personnelActor();
   const { id } = await params;
   const now = new Date();

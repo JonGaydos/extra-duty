@@ -9,7 +9,7 @@ import { vendorMarkPaidAction } from "../_vendor/actions";
 type Method = { id: string; name: string };
 
 /** "Mark paid" on the vendor's side: date, method and reference in a short inline form (spec 12.8). */
-export function MarkPaid({ invoiceId, number, methods, today, canMark }: { invoiceId: string; number: string; methods: Method[]; today: string; canMark: boolean }) {
+export function MarkPaid({ invoiceId, number, methods, today, canMark }: Readonly<{ invoiceId: string; number: string; methods: Method[]; today: string; canMark: boolean }>) {
   const [open, setOpen] = useState(false);
   const [paidDate, setPaidDate] = useState(today);
   const [methodId, setMethodId] = useState(methods[0]?.id ?? "");
@@ -18,7 +18,7 @@ export function MarkPaid({ invoiceId, number, methods, today, canMark }: { invoi
   const { run, busy, result } = useAction();
   return (
     <div className="flex flex-col gap-3">
-      {!canMark ? null : open ? (
+      {canMark && open ? (
         <form
           className="flex flex-col gap-3"
           onSubmit={(e) => {
@@ -55,11 +55,12 @@ export function MarkPaid({ invoiceId, number, methods, today, canMark }: { invoi
             </Button>
           </div>
         </form>
-      ) : (
+      ) : null}
+      {canMark && !open ? (
         <Button className="w-full sm:w-fit" onClick={() => setOpen(true)} aria-label={`Mark paid, invoice ${number}`}>
           Mark paid
         </Button>
-      )}
+      ) : null}
       <ActionStatus result={result} />
     </div>
   );

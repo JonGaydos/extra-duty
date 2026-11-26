@@ -294,7 +294,7 @@ const LISTS = {
   "vendor-types": { create: createVendorType, update: updateVendorType, setActive: setVendorTypeActive },
   "payment-methods": { create: createPaymentMethod, update: updatePaymentMethod, setActive: setPaymentMethodActive },
 } as const;
-export type ListSlug = keyof typeof LISTS;
+type ListSlug = keyof typeof LISTS;
 
 function list(slug: string) {
   const l = LISTS[slug as ListSlug];

@@ -1,3 +1,5 @@
+import { byText } from "@/lib/sort";
+
 /**
  * Address comparison for the address field: whether the geocoder's match reads the same as what the person typed
  * (so it is verified as is) or differs (so it is offered as "Did you mean"). Shared by the server and the browser.
@@ -37,8 +39,8 @@ export function sameAddress(a: string, b: string): boolean {
   const x = tokens(a);
   const y = tokens(b);
   if (x.length === 0 || x.length !== y.length) return false;
-  const left = [...x].sort();
-  const right = [...y].sort();
+  const left = [...x].sort(byText);
+  const right = [...y].sort(byText);
   return left.every((w, i) => w === right[i]);
 }
 
@@ -48,8 +50,10 @@ export function addressDecision(typed: string, match: { label: string } | null):
   return sameAddress(typed, match.label) ? "verified" : "suggest";
 }
 
+/** The words that start a unit, with their usual abbreviations. */
+const UNIT_WORDS = ["suite", "ste", "apartment", "apt", "unit", "room", "rm", "building", "bldg", "floor"];
 /** A suite, apartment, unit, room, building or floor number, or "#12". The map never returns these. */
-const UNIT = /\b(?:suite|ste|apartment|apt|unit|room|rm|building|bldg|floor)\.?\s*#?\s*[\p{L}\p{N}-]+|#\s*[\p{L}\p{N}-]+/giu;
+const UNIT = new RegExp(String.raw`\b(?:${UNIT_WORDS.join("|")})\.?\s*(?:#\s*)?[\p{L}\p{N}-]+|#\s*[\p{L}\p{N}-]+`, "giu");
 
 /**
  * The map match with any unit the person typed put back after the street ("Use suggested" must not drop a suite
@@ -57,7 +61,7 @@ const UNIT = /\b(?:suite|ste|apartment|apt|unit|room|rm|building|bldg|floor)\.?\
  */
 export function withUnit(typed: string, label: string): string {
   const have = tokens(label);
-  const missing = (typed.match(UNIT) ?? []).map((u) => u.trim().replace(/\s+/g, " ")).filter((u) => !tokens(u).every((w) => have.includes(w)));
+  const missing = [...typed.matchAll(UNIT)].map(([u]) => u.trim().replace(/\s+/g, " ")).filter((u) => !tokens(u).every((w) => have.includes(w)));
   if (missing.length === 0) return label;
   const i = label.indexOf(",");
   return i === -1 ? `${label}, ${missing.join(", ")}` : `${label.slice(0, i)}, ${missing.join(", ")}${label.slice(i)}`;

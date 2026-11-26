@@ -6,6 +6,7 @@ import { auditLog, notifications, users } from "@/db/schema";
 import { setupEmail } from "@/db/setup-email";
 import { getSettings } from "@/domain/settings/settings";
 import { decryptSecret } from "@/lib/crypto/secrets";
+import { byText } from "@/lib/sort";
 
 describe("first-run email setup (ROLE=setup-email)", () => {
   const get = useTestDb();
@@ -52,7 +53,7 @@ describe("first-run email setup (ROLE=setup-email)", () => {
     const [audit] = await db.select().from(auditLog).where(eq(auditLog.action, "settings.email_replaced"));
     expect(audit).toMatchObject({ actorUserId: adminId, before: { host: "smtp.county.example" }, after: { host: "smtp2.county.example" } });
     const alerts = await db.select().from(notifications).where(eq(notifications.type, "settings.email_replaced"));
-    expect(alerts.map((a) => a.userId).sort()).toEqual([adminId, second.id].sort());
+    expect(alerts.map((a) => a.userId).sort(byText)).toEqual([adminId, second.id].sort(byText));
     const queued = await db.execute<{ n: number }>(sql`select count(*)::int as n from pgboss.job where name = 'notify.email'`);
     expect(queued.rows[0].n).toBe(2);
   });

@@ -19,6 +19,7 @@ Copy `app.env.example` to `.env.local` and fill in values. `npm run dev` starts 
     npm run test:e2e           # Playwright; builds the app into .next-e2e and seeds its own database
     npx tsc --noEmit           # type check
     npm run lint               # ESLint
+    npm run lint:sonar         # SonarCloud rules, about 2 minutes
 
 Run the unit and integration tests, the type check and the linter before opening a pull request. Add or update
 tests for every change in behavior. Run the end-to-end specs that cover the screens you changed, for example

@@ -19,7 +19,7 @@ function secretHint(set: boolean, name: string) {
   return set ? `${name} is set. Leave blank to keep it.` : `${name} is not set.`;
 }
 
-export function EmailSettingsForm({ initial, secrets }: { initial: Omit<Fields, "password" | "apiKey" | "clearPassword" | "clearApiKey">; secrets: SecretState }) {
+export function EmailSettingsForm({ initial, secrets }: Readonly<{ initial: Omit<Fields, "password" | "apiKey" | "clearPassword" | "clearApiKey">; secrets: SecretState }>) {
   const [v, setV] = useState<Fields>({ ...initial, password: "", apiKey: "", clearPassword: false, clearApiKey: false });
   const { run, busy, error } = useCoordAction();
   const errors = error && !error.ok ? (error.fields ?? {}) : {};
@@ -96,7 +96,7 @@ export function EmailSettingsForm({ initial, secrets }: { initial: Omit<Fields, 
   );
 }
 
-export function TestEmail({ to }: { to: string }) {
+export function TestEmail({ to }: Readonly<{ to: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Card>

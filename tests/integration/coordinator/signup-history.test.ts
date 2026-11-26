@@ -69,9 +69,12 @@ describe("sign-up history on a detail's deputy list", () => {
 
   test("a late_canceled row reads Vendor canceled late", async () => {
     const { job, positionId } = await f.mkJob();
-    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: blake.userId, status: "late_canceled" });
+    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: blake.userId, status: "late_canceled", removalReason: "Rained out" });
     const admin = await f.run((tx) => jobAdmin(f.coord, tx, job.id));
     expect(admin.roster.map((r) => [r.label, r.active])).toEqual([["Vendor canceled late", false]]);
+    // No audit row: who is unknown, and when and why come from the row itself.
+    expect(admin.roster[0].ended).toMatchObject({ by: null, reason: "Rained out" });
+    expect(admin.roster[0].ended?.at).toBeInstanceOf(Date);
   });
 
   test("personnel see only the current roster, with no reasons", async () => {

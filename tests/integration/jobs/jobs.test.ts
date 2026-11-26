@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { makeUser } from "../users/helpers";
@@ -11,6 +11,7 @@ import {
   jobs,
   jobSafetyAddresses,
   jobTypes,
+  notifications,
   positionTypes,
   ranks,
   vendorDocuments,
@@ -25,6 +26,9 @@ import { releaseAt } from "@/domain/release/release";
 import { updateSettings } from "@/domain/settings/settings";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { resetGeocoder } from "@/domain/vendors/geocode";
+import { byNumber, byText } from "@/lib/sort";
+
+// Fake fetches are async to match fetch; they answer at once.
 
 const nominatim = (lat: string, lon: string) => new Response(JSON.stringify([{ lat, lon }]), { status: 200 });
 
@@ -96,7 +100,7 @@ describe("jobs", () => {
 
   beforeEach(() => {
     resetGeocoder({ intervalMs: 0 });
-    fetchMock = vi.fn(async () => nominatim("30.5", "-86.1"));
+    fetchMock = vi.fn(() => Promise.resolve(nominatim("30.5", "-86.1")));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -203,8 +207,8 @@ describe("jobs", () => {
       const detail = await run((tx) => getJob(coord, tx, job.id));
       expect(detail.safety!.addresses).toHaveLength(2);
       for (const a of detail.safety!.addresses) {
-        expect(a.lat).toBe(30.5);
-        expect(a.lng).toBe(-86.1);
+        expect(a.lat).toBeCloseTo(30.5, 10);
+        expect(a.lng).toBeCloseTo(-86.1, 10);
         expect(a.addedBy).toBe(coord.userId);
         expect(a.addedByName).toBe("jcoord");
         expect(a.addedByRole).toBe("coordinator");
@@ -218,7 +222,7 @@ describe("jobs", () => {
     });
 
     test("a failed lookup keeps the address without a pin", async () => {
-      fetchMock.mockImplementation(async () => new Response("down", { status: 500 }));
+      fetchMock.mockImplementation(() => Promise.resolve(new Response("down", { status: 500 })));
       const job = await make({ safety: { notes: "", addresses: [{ address: "Unknown Rd", description: "x" }] } });
       const [a] = await get().db.select().from(jobSafetyAddresses).where(eq(jobSafetyAddresses.jobId, job.id));
       expect(a.address).toBe("Unknown Rd");
@@ -304,6 +308,25 @@ describe("jobs", () => {
       expect(rows[0].after).toEqual({ rateCents: 8000 });
     });
 
+    test("an edit alerts the people on the job once with every change and carries fixed times to their plans", async () => {
+      const { db } = get();
+      const person = (await makeUser(db, "personnel", "jchange@example.test")).actor;
+      const job = await make();
+      await addSignup(job.id, person.userId);
+      await expect(run((tx) => updateJob(coord, tx, job.id, { vendorId: otherVendorId }, "one"))).rejects.toThrow(new ValidationError("A job cannot move to another vendor."));
+      await expect(run((tx) => updateJob(coord, tx, job.id, { title: "  " }, "one"))).rejects.toThrow(new ValidationError("A title is required."));
+      const newStart = agencyInstant(2035, 6, 10, 18, 0);
+      const newEnd = agencyInstant(2035, 6, 11, 0, 0);
+      const [after] = await run((tx) => updateJob(coord, tx, job.id, { startAt: newStart, endAt: newEnd, rateCents: 9000, description: "New text" }, "one"));
+      expect(after.description).toBe("New text");
+      const [a] = await db.select().from(assignments).where(eq(assignments.jobId, job.id));
+      expect([a.plannedStartAt, a.plannedEndAt]).toEqual([newStart, newEnd]);
+      const alerts = await db.select().from(notifications).where(and(eq(notifications.userId, person.userId), eq(notifications.type, "job.changed")));
+      expect(alerts.map((n) => [n.title, n.body])).toEqual([
+        ["Detail changed: Stadium security", "The hourly rate changed from $70.00 to $90.00. The time changed to Jun 10, 2035, 6:00 PM to Jun 11, 2035, 12:00 AM."],
+      ]);
+    });
+
     test("moving the start recomputes releaseAt", async () => {
       const job = await make();
       const [after] = await run((tx) => updateJob(coord, tx, job.id, { startAt: agencyInstant(2035, 8, 10, 17, 0), endAt: agencyInstant(2035, 8, 10, 23, 0) }, "one"));
@@ -329,7 +352,7 @@ describe("jobs", () => {
       const [s] = await db.insert(jobSeries).values({ name: "Games" }).returning();
       for (const j of [a, b, c]) await db.update(jobs).set({ seriesId: s.id }).where(eq(jobs.id, j.id));
       const out = await run((tx) => updateJob(coord, tx, b.id, { title: "Season games" }, "series"));
-      expect(out.map((j) => j.id).sort()).toEqual([b.id, c.id].sort());
+      expect(out.map((j) => j.id).sort(byText)).toEqual([b.id, c.id].sort(byText));
       expect((await db.select().from(jobs).where(eq(jobs.id, a.id)))[0].title).toBe("Stadium security");
       await expect(run((tx) => updateJob(coord, tx, b.id, { startAt: start }, "series"))).rejects.toBeInstanceOf(ValidationError);
     });
@@ -369,7 +392,7 @@ describe("jobs", () => {
       const b = (rows[0].before as { positions: { count: number }[] }).positions;
       const a = (rows[0].after as { positions: { count: number }[] }).positions;
       expect(b.map((p) => p.count)).toEqual([2]);
-      expect(a.map((p) => p.count).sort()).toEqual([1, 3]);
+      expect(a.map((p) => p.count).sort(byNumber)).toEqual([1, 3]);
     });
 
     test("createJob without a positions field applies the default position", async () => {

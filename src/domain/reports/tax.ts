@@ -9,11 +9,12 @@ import { centsText, toCsv } from "@/lib/csv";
 import { formatDate, formatMoney } from "@/lib/pdf/invoice-pdf";
 import { renderTaxSummaryPdf } from "@/lib/pdf/report-pdf";
 import { ValidationError } from "@/domain/errors";
-import { isBilled, loadUserInvoices, type PaidDateSource } from "./earnings";
+import { byText } from "@/lib/sort";
+import { isBilled, loadUserInvoices, type PaidDateSource, type UserInvoiceRow } from "./earnings";
 
-export type TaxSection = "paid" | "unpaid" | "written_off";
+type TaxSection = "paid" | "unpaid" | "written_off";
 
-export type TaxRow = {
+type TaxRow = {
   invoiceId: string;
   /** Display number, for example ED-000001. */
   invoiceNumber: string;
@@ -52,6 +53,20 @@ function checkYear(year: number): void {
 }
 
 /**
+ * Which part of the year's summary an invoice belongs to, or null when it is not listed that year: written off in
+ * its detail's year, paid in the year received, unpaid when billed that year and not received by its end.
+ */
+function taxSection(r: UserInvoiceRow, year: number): TaxSection | null {
+  if (r.status === "returned") return null;
+  const jobYear = agencyDateParts(r.jobStartAt).year;
+  const paidYear = r.paid ? agencyDateParts(r.paid.at).year : null;
+  if (r.status === "written_off") return jobYear === year ? "written_off" : null;
+  if (paidYear === year) return "paid";
+  if (isBilled(r.status) && jobYear === year && (paidYear === null || paidYear > year)) return "unpaid";
+  return null;
+}
+
+/**
  * Cash basis: an invoice counts in the year the deputy marked it received (or a coordinator closed it as paid).
  * Billed-but-unpaid is the year's details still unpaid at year end; written off invoices are listed and counted in neither.
  */
@@ -65,17 +80,7 @@ export async function taxYearSummary(actor: Actor, tx: Tx, userId: string, year:
   let unpaidBilledCents = 0;
 
   for (const r of invoices) {
-    if (r.status === "returned") continue;
-    const jobYear = agencyDateParts(r.jobStartAt).year;
-    const paidYear = r.paid ? agencyDateParts(r.paid.at).year : null;
-    let section: TaxSection | null = null;
-    if (r.status === "written_off") {
-      if (jobYear === year) section = "written_off";
-    } else if (paidYear === year) {
-      section = "paid";
-    } else if (isBilled(r.status) && jobYear === year && (paidYear === null || paidYear > year)) {
-      section = "unpaid";
-    }
+    const section = taxSection(r, year);
     if (!section) continue;
 
     if (section === "paid") {
@@ -104,10 +109,10 @@ export async function taxYearSummary(actor: Actor, tx: Tx, userId: string, year:
       yearMismatch: r.paid !== null && r.vendorPaidAt !== null && agencyDateParts(r.paid.at).year !== agencyDateParts(r.vendorPaidAt).year,
     });
   }
-  rows.sort((a, b) => SECTION_ORDER[a.section] - SECTION_ORDER[b.section] || (a.jobDate < b.jobDate ? -1 : a.jobDate > b.jobDate ? 1 : a.invoiceNumber < b.invoiceNumber ? -1 : 1));
+  rows.sort((a, b) => SECTION_ORDER[a.section] - SECTION_ORDER[b.section] || byText(a.jobDate, b.jobDate) || (a.invoiceNumber < b.invoiceNumber ? -1 : 1));
   const byVendor = [...vendors.entries()]
     .map(([vendorId, v]) => ({ vendorId, ...v }))
-    .sort((a, b) => (a.vendorName < b.vendorName ? -1 : a.vendorName > b.vendorName ? 1 : a.vendorId < b.vendorId ? -1 : 1));
+    .sort((a, b) => byText(a.vendorName, b.vendorName) || (a.vendorId < b.vendorId ? -1 : 1));
   return { year, payee: { name: user.name, mailingAddress: user.mailingAddress ?? "" }, byVendor, totalPaidCents, unpaidBilledCents, rows };
 }
 

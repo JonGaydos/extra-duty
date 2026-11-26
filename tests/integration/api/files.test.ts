@@ -16,6 +16,8 @@ import { GET as attachmentFile } from "@/app/api/v1/jobs/[id]/attachments/[attac
 import { POST as attachRoute } from "@/app/api/v1/jobs/[id]/attachments/route";
 import { POST as vendorRequest } from "@/app/api/v1/vendor-requests/route";
 
+// Fake fetches are async to match fetch; they answer at once.
+
 const PDF = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from("contract body ".repeat(10))]);
 
 describe("vendor documents and detail contracts", () => {
@@ -127,7 +129,7 @@ describe("vendor documents and detail contracts", () => {
 
   test("a vendor request from someone who cannot send one is refused before any address lookup", async () => {
     resetGeocoder({ intervalMs: 0 });
-    const fetchMock = vi.fn(async () => new Response("[]"));
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("[]")));
     vi.stubGlobal("fetch", fetchMock);
     const form = new FormData();
     form.set("request", JSON.stringify({ safetyNotes: "Dogs", safetyAddresses: [{ address: "1 Lookup Rd", description: "Dog" }] }));

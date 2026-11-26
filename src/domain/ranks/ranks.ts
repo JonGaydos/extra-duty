@@ -58,6 +58,7 @@ export async function reorderRanks(actor: Actor, tx: Tx, orderedIds: string[]): 
   // sort_order is unique: move everything out of range first, then to the final values.
   const offset = before.length + 1000;
   await tx.update(ranks).set({ sortOrder: sql`${ranks.sortOrder} + ${offset}` });
+  // Sequential: updates in this transaction; sort_order is unique.
   for (const [i, id] of orderedIds.entries()) {
     await tx.update(ranks).set({ sortOrder: i + 1 }).where(eq(ranks.id, id));
   }

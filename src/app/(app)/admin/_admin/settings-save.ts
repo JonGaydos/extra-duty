@@ -6,12 +6,32 @@ import { normalizePhone } from "@/lib/phone";
 import { PHONE_MESSAGE } from "@/domain/phone";
 import type { ActionResult } from "../../_personnel/result";
 import { getPath, type Field, type Group, type GroupValues } from "./settings-groups";
+import { scalarText } from "@/lib/text";
 
 function setPath(obj: Record<string, unknown>, key: string, value: unknown): void {
   const parts = key.split(".");
   let o = obj;
-  for (const p of parts.slice(0, -1)) o = (o[p] ??= {}) as Record<string, unknown>;
-  o[parts[parts.length - 1]] = value;
+  for (const p of parts.slice(0, -1)) {
+    o[p] ??= {};
+    o = o[p] as Record<string, unknown>;
+  }
+  o[parts.at(-1)!] = value;
+}
+
+/** A typed whole number: blank is NaN, anything else goes through Number (the schema refuses fractions). */
+function intValue(s: string): number {
+  if (/^-?\d+$/.test(s)) return Number(s);
+  return s === "" ? Number.NaN : Number(s);
+}
+
+/** Typed dollars as cents: blank is null (optional) or 0 (blank is zero); anything unreadable is NaN. */
+function centsValue(f: Field, s: string): number | null {
+  const t = s.replace(/[$,\s]/g, "");
+  if (f.kind === "dollarsOptional" && t === "") return null;
+  if (f.blankIsZero && t === "") return 0;
+  if (!/^\d{1,6}(\.\d{1,2})?$/.test(t)) return Number.NaN;
+  const [whole, cents = ""] = t.split(".");
+  return Number(whole) * 100 + Number(cents.padEnd(2, "0"));
 }
 
 /** A typed value as the schema expects it. Anything unreadable becomes NaN, which the schema refuses. */
@@ -19,20 +39,14 @@ function convert(f: Field, v: unknown): unknown {
   const s = typeof v === "string" ? v.trim() : "";
   switch (f.kind) {
     case "int":
-      return /^-?\d+$/.test(s) ? Number(s) : s === "" ? Number.NaN : Number(s);
+      return intValue(s);
     case "hours":
       return /^\d{1,4}(\.\d{1,2})?$/.test(s) ? Math.round(Number(s) * 60) : Number.NaN;
     case "float":
       return s !== "" && Number.isFinite(Number(s)) ? Number(s) : Number.NaN;
     case "dollarsOptional":
-    case "dollars": {
-      const t = s.replace(/[$,\s]/g, "");
-      if (f.kind === "dollarsOptional" && t === "") return null;
-      if (f.blankIsZero && t === "") return 0;
-      if (!/^\d{1,6}(\.\d{1,2})?$/.test(t)) return Number.NaN;
-      const [whole, cents = ""] = t.split(".");
-      return Number(whole) * 100 + Number(cents.padEnd(2, "0"));
-    }
+    case "dollars":
+      return centsValue(f, s);
     case "weekday":
       return /^[0-6]$/.test(s) ? Number(s) : Number.NaN;
     case "switch":
@@ -49,6 +63,9 @@ function convert(f: Field, v: unknown): unknown {
 /** A schema limit in the unit the field is typed in (hours fields store minutes). */
 const shown = (f: Field, limit: unknown) => (f.kind === "hours" ? String(Math.round((Number(limit) / 60) * 100) / 100) : String(limit));
 
+/** What to type, for a value of the wrong type in a number field with no format hint of its own. */
+const TYPE_HINT: Partial<Record<Field["kind"], string>> = { int: "Enter a whole number.", float: "Enter a number." };
+
 /** A plain message for one schema issue on one field. */
 function message(f: Field, i: $ZodIssue): string {
   switch (i.code) {
@@ -63,10 +80,38 @@ function message(f: Field, i: $ZodIssue): string {
     case "invalid_value":
       return "Choose one of the options.";
     case "invalid_type":
-      return f.formatHint ?? (f.kind === "int" ? "Enter a whole number." : f.kind === "float" ? "Enter a number." : "Check this value.");
+      return f.formatHint ?? TYPE_HINT[f.kind] ?? "Check this value.";
     default:
       return f.formatHint ?? "Check this value.";
   }
+}
+
+const CHECK_FIELDS = "Check the highlighted fields. Nothing was saved.";
+
+/** Phone fields the phone rule refuses. An unchanged number saved before the phone rule never blocks the rest of the form. */
+function phoneProblems(group: Group, values: GroupValues, before: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of group.fields) {
+    const v = typeof values[f.key] === "string" ? (values[f.key] as string).trim() : "";
+    if (f.kind === "phone" && v && v !== scalarText(getPath(before, f.key)).trim() && !normalizePhone(v)) out[f.key] = `${PHONE_MESSAGE}.`;
+  }
+  return out;
+}
+
+/** Adds a message beside each field of the group that a schema issue points at, keeping a field's first message. */
+function addIssueMessages(group: Group, issues: readonly $ZodIssue[], fields: Record<string, string>): void {
+  for (const issue of issues) {
+    const key = issue.path.join(".");
+    const f = group.fields.find((x) => x.key === key || key.startsWith(`${x.key}.`));
+    if (f && !fields[f.key]) fields[f.key] = message(f, issue);
+  }
+}
+
+/** The saved message when the release day or time changed: how many details now open on the new date. */
+function releaseMovedMessage(moved: number): string {
+  if (moved === 0) return "Saved. No release dates changed.";
+  const opens = moved === 1 ? "detail now opens" : "details now open";
+  return `Saved. ${moved} ${opens} on the new release date.`;
 }
 
 /**
@@ -81,42 +126,24 @@ export async function saveGroup(actor: Actor, tx: Tx, group: Group, values: Grou
 
   const candidate = structuredClone(before) as unknown as Record<string, unknown>;
   for (const f of group.fields) setPath(candidate, f.key, getPath(patch, f.key));
-  const phoneErrors: Record<string, string> = {};
-  for (const f of group.fields) {
-    const v = typeof values[f.key] === "string" ? (values[f.key] as string).trim() : "";
-    // An unchanged number saved before the phone rule never blocks the rest of the form.
-    if (f.kind === "phone" && v && v !== String(getPath(before, f.key) ?? "").trim() && !normalizePhone(v)) phoneErrors[f.key] = `${PHONE_MESSAGE}.`;
-  }
+  const phoneErrors = phoneProblems(group, values, before);
   const parsed = agencySettingsSchema.safeParse(candidate);
   if (Object.keys(phoneErrors).length) {
     const fields: Record<string, string> = { ...phoneErrors };
-    if (!parsed.success) for (const issue of parsed.error.issues) {
-      const key = issue.path.join(".");
-      const f = group.fields.find((x) => x.key === key || key.startsWith(`${x.key}.`));
-      if (f && !fields[f.key]) fields[f.key] = message(f, issue);
-    }
-    return { ok: false, error: "Check the highlighted fields. Nothing was saved.", fields };
+    if (!parsed.success) addIssueMessages(group, parsed.error.issues, fields);
+    return { ok: false, error: CHECK_FIELDS, fields };
   }
   if (!parsed.success) {
     const fields: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
-      const key = issue.path.join(".");
-      const f = group.fields.find((x) => x.key === key || key.startsWith(`${x.key}.`));
-      if (f && !fields[f.key]) fields[f.key] = message(f, issue);
-    }
-    if (Object.keys(fields).length) return { ok: false, error: "Check the highlighted fields. Nothing was saved.", fields };
+    addIssueMessages(group, parsed.error.issues, fields);
+    if (Object.keys(fields).length) return { ok: false, error: CHECK_FIELDS, fields };
   } else {
     const keys = new Set(group.fields.map((f) => f.key));
     const problems = (await rateRangeProblems(tx, before, parsed.data)).filter((p) => keys.has(p.key));
-    if (problems.length) return { ok: false, error: "Check the highlighted fields. Nothing was saved.", fields: Object.fromEntries(problems.map((p) => [p.key, p.message])) };
+    if (problems.length) return { ok: false, error: CHECK_FIELDS, fields: Object.fromEntries(problems.map((p) => [p.key, p.message])) };
   }
 
   const { releaseDatesMoved: moved } = await saveSettings(actor, tx, patch as SettingsPatch);
-  if (moved !== null) {
-    return {
-      ok: true,
-      message: moved === 0 ? "Saved. No release dates changed." : `Saved. ${moved} ${moved === 1 ? "detail now opens" : "details now open"} on the new release date.`,
-    };
-  }
+  if (moved !== null) return { ok: true, message: releaseMovedMessage(moved) };
   return { ok: true, message: group.saved };
 }

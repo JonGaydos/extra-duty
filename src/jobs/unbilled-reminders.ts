@@ -6,6 +6,7 @@ import { loadSentInvoices, loadUnbilled, reminderDue, unbilledOverdue } from "@/
 import { emit } from "@/domain/notifications/notify";
 import { isJobLocked } from "@/domain/vendor-portal/holds";
 import { formatInvoiceNumber } from "@/domain/invoices/invoices";
+import { byText } from "@/lib/sort";
 
 /** One failing row is logged and skipped so it cannot block the rest of the tick. */
 async function guarded(what: string, fn: () => Promise<number>): Promise<number> {
@@ -46,6 +47,7 @@ export async function billingReadyTick(now: Date): Promise<number> {
       .orderBy(asc(assignments.id)),
   );
   let sent = 0;
+  // Sequential: one transaction per assignment, so one failure is skipped without holding many connections.
   for (const { id } of due) {
     sent += await guarded(`billing.ready for assignment ${id}`, () => withTx(async (tx) => {
       const [row] = await tx
@@ -90,9 +92,10 @@ export async function unbilledRemindersTick(now: Date): Promise<number> {
       .selectDistinct({ id: invoices.payeeUserId })
       .from(invoices)
       .where(and(eq(invoices.status, "sent"), eq(invoices.responsibleParty, "deputy")));
-    return [...new Set([...a, ...i].map((r) => r.id))].sort();
+    return [...new Set([...a, ...i].map((r) => r.id))].sort(byText);
   });
   let sent = 0;
+  // Sequential: one transaction per person, so one failure is skipped without holding many connections.
   for (const userId of candidates) {
     sent += await guarded(`unbilled reminder for user ${userId}`, () => withTx(async (tx) => {
       const [user] = await tx.select().from(users).where(eq(users.id, userId)).for("update");

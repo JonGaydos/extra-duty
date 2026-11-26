@@ -1,4 +1,5 @@
 import { PHONE, agencyAt, expect, one, test } from "../fixtures";
+import { byText } from "@/lib/sort";
 
 /**
  * Flow (b): a deputy cancels a full detail, the spot goes to backup #1 for the backup window, the window runs out on
@@ -67,5 +68,5 @@ test("cancel, backup window, backup claims", async ({ agency, session, mail, clo
     "select string_agg(u.email || '=' || a.status || coalesce('#' || a.backup_position, ''), ',' order by u.email) as statuses from assignments a join users u on u.id = a.user_id where a.job_id = $1",
     [job.id],
   );
-  expect(roster.statuses.split(",").sort()).toEqual([`${agency.deputy.email}=canceled`, `${kai.email}=backup#1`, `${noor.email}=signed_up`].sort());
+  expect(roster.statuses.split(",").sort(byText)).toEqual([`${agency.deputy.email}=canceled`, `${kai.email}=backup#1`, `${noor.email}=signed_up`].sort(byText));
 });

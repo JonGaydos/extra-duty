@@ -20,13 +20,13 @@ export function Notice({
   role,
   live,
   as: Tag = "p",
-}: {
+}: Readonly<{
   tone?: NoticeTone;
   children: ReactNode;
   role?: "status" | "alert";
   live?: "polite" | "assertive";
   as?: "p" | "span" | "div";
-}) {
+}>) {
   return (
     <Tag role={role} aria-live={live} className={`m-0 flex items-start gap-2 rounded-md px-3 py-2.5 text-sm ${TONES[tone]}`}>
       <Icon name="info" size={16} strokeWidth={2} className="mt-0.5 shrink-0" />

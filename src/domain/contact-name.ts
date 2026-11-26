@@ -1,6 +1,6 @@
 import { ValidationError } from "./errors";
 
-export const NAME_MESSAGE = "Enter a name with at least one letter";
+const NAME_MESSAGE = "Enter a name with at least one letter";
 
 /** A contact's name: blank is null; anything else is trimmed and must contain a letter (so "123" is refused). */
 export function cleanContactName(v: string | null | undefined): string | null {

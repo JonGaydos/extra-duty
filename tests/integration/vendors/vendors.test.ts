@@ -32,6 +32,9 @@ import {
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 import { useEmailQueue } from "../../setup/email-queue";
+import { byText } from "@/lib/sort";
+
+// Fake fetches are async to match fetch; they answer at once.
 
 const PDF = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.from("contract ".repeat(20))]);
 const input = (name: string) => ({ name, typeId: null, contactName: "Pat", phone: "850-555-0155", billingEmails: ["Bill@Example.test"], defaultRateCents: 4500, notes: null });
@@ -69,7 +72,7 @@ describe("vendors", () => {
 
   beforeEach(() => {
     resetGeocoder({ intervalMs: 0 });
-    fetchMock = vi.fn(async () => nominatim("41.5", "-90.5"));
+    fetchMock = vi.fn(() => Promise.resolve(nominatim("41.5", "-90.5")));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -109,7 +112,19 @@ describe("vendors", () => {
     expect(off.active).toBe(false);
     await expect(db.transaction((tx) => setVendorActive(personnel, tx, v.id, true))).rejects.toBeInstanceOf(ForbiddenError);
     const audit = await db.transaction((tx) => listAudit(coordinator, tx, { entityId: v.id }, 1));
-    expect(audit.map((a) => a.action).sort()).toEqual(["vendor.create", "vendor.deactivate", "vendor.update"]);
+    expect(audit.map((a) => a.action).sort(byText)).toEqual(["vendor.create", "vendor.deactivate", "vendor.update"]);
+  });
+
+  test("updateVendor checks each field it is given, in order, and saves the invoice options", async () => {
+    const { db } = get();
+    const v = await db.transaction((tx) => createVendor(coordinator, tx, input("Echo")));
+    const update = (patch: Record<string, unknown>) => db.transaction((tx) => updateVendor(coordinator, tx, v.id, patch as never));
+    await expect(update({ name: "  " })).rejects.toThrow("Vendor name is required.");
+    await expect(update({ name: "  ", invoiceSendSchedule: "never" })).rejects.toThrow("Vendor name is required.");
+    await expect(update({ invoiceSendSchedule: "never", emailApprovedInvoices: "yes" })).rejects.toThrow("Choose when invoices are sent.");
+    await expect(update({ emailApprovedInvoices: "yes" })).rejects.toThrow("Choose whether approved invoices are emailed to this vendor.");
+    expect(await update({})).toMatchObject({ id: v.id, name: "Echo" });
+    expect(await update({ invoiceSendSchedule: null, emailApprovedInvoices: false })).toMatchObject({ invoiceSendSchedule: null, emailApprovedInvoices: false });
   });
 
   test("createVendorLogin makes a vendor user whose actor has vendorId, and invites", async () => {
@@ -166,9 +181,9 @@ describe("vendors", () => {
     expect(await geocodeAddress("  10  cache st ")).toEqual({ lat: 41.5, lng: -90.5 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const starts: number[] = [];
-    fetchMock.mockImplementation(async () => {
+    fetchMock.mockImplementation(() => {
       starts.push(Date.now());
-      return nominatim("1", "2");
+      return Promise.resolve(nominatim("1", "2"));
     });
     await Promise.all([geocodeAddress("A St"), geocodeAddress("B St"), geocodeAddress("C St")]);
     expect(starts).toHaveLength(3);

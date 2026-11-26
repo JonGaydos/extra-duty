@@ -18,7 +18,7 @@ const TONES: Record<ChipTone, string> = {
   coordinator: "bg-coordinator-soft text-coordinator-ink",
 };
 
-export function Chip({ tone = "neutral", children }: { tone?: ChipTone; children: ReactNode }) {
+export function Chip({ tone = "neutral", children }: Readonly<{ tone?: ChipTone; children: ReactNode }>) {
   return (
     <span
       className={`inline-flex w-fit items-center rounded-full px-2.25 py-0.75 text-xs font-semibold whitespace-nowrap ${TONES[tone]}`}

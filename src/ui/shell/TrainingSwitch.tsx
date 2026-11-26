@@ -14,7 +14,7 @@ const ROLES: Array<{ value: TrainingRole; label: string }> = [
 ];
 
 /** "Switch to training" in the coordinator menu: asks which role to practice as, then calls `switchMode`. */
-export function TrainingSwitch({ switchMode }: { switchMode: (role: TrainingRole) => Promise<Result> }) {
+export function TrainingSwitch({ switchMode }: Readonly<{ switchMode: (role: TrainingRole) => Promise<Result> }>) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<TrainingRole>("deputy");
   const [busy, setBusy] = useState(false);
@@ -62,11 +62,11 @@ export function TrainingSwitch({ switchMode }: { switchMode: (role: TrainingRole
 }
 
 /** The training banner on every page while practicing ("TRAINING: practicing as Deputy"), with "Back to live". */
-export function TrainingBanner({ roleLabel, backToLive }: { roleLabel: string; backToLive: () => Promise<Result> }) {
+export function TrainingBanner({ roleLabel, backToLive }: Readonly<{ roleLabel: string; backToLive: () => Promise<Result> }>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <div role="region" aria-label="Training mode" className="border-b border-warning-line bg-warning-soft text-warning-ink">
+    <section aria-label="Training mode" className="border-b border-warning-line bg-warning-soft text-warning-ink">
       <div className="mx-auto flex max-w-310 flex-wrap items-center justify-between gap-2 px-5 py-2 md:px-6">
         <p className="m-0 text-sm">
           <strong className="font-bold">TRAINING: practicing as {roleLabel}</strong>. Nothing here is real, and no email leaves training.
@@ -91,12 +91,12 @@ export function TrainingBanner({ roleLabel, backToLive }: { roleLabel: string; b
           </p>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 }
 
 /** "Back to live data" on the phone More page while practicing (the banner has the same action). */
-export function BackToLiveButton({ backToLive }: { backToLive: () => Promise<Result> }) {
+export function BackToLiveButton({ backToLive }: Readonly<{ backToLive: () => Promise<Result> }>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (

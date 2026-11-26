@@ -9,7 +9,7 @@ const drawn = (place: "signIn" | "header" | "pdf", w: number, h: number) => {
 
 describe("logo shape", () => {
   test("the wide slot starts at about 1.3:1", () => {
-    expect(WIDE_RATIO).toBe(1.3);
+    expect(WIDE_RATIO).toBeCloseTo(1.3, 10);
   });
 
   test.each([

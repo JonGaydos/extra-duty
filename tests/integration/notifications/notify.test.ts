@@ -15,6 +15,9 @@ import { NOTIFY_EMAIL_QUEUE, NOTIFY_PUSH_QUEUE } from "@/jobs/boss";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 import { agencyInstant } from "@/domain/time/agency-time";
+import { byText } from "@/lib/sort";
+
+// Fake push sends are async to match web-push; they answer at once.
 
 describe("notification core", () => {
   const get = useTestDb();
@@ -88,15 +91,16 @@ describe("notification core", () => {
     await sub(a.row.id, "https://push.example.test/flaky");
     await sub(a.row.id, "https://push.example.test/fine");
     let flakyUp = false;
-    push.sendNotification.mockImplementation(async (s: { endpoint: string }) => {
-      if (s.endpoint.endsWith("gone")) throw Object.assign(new Error("gone"), { statusCode: 410 });
-      if (s.endpoint.endsWith("missing")) throw Object.assign(new Error("missing"), { statusCode: 404 });
-      if (s.endpoint.endsWith("flaky") && !flakyUp) throw Object.assign(new Error("busy"), { statusCode: 503 });
+    push.sendNotification.mockImplementation((s: { endpoint: string }) => {
+      if (s.endpoint.endsWith("gone")) return Promise.reject(Object.assign(new Error("gone"), { statusCode: 410 }));
+      if (s.endpoint.endsWith("missing")) return Promise.reject(Object.assign(new Error("missing"), { statusCode: 404 }));
+      if (s.endpoint.endsWith("flaky") && !flakyUp) return Promise.reject(Object.assign(new Error("busy"), { statusCode: 503 }));
+      return Promise.resolve();
     });
     await run(ev([a.row.id]));
     await drain();
     const left = await get().db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, a.row.id));
-    expect(left.map((s) => s.endpoint).sort()).toEqual(["https://push.example.test/fine", "https://push.example.test/flaky"]);
+    expect(left.map((s) => s.endpoint).sort(byText)).toEqual(["https://push.example.test/fine", "https://push.example.test/flaky"]);
     expect(await pushJobStates()).toEqual(["retry"]);
     expect(push.sendNotification).toHaveBeenCalledTimes(4);
 

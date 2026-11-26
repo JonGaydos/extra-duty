@@ -158,7 +158,7 @@ describe("API keys", () => {
     expect((await call(userW9, `/api/v1/users/${personnelId}/w9`, { headers: bearer(w9.key), params: { id: personnelId } })).status).toBe(404);
   });
 
-  test("a key is limited to 600 requests a minute", async () => {
+  test("a key is limited to 600 requests a minute", () => {
     resetApiKeyLimits();
     const t = Date.UTC(2026, 0, 1);
     for (let i = 0; i < API_KEY_RATE_PER_MINUTE; i++) expect(takeApiKeyRequest("k1", t + i)).toBe(true);

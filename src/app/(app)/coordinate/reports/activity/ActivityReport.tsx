@@ -33,6 +33,109 @@ function show(column: string, v: number | null | undefined): string {
   return v.toLocaleString("en-US");
 }
 
+type Sort = { column: string; dir: "asc" | "desc" };
+
+/** The period a preset covers; Season falls back to this month when there is no season. */
+function presetRange(preset: Preset, custom: Range, periods: { month: Range; year: Range; season: (Range & { name: string }) | null }): Range {
+  if (preset === "custom") return custom;
+  if (preset === "season" && periods.season) return periods.season;
+  return preset === "year" ? periods.year : periods.month;
+}
+
+const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
+
+/** A column header that sorts by it: again flips the order; a new column starts A to Z for names, highest first for numbers. */
+function SortHeader({ c, sort, onSort, label }: Readonly<{ c: string; sort: Sort; onSort: (s: Sort) => void; label: string }>) {
+  const on = sort.column === c;
+  const flipped = sort.dir === "asc" ? "desc" : "asc";
+  return (
+    <th scope="col" aria-sort={on ? ARIA_SORT[sort.dir] : undefined} className={`px-2 py-1.5 align-bottom ${c === "name" ? "text-left" : "text-right"}`}>
+      <button
+        type="button"
+        onClick={() => onSort(on ? { column: c, dir: flipped } : { column: c, dir: c === "name" ? "asc" : "desc" })}
+        className={`inline-flex min-h-9 items-end gap-1 rounded-sm px-1.5 py-1 text-xs font-semibold hover:bg-subtle hover:text-ink pointer-coarse:min-h-11 ${on ? "text-ink" : "text-muted"} ${c === "name" ? "" : "flex-row-reverse text-right"}`}
+      >
+        <span className="max-w-24 text-balance">{label}</span>
+        <Icon name={on && sort.dir === "asc" ? "up" : "down"} size={14} className={on ? "" : "opacity-0"} />
+      </button>
+    </th>
+  );
+}
+
+/** Everyone in a sortable table, with a totals row. */
+function ActivityTable({
+  rows,
+  sorted,
+  columns,
+  measures,
+  totals,
+  sort,
+  onSort,
+  head,
+}: Readonly<{
+  rows: number;
+  sorted: ActivityRow[];
+  columns: string[];
+  measures: string[];
+  totals: Record<string, number | null>;
+  sort: Sort;
+  onSort: (s: Sort) => void;
+  head: (c: string) => string;
+}>) {
+  return (
+    <ScrollRegion label="Personnel activity table" className="overflow-x-auto rounded-xl border border-line bg-surface md:rounded-2xl">
+      <table className="w-full border-collapse text-body">
+        <caption className="px-4 pt-4 pb-1 text-left text-title font-semibold md:text-base">
+          Everyone, {rows} {rows === 1 ? "person" : "people"}
+        </caption>
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <SortHeader key={c} c={c} sort={sort} onSort={onSort} label={head(c)} />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.length === 0 ? (
+            <tr className="border-t border-divider">
+              <td colSpan={columns.length} className="px-3.5 py-6 text-center text-muted">
+                Nobody matches these filters.
+              </td>
+            </tr>
+          ) : (
+            sorted.map((r) => (
+              <tr key={r.userId} className="border-t border-divider">
+                <th scope="row" className="px-3.5 py-3 text-left font-normal whitespace-nowrap">
+                  <PersonLink row={r} />
+                </th>
+                {measures.map((m) => (
+                  <td key={m} className={`px-3.5 py-3 text-right whitespace-nowrap ${r.values[m] === null ? "text-muted" : ""}`} data-numeric>
+                    {show(m, r.values[m])}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+        {sorted.length > 0 ? (
+          <tfoot>
+            <tr className="border-t border-line">
+              <th scope="row" className="px-3.5 py-3 text-left font-semibold">
+                Total
+              </th>
+              {measures.map((m) => (
+                <td key={m} className="px-3.5 py-3 text-right font-semibold whitespace-nowrap" data-numeric>
+                  {show(m, totals[m])}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </ScrollRegion>
+  );
+}
+
 /** Presets and filters, the five leaderboards, then the sortable table. Runs through the report engine. */
 export function ActivityReport({
   measures,
@@ -41,14 +144,14 @@ export function ActivityReport({
   ranks,
   flags,
   saved,
-}: {
+}: Readonly<{
   measures: string[];
   labels: Record<string, string>;
   periods: { month: Range; year: Range; season: (Range & { name: string }) | null };
   ranks: Array<{ id: string; name: string }>;
   flags: Array<{ id: string; name: string }>;
   saved: SavedActivity | null;
-}) {
+}>) {
   const savedRange = saved ? savedDayRange(saved.spec) : null;
   const [preset, setPreset] = useState<Preset>(savedRange ? "custom" : "month");
   const [custom, setCustom] = useState<Range>(savedRange ?? periods.month);
@@ -56,12 +159,12 @@ export function ActivityReport({
   const [flagId, setFlagId] = useState(saved?.spec.filters.qualificationIds?.[0] ?? "");
   const [result, setResult] = useState<ActivityResult | null>(null);
   const [ran, setRan] = useState<Range | null>(null);
-  const [sort, setSort] = useState<{ column: string; dir: "asc" | "desc" }>({ column: "hours", dir: "desc" });
+  const [sort, setSort] = useState<Sort>({ column: "hours", dir: "desc" });
   const [saveName, setSaveName] = useState("");
   const [downloading, setDownloading] = useState(false);
   const { run, busy } = useCoordAction();
 
-  const range: Range = preset === "custom" ? custom : preset === "season" && periods.season ? periods.season : preset === "year" ? periods.year : periods.month;
+  const range = presetRange(preset, custom, periods);
   const spec: ReportWire = {
     dataset: "activity",
     from: range.from,
@@ -204,68 +307,7 @@ export function ActivityReport({
             </div>
           </section>
 
-          <ScrollRegion label="Personnel activity table" className="overflow-x-auto rounded-xl border border-line bg-surface md:rounded-2xl">
-            <table className="w-full border-collapse text-body">
-              <caption className="px-4 pt-4 pb-1 text-left text-title font-semibold md:text-base">
-                Everyone, {rows.length} {rows.length === 1 ? "person" : "people"}
-              </caption>
-              <thead>
-                <tr>
-                  {columns.map((c) => {
-                    const on = sort.column === c;
-                    return (
-                      <th key={c} scope="col" aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : undefined} className={`px-2 py-1.5 align-bottom ${c === "name" ? "text-left" : "text-right"}`}>
-                        <button
-                          type="button"
-                          onClick={() => setSort(on ? { column: c, dir: sort.dir === "asc" ? "desc" : "asc" } : { column: c, dir: c === "name" ? "asc" : "desc" })}
-                          className={`inline-flex min-h-9 items-end gap-1 rounded-sm px-1.5 py-1 text-xs font-semibold hover:bg-subtle hover:text-ink pointer-coarse:min-h-11 ${on ? "text-ink" : "text-muted"} ${c === "name" ? "" : "flex-row-reverse text-right"}`}
-                        >
-                          <span className="max-w-24 text-balance">{head(c)}</span>
-                          <Icon name={on && sort.dir === "asc" ? "up" : "down"} size={14} className={on ? "" : "opacity-0"} />
-                        </button>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 ? (
-                  <tr className="border-t border-divider">
-                    <td colSpan={columns.length} className="px-3.5 py-6 text-center text-muted">
-                      Nobody matches these filters.
-                    </td>
-                  </tr>
-                ) : (
-                  sorted.map((r) => (
-                    <tr key={r.userId} className="border-t border-divider">
-                      <th scope="row" className="px-3.5 py-3 text-left font-normal whitespace-nowrap">
-                        <PersonLink row={r} />
-                      </th>
-                      {measures.map((m) => (
-                        <td key={m} className={`px-3.5 py-3 text-right whitespace-nowrap ${r.values[m] === null ? "text-muted" : ""}`} data-numeric>
-                          {show(m, r.values[m])}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {sorted.length > 0 ? (
-                <tfoot>
-                  <tr className="border-t border-line">
-                    <th scope="row" className="px-3.5 py-3 text-left font-semibold">
-                      Total
-                    </th>
-                    {measures.map((m) => (
-                      <td key={m} className="px-3.5 py-3 text-right font-semibold whitespace-nowrap" data-numeric>
-                        {show(m, result.totals[m])}
-                      </td>
-                    ))}
-                  </tr>
-                </tfoot>
-              ) : null}
-            </table>
-          </ScrollRegion>
+          <ActivityTable rows={rows.length} sorted={sorted} columns={columns} measures={measures} totals={result.totals} sort={sort} onSort={setSort} head={head} />
           <p className="m-0 max-w-[70ch] text-xs text-muted">
             Billed and paid details count as worked. Gave away is the person canceling their own sign-up. Vendor late cancels are details the vendor canceled late, paid or not; they are shown for information and never count as a cancellation by the person. A detail the agency canceled, a removal by suspension, and a sign-up removed because the person left the agency, is a sign-up but not a cancellation. The rate is cancellations out of sign-ups.
           </p>
@@ -279,11 +321,11 @@ export function ActivityReport({
   );
 }
 
-function PersonLink({ row }: { row: ActivityRow }) {
+function PersonLink({ row }: Readonly<{ row: ActivityRow }>) {
   return <Link href={`/coordinate/reports/deputies/${row.userId}`}>{row.name}</Link>;
 }
 
-function Leaderboard({ title, column, unit, rows }: { title: string; column: string; unit: string; rows: ActivityRow[] }) {
+function Leaderboard({ title, column, unit, rows }: Readonly<{ title: string; column: string; unit: string; rows: ActivityRow[] }>) {
   const id = `board-${column}`;
   return (
     <Card aria-labelledby={id} className="gap-2!">

@@ -91,6 +91,7 @@ export async function createUser(actor: Actor, tx: Tx, input: CreateUserInput): 
     .returning();
   await recordAudit(tx, { actor, action: "user.create", entityType: "user", entityId: row.id, before: null, after: row });
 
+  // Sequential: grants and audits written in this transaction.
   for (const qualificationId of qualificationIds) {
     const [grant] = await tx
       .insert(userQualifications)
@@ -197,11 +198,13 @@ export async function deactivateUser(actor: Actor, tx: Tx, id: string, input: De
   await recordAudit(tx, { actor, action: "user.deactivate", entityType: "user", entityId: id, before, after, reason });
   await revokeCalendarTokensFor(tx, actor, id, now);
   const keys = await tx.update(apiKeys).set({ revokedAt: now }).where(and(eq(apiKeys.createdBy, id), isNull(apiKeys.revokedAt))).returning({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix });
+  // Sequential: audit writes in this transaction.
   for (const k of keys) await recordAudit(tx, { actor, action: "api_key.revoke", entityType: "api_key", entityId: k.id, after: { name: k.name, prefix: k.prefix, revokedAt: now }, reason: "Account deactivated" });
   await tx.update(sessions).set({ expiresAt: now }).where(and(eq(sessions.userId, id), gt(sessions.expiresAt, now)));
 
   await lockUser(tx, id);
   const removed = await signupsAfter(tx, id, last.after, now);
+  // Sequential: each sign-up is ended in this transaction, in order.
   for (const a of removed) {
     await leaveAssignment(actor, tx, a.assignmentId, {
       status: "removed",

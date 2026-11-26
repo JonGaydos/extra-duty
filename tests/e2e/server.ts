@@ -8,6 +8,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, openSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
 import { startTestDb } from "../setup/db";
 import { createDb, runInMode } from "@/db/client";
@@ -76,15 +78,17 @@ const log = openSync("test-results/e2e-server.log", "w");
 const nominatim = await startFakeNominatim(E2E.nominatimPort);
 const env = { ...process.env, ...E2E.appEnv, ...(stagingDemo ? { APP_ENV: "staging", STORAGE_LOCAL_DIR: "test-results/e2e-storage" } : {}), DATABASE_URL: tdb.url, NEXT_DIST_DIR: ".next-e2e", NOMINATIM_URL: `http://127.0.0.1:${E2E.nominatimPort}/search` };
 // E2E_REUSE_BUILD=1 starts the last e2e build as is (faster reruns); leave it off after changing app code.
+// The repository root, from this file, so the Next binary is found by an absolute path.
+const nextBin = resolve(fileURLToPath(new URL("../..", import.meta.url)), "node_modules/.bin/next");
 const reuse = process.env.E2E_REUSE_BUILD === "1" && existsSync(".next-e2e/BUILD_ID");
-const build = reuse ? { status: 0 } : spawnSync("node_modules/.bin/next", ["build"], { stdio: ["ignore", log, log], env });
+const build = reuse ? { status: 0 } : spawnSync(nextBin, ["build"], { stdio: ["ignore", log, log], env });
 if (build.status !== 0) {
   nominatim.close();
   await tdb.stop();
   console.error("next build failed; see test-results/e2e-server.log");
   process.exit(1);
 }
-const next = spawn("node_modules/.bin/next", ["start", "--port", String(E2E.port)], { stdio: ["ignore", log, log], env });
+const next = spawn(nextBin, ["start", "--port", String(E2E.port)], { stdio: ["ignore", log, log], env });
 
 let stopping = false;
 async function stop(code: number): Promise<void> {

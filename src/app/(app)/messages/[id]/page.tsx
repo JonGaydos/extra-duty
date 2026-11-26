@@ -14,10 +14,16 @@ import { MessageTools } from "./MessageTools";
 
 export const metadata: Metadata = { title: "Message" };
 
+/** "You sent this to 3 people" for the sender, "From Pat Lee" for everyone else. */
+function fromLine(mine: boolean, recipients: number, sender: string): string {
+  if (!mine) return `From ${sender}`;
+  return `You sent this to ${recipients} ${recipients === 1 ? "person" : "people"}`;
+}
+
 type Props = { params: Promise<{ id: string }> };
 
 /** One message, for its sender or a recipient. Opening it marks it read. */
-export default async function MessagePage({ params }: Props) {
+export default async function MessagePage({ params }: Readonly<Props>) {
   const actor = await personnelActor();
   const { id } = await params;
   const data = await withTx(async (tx) => {
@@ -43,7 +49,7 @@ export default async function MessagePage({ params }: Props) {
       <Card>
         <h1 className="m-0 text-2xl font-bold md:text-3xl">{m.subject}</h1>
         <p className="m-0 text-sm text-muted">
-          {mine ? `You sent this to ${m.recipientCount} ${m.recipientCount === 1 ? "person" : "people"}` : `From ${data.sender}`}, {dateTime(m.sentAt)}
+          {fromLine(mine, m.recipientCount, data.sender)}, {dateTime(m.sentAt)}
           {data.job ? (
             <>
               {". About "}

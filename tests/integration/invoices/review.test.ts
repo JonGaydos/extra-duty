@@ -17,6 +17,7 @@ import { approveInvoice, editInvoice, listInvoicesForReview, sendBackInvoice } f
 import { updateSettings } from "@/domain/settings/settings";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
 
 const GOOD_EMAIL = { provider: "smtp" as const, from: "Sheriff <no-reply@sheriff.example>", smtp: { host: "smtp.test" } };
 const AFTER = new Date("2036-01-01T00:00:00Z");
@@ -225,6 +226,27 @@ describe("invoice review", () => {
     expect(again.invoice.minutes).toBe(first.invoice.minutes);
   });
 
+  test("a correction refuses a rate or minimum that is not a whole, non-negative number, and new times on a late cancellation", async () => {
+    const { inv } = await held();
+    const edit = (input: Parameters<typeof editInvoice>[3]) => get().db.transaction((tx) => editInvoice(fx.coord, tx, inv.id, input));
+    const rate = new ValidationError("Rate must be a non-negative integer number of cents.");
+    const minimum = new ValidationError("Minimum must be a non-negative integer number of minutes.");
+    for (const rateCents of [-1, 1.5, Number.NaN]) await expect(edit({ rateCents, reason: "Rate" })).rejects.toThrow(rate);
+    for (const minimumBillableMinutes of [-15, 30.5]) await expect(edit({ minimumBillableMinutes, reason: "Minimum" })).rejects.toThrow(minimum);
+    // Zero is allowed for both.
+    expect((await edit({ rateCents: 0, minimumBillableMinutes: 0, reason: "Waived" })).totalCents).toBe(0);
+
+    const { db } = get();
+    const person = await fx.person();
+    await db.update(users).set({ mailingAddress: "1 Main St, Town, TX 75001" }).where(eq(users.id, person.userId));
+    const { job, positionId } = await fx.mkJob();
+    const [a] = await db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: person.userId, status: "late_canceled" }).returning();
+    const late = await db.transaction((tx) => billAssignment(person, tx, a.id, { startAt: job.startAt, endAt: job.endAt, attachW9: false }, AFTER));
+    await expect(db.transaction((tx) => editInvoice(fx.coord, tx, late.invoice.id, { endAt: job.endAt, reason: "Times" }))).rejects.toThrow(
+      new ValidationError("A late cancellation has fixed times."),
+    );
+  });
+
   test("an email queued before the invoice was sent back is not sent", async () => {
     const { inv } = await held({ mode: "immediate" });
     await get().db.transaction((tx) => sendBackInvoice(fx.coord, tx, inv.id));
@@ -333,19 +355,19 @@ describe("invoice review", () => {
     await tx((t) => markPaid(person, t, inv.id, { ...pay, note: "Got it" }, AFTER));
 
     const staff = await tx((t) => invoiceTimeline(fx.coord, t, inv.id));
-    expect(staff.map((e) => e.event).sort()).toEqual(
-      ["edited", "edited", "rebilled", "returned", "revised", "sent", "sent", "vendor_paid", "deputy_paid"].concat(Array(7).fill("responsibility")).sort(),
+    expect(staff.map((e) => e.event).sort(byText)).toEqual(
+      ["edited", "edited", "rebilled", "returned", "revised", "sent", "sent", "vendor_paid", "deputy_paid"].concat(new Array(7).fill("responsibility")).sort(byText),
     );
     expect(staff.find((e) => e.event === "returned")?.note).toBe(NOTES[1]);
     expect(staff.find((e) => e.event === "returned")?.vendorVisible).toBe(false);
 
     const seen = await tx((t) => invoiceTimeline(vendor, t, inv.id));
     // Responsibility is shown only for the vendor's turn, or the payee's turn once the invoice is sent; never review holds or send backs.
-    expect(seen.map((e) => (e.event === "responsibility" ? `responsibility:${e.party}` : e.event)).sort()).toEqual(
-      ["revised", "sent", "sent", "vendor_paid", "deputy_paid", "responsibility:vendor", "responsibility:vendor", "responsibility:deputy"].sort(),
+    expect(seen.map((e) => (e.event === "responsibility" ? `responsibility:${e.party}` : e.event)).sort(byText)).toEqual(
+      ["revised", "sent", "sent", "vendor_paid", "deputy_paid", "responsibility:vendor", "responsibility:vendor", "responsibility:deputy"].sort(byText),
     );
-    for (const e of seen) expect(Object.keys(e).sort()).toEqual(["at", "event", "id", "invoiceId", "note", "party"]);
-    expect(seen.map((e) => e.note).filter(Boolean).sort()).toEqual(["Got it", "Mailed check"]);
+    for (const e of seen) expect(Object.keys(e).sort(byText)).toEqual(["at", "event", "id", "invoiceId", "note", "party"]);
+    expect(seen.map((e) => e.note).filter((n): n is string => Boolean(n)).sort(byText)).toEqual(["Got it", "Mailed check"]);
     for (const n of NOTES) expect(JSON.stringify(seen)).not.toContain(n);
     // Staff rows name who acted.
     expect(staff.filter((e) => e.event === "responsibility").every((e) => e.actorUserId !== null)).toBe(true);

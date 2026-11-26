@@ -5,7 +5,7 @@
  * same. suggest: the match differs and waits for Use suggested or Keep as entered. unverified: no match, the
  * lookup failed, or the person kept what they typed.
  */
-export type AddressState = "idle" | "checking" | "verified" | "suggest" | "unverified";
+type AddressState = "idle" | "checking" | "verified" | "suggest" | "unverified";
 export type AddressValue = {
   address: string;
   lat: number | null;

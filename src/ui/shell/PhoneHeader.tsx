@@ -3,7 +3,7 @@ import { AgencyLogo, type AgencyLogoData } from "../components/AgencyLogo";
 import { AlertsBell } from "./AlertsBell";
 
 /** Phones, for coordinators and admins: the brand and the alerts bell above every page (the tab bar has no room for it). */
-export function PhoneHeader({ home, unreadAlerts, logo = null }: { home: string; unreadAlerts: number; logo?: AgencyLogoData | null }) {
+export function PhoneHeader({ home, unreadAlerts, logo = null }: Readonly<{ home: string; unreadAlerts: number; logo?: AgencyLogoData | null }>) {
   return (
     <header data-shell="phone-header" className="border-b border-line bg-surface md:hidden">
       <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-1.5">

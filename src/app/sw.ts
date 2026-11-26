@@ -14,7 +14,7 @@ type NotificationEventLike = Waitable & { notification: { close(): void; data?: 
 type FetchEventLike = { request: { mode: string }; respondWith(r: Promise<Response>): void };
 type WindowClientLike = { url: string; focus(): Promise<unknown> };
 
-export type ServiceWorkerScope = {
+type ServiceWorkerScope = {
   location: { origin: string };
   addEventListener(type: "install" | "activate", fn: (e: Waitable) => void): void;
   addEventListener(type: "push", fn: (e: PushEventLike) => void): void;
@@ -29,7 +29,7 @@ export type ServiceWorkerScope = {
   };
 };
 
-export function serviceWorker(sw: ServiceWorkerScope, offlineHtml: string): void {
+function serviceWorker(sw: ServiceWorkerScope, offlineHtml: string): void {
   sw.addEventListener("install", () => {
     void sw.skipWaiting();
   });

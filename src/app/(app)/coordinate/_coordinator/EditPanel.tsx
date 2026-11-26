@@ -13,6 +13,7 @@ import { RateRangeNotice, typedCents } from "./RateRangeNotice";
 import { useCoordAction } from "./status";
 import { useConflictGuard } from "./conflict-guard";
 import type { RateRange } from "@/domain/jobs/rate";
+import { useRowKeys } from "@/ui/use-row-keys";
 
 type Position = { positionTypeId: string; count: number };
 type Option = { id: string; name: string };
@@ -22,11 +23,12 @@ const TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hou
 const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric" });
 
 /** The rows of positions with Add position (agency default, merging duplicates) and Remove. */
-export function PositionsEditor({ value, onChange, types, defaultTypeId, idPrefix }: { value: Position[]; onChange: (v: Position[]) => void; types: Option[]; defaultTypeId: string; idPrefix: string }) {
+export function PositionsEditor({ value, onChange, types, defaultTypeId, idPrefix }: Readonly<{ value: Position[]; onChange: (v: Position[]) => void; types: Option[]; defaultTypeId: string; idPrefix: string }>) {
+  const keys = useRowKeys(value);
   return (
     <div className="flex flex-col gap-2">
       {value.map((p, i) => (
-        <div key={`${idPrefix}-${i}`} className="grid grid-cols-[minmax(0,1fr)_5.5rem_auto] items-end gap-2">
+        <div key={keys[i]} className="grid grid-cols-[minmax(0,1fr)_5.5rem_auto] items-end gap-2">
           <FormField label={`Position ${i + 1}`}>
             <Select value={p.positionTypeId} onChange={(e) => onChange(changePositionType(value, i, e.target.value))}>
               {types.map((t) => (
@@ -53,7 +55,7 @@ export function PositionsEditor({ value, onChange, types, defaultTypeId, idPrefi
  * Add position: a type picker that starts on the agency default type, and Add. A type already listed raises
  * that row's count instead of adding a second row.
  */
-export function AddPositionRow({ types, defaultTypeId, onAdd, idPrefix }: { types: Option[]; defaultTypeId: string; onAdd: (typeId: string) => void; idPrefix: string }) {
+export function AddPositionRow({ types, defaultTypeId, onAdd, idPrefix }: Readonly<{ types: Option[]; defaultTypeId: string; onAdd: (typeId: string) => void; idPrefix: string }>) {
   const [typeId, setTypeId] = useState(defaultTypeId);
   return (
     <div className="flex flex-wrap items-end gap-2">
@@ -78,7 +80,7 @@ export function AddPositionRow({ types, defaultTypeId, onAdd, idPrefix }: { type
  * Deputy conflicts a time change would cause, with the two ways out (remove the deputy from the detail, or change
  * the edit) and an override that needs a confirmation and a reason. `reason` is sent only once confirmed.
  */
-export function ConflictOverride({ conflicts, confirmed, onConfirmed, reason, onReason, idPrefix }: { conflicts: string[]; confirmed: boolean; onConfirmed: (v: boolean) => void; reason: string; onReason: (v: string) => void; idPrefix: string }) {
+export function ConflictOverride({ conflicts, confirmed, onConfirmed, reason, onReason, idPrefix }: Readonly<{ conflicts: string[]; confirmed: boolean; onConfirmed: (v: boolean) => void; reason: string; onReason: (v: string) => void; idPrefix: string }>) {
   if (conflicts.length === 0) return null;
   return (
     <div className="flex flex-col gap-2.5" data-testid={`${idPrefix}-conflicts`}>
@@ -94,8 +96,7 @@ export function ConflictOverride({ conflicts, confirmed, onConfirmed, reason, on
         Remove the deputy from the detail under Staffing, change the edit, or override below.
       </Notice>
       <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-        <input type="checkbox" checked={confirmed} onChange={(e) => onConfirmed(e.target.checked)} className={check} />
-        Save anyway: I confirm these deputies stay on with the conflicts above
+        <input type="checkbox" checked={confirmed} onChange={(e) => onConfirmed(e.target.checked)} className={check} />Save anyway: I confirm these deputies stay on with the conflicts above
       </label>
       {confirmed ? (
         <FormField label="Reason for the override" hint="Required. Kept in the audit log with the deputies and conflicts.">
@@ -114,7 +115,7 @@ export type QuickEditInitial = { rate: string; startTime: string; endTime: strin
  * Quick edit on the detail page: rate, start and end time, positions and description in place, saved together.
  * On a series it applies to this detail or to this and the later ones; times apply on each detail's own date.
  */
-export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, started, range, approved }: { jobId: string; initial: QuickEditInitial; types: Option[]; defaultTypeId: string; seriesLater: number; started: boolean; range: RateRange; approved: boolean }) {
+export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, started, range, approved }: Readonly<{ jobId: string; initial: QuickEditInitial; types: Option[]; defaultTypeId: string; seriesLater: number; started: boolean; range: RateRange; approved: boolean }>) {
   const [v, setV] = useState(initial);
   const [scope, setScope] = useState<"one" | "series">("one");
   const [reason, setReason] = useState("");
@@ -157,8 +158,7 @@ export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, s
             <input type="radio" name="quick-scope" checked={scope === "one"} onChange={() => {
                 setScope("one");
                 guard.touch();
-              }} className={check} />
-            This detail only
+              }} className={check} />This detail only
           </label>
           <label className="flex min-h-11 items-center gap-2">
             <input type="radio" name="quick-scope" checked={scope === "series"} onChange={() => {
@@ -204,7 +204,7 @@ export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, s
   );
 }
 
-function Shot({ s }: { s: { startAt: string; endAt: string; rateCents: number; description: string | null; positions: Array<{ name: string; count: number }> } }) {
+function Shot({ s }: Readonly<{ s: { startAt: string; endAt: string; rateCents: number; description: string | null; positions: Array<{ name: string; count: number }> } }>) {
   return (
     <span className="flex flex-col text-sm">
       <span data-numeric>
@@ -219,11 +219,86 @@ type WireRow = Omit<EditRow, "before" | "after" | "conflicts"> & {
   conflictFingerprint: string | null;
   conflicts: Array<{ assignmentId: string; name: string; check: string; message: string }>; before: Parameters<typeof Shot>[0]["s"]; after: Parameters<typeof Shot>[0]["s"] | null };
 
+/** One detail in the bulk edit preview: before and after, and why it is refused or which deputies conflict. */
+function PreviewRow({ r }: Readonly<{ r: WireRow }>) {
+  return (
+    <li className="flex flex-col gap-1.5 px-3 py-2.5">
+      <span className="font-semibold">
+        #{r.number} {r.title}
+        <span className="font-normal text-muted">
+          , {r.vendorName}, {DAY.format(new Date(r.before.startAt))}
+        </span>
+      </span>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-muted">Before</span>
+          <Shot s={r.before} />
+        </div>
+        {r.after ? (
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-muted">After</span>
+            <Shot s={r.after} />
+          </div>
+        ) : null}
+      </div>
+      {r.problem ? <p className="m-0 text-sm font-medium text-danger-ink">Refused: {r.problem}</p> : null}
+      {r.conflicts.map((c) => (
+        <p key={`${c.assignmentId}-${c.check}`} className="m-0 text-sm font-medium text-danger-ink">
+          Conflict for {c.name}: {c.message}{" "}
+          <a href={`/coordinate/details/${r.jobId}`} target="_blank" rel="noreferrer" className="font-semibold">
+            Open the detail in a new tab to remove them
+          </a>
+        </p>
+      ))}
+    </li>
+  );
+}
+
+/** The bulk edit preview: refusals, every detail's before and after, the conflict override and Save all. */
+function BulkPreview({
+  preview,
+  conflicts,
+  confirmed,
+  onConfirmed,
+  reason,
+  onReason,
+  busy,
+  count,
+  onSave,
+}: Readonly<{
+  preview: WireRow[];
+  conflicts: string[];
+  confirmed: boolean;
+  onConfirmed: (v: boolean) => void;
+  reason: string;
+  onReason: (v: string) => void;
+  busy: boolean;
+  count: number;
+  onSave: () => void;
+}>) {
+  const refused = preview.filter((r) => r.problem).length;
+  return (
+    <div className="flex flex-col gap-2.5">
+      <h3 className="m-0 text-body font-semibold">Preview</h3>
+      {refused ? <Notice tone="danger">{refused === 1 ? "1 detail cannot take this change" : `${refused} details cannot take this change`}. Remove them from the selection or change the edit; nothing is saved until every detail can.</Notice> : null}
+      <ul className="m-0 flex max-h-112 list-none flex-col divide-y divide-divider overflow-y-auto rounded-md border border-line p-0" aria-label="Before and after">
+        {preview.map((r) => (
+          <PreviewRow key={r.jobId} r={r} />
+        ))}
+      </ul>
+      <ConflictOverride conflicts={conflicts} confirmed={confirmed} onConfirmed={onConfirmed} reason={reason} onReason={onReason} idPrefix="bulk" />
+      <Button busy={busy} disabled={refused > 0 || (conflicts.length > 0 && !(confirmed && reason.trim()))} onClick={onSave} className="w-fit">
+        {count === 1 ? "Save 1 detail" : `Save all ${count} details`}
+      </Button>
+    </div>
+  );
+}
+
 /**
  * Bulk edit for selected details (any vendor): blank fields stay as they are. Preview lists every detail's before
  * and after and any refusal; Save all saves every detail or none.
  */
-export function BulkEdit({ jobIds, types, defaultTypeId, onDone }: { jobIds: string[]; types: Option[]; defaultTypeId: string; onDone: () => void }) {
+export function BulkEdit({ jobIds, types, defaultTypeId, onDone }: Readonly<{ jobIds: string[]; types: Option[]; defaultTypeId: string; onDone: () => void }>) {
   const [rate, setRate] = useState("");
   const [startTime, setStart] = useState("");
   const [endTime, setEnd] = useState("");
@@ -244,7 +319,6 @@ export function BulkEdit({ jobIds, types, defaultTypeId, onDone }: { jobIds: str
   if (changeDescription) edit.description = description;
   if (changePositions) edit.positions = positions;
   const any = Object.keys(edit).length > 0;
-  const refused = preview?.filter((r) => r.problem).length ?? 0;
   const conflicts = (preview ?? []).flatMap((r) => r.conflicts.map((c) => `${c.name} on #${r.number}, ${DAY.format(new Date(r.before.startAt))}: ${c.message}`));
   const fingerprints = Object.fromEntries((preview ?? []).filter((r) => r.conflictFingerprint).map((r) => [r.jobId, r.conflictFingerprint!]));
   const saveEdit: EditWire = conflicts.length && confirmed && conflictReason.trim() ? { ...edit, conflictOverride: { reason: conflictReason, fingerprints } } : edit;
@@ -282,13 +356,11 @@ export function BulkEdit({ jobIds, types, defaultTypeId, onDone }: { jobIds: str
         </FormField>
       </div>
       <label className="flex min-h-11 items-center gap-2">
-        <input type="checkbox" checked={changePositions} onChange={(e) => touch(setChangePositions)(e.target.checked)} className={check} />
-        Replace the positions
+        <input type="checkbox" checked={changePositions} onChange={(e) => touch(setChangePositions)(e.target.checked)} className={check} />Replace the positions
       </label>
       {changePositions ? <PositionsEditor value={positions} onChange={touch(setPositions)} types={types} defaultTypeId={defaultTypeId} idPrefix="bulk" /> : null}
       <label className="flex min-h-11 items-center gap-2">
-        <input type="checkbox" checked={changeDescription} onChange={(e) => touch(setChangeDescription)(e.target.checked)} className={check} />
-        Replace the description
+        <input type="checkbox" checked={changeDescription} onChange={(e) => touch(setChangeDescription)(e.target.checked)} className={check} />Replace the description
       </label>
       {changeDescription ? (
         <FormField label="Description">
@@ -311,61 +383,29 @@ export function BulkEdit({ jobIds, types, defaultTypeId, onDone }: { jobIds: str
         </div>
       ) : null}
       {preview ? (
-        <div className="flex flex-col gap-2.5">
-          <h3 className="m-0 text-body font-semibold">Preview</h3>
-          {refused ? <Notice tone="danger">{refused === 1 ? "1 detail cannot take this change" : `${refused} details cannot take this change`}. Remove them from the selection or change the edit; nothing is saved until every detail can.</Notice> : null}
-          <ul className="m-0 flex max-h-112 list-none flex-col divide-y divide-divider overflow-y-auto rounded-md border border-line p-0" aria-label="Before and after">
-            {preview.map((r) => (
-              <li key={r.jobId} className="flex flex-col gap-1.5 px-3 py-2.5">
-                <span className="font-semibold">
-                  #{r.number} {r.title}
-                  <span className="font-normal text-muted">
-                    , {r.vendorName}, {DAY.format(new Date(r.before.startAt))}
-                  </span>
-                </span>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-muted">Before</span>
-                    <Shot s={r.before} />
-                  </div>
-                  {r.after ? (
-                    <div className="flex flex-col">
-                      <span className="text-xs font-semibold text-muted">After</span>
-                      <Shot s={r.after} />
-                    </div>
-                  ) : null}
-                </div>
-                {r.problem ? <p className="m-0 text-sm font-medium text-danger-ink">Refused: {r.problem}</p> : null}
-                {r.conflicts.map((c) => (
-                  <p key={`${c.assignmentId}-${c.check}`} className="m-0 text-sm font-medium text-danger-ink">
-                    Conflict for {c.name}: {c.message}{" "}
-                    <a href={`/coordinate/details/${r.jobId}`} target="_blank" rel="noreferrer" className="font-semibold">
-                      Open the detail in a new tab to remove them
-                    </a>
-                  </p>
-                ))}
-              </li>
-            ))}
-          </ul>
-          <ConflictOverride conflicts={conflicts} confirmed={confirmed} onConfirmed={setConfirmed} reason={conflictReason} onReason={setConflictReason} idPrefix="bulk" />
-          <Button busy={busy} disabled={refused > 0 || (conflicts.length > 0 && !(confirmed && conflictReason.trim()))} onClick={() =>
-              run(async () => {
-                const r = await applyEditAction({ jobIds, edit: saveEdit });
-                if (!r.ok) {
-                  // The details changed since the preview: drop it so nothing stale is shown or overridden.
-                  setPreview(null);
-                  setConfirmed(false);
-                  setConflictReason("");
-                  setStale(r.error);
-                }
-                return r;
-              }, onDone)
-            }
-            className="w-fit"
-          >
-            {jobIds.length === 1 ? "Save 1 detail" : `Save all ${jobIds.length} details`}
-          </Button>
-        </div>
+        <BulkPreview
+          preview={preview}
+          conflicts={conflicts}
+          confirmed={confirmed}
+          onConfirmed={setConfirmed}
+          reason={conflictReason}
+          onReason={setConflictReason}
+          busy={busy}
+          count={jobIds.length}
+          onSave={() =>
+            run(async () => {
+              const r = await applyEditAction({ jobIds, edit: saveEdit });
+              if (!r.ok) {
+                // The details changed since the preview: drop it so nothing stale is shown or overridden.
+                setPreview(null);
+                setConfirmed(false);
+                setConflictReason("");
+                setStale(r.error);
+              }
+              return r;
+            }, onDone)
+          }
+        />
       ) : null}
     </form>
   );

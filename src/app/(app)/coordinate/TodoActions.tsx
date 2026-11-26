@@ -8,7 +8,7 @@ import { useCoordAction } from "./_coordinator/status";
 import { ApproveChoice } from "../invoices/[id]/StaffInvoiceActions";
 
 /** One-tap cancel for a locked detail that has started, with the reason already filled in. */
-export function LockedCancel({ jobId, title, reason, latePay, signedUp }: { jobId: string; title: string; reason: string; latePay: boolean; signedUp: number }) {
+export function LockedCancel({ jobId, title, reason, latePay, signedUp }: Readonly<{ jobId: string; title: string; reason: string; latePay: boolean; signedUp: number }>) {
   const [why, setWhy] = useState(reason);
   const [applyPay, setApplyPay] = useState(false);
   const { run, busy } = useCoordAction();
@@ -25,8 +25,7 @@ export function LockedCancel({ jobId, title, reason, latePay, signedUp }: { jobI
       </FormField>
       {!latePay && signedUp > 0 ? (
         <label className="flex min-h-11 items-center gap-2 text-sm">
-          <input type="checkbox" checked={applyPay} onChange={(e) => setApplyPay(e.target.checked)} className="size-4.5 accent-accent" />
-          Pay the people signed up the late cancellation minimum
+          <input type="checkbox" checked={applyPay} onChange={(e) => setApplyPay(e.target.checked)} className="size-4.5 accent-accent" />Pay the people signed up the late cancellation minimum
         </label>
       ) : null}
       <Button type="submit" variant="danger" busy={busy} aria-label={`Cancel detail, ${title}`}>
@@ -36,13 +35,13 @@ export function LockedCancel({ jobId, title, reason, latePay, signedUp }: { jobI
   );
 }
 
-export function ApproveInvoiceButton({ invoiceId, batched = false, sendByDefault = true }: { invoiceId: string; batched?: boolean; sendByDefault?: boolean }) {
+export function ApproveInvoiceButton({ invoiceId, batched = false, sendByDefault = true }: Readonly<{ invoiceId: string; batched?: boolean; sendByDefault?: boolean }>) {
   const { run, busy } = useCoordAction();
   return <ApproveChoice size="sm" busy={busy} batched={batched} sendByDefault={sendByDefault} onApprove={(send) => run(() => approveInvoiceAction(invoiceId, { send }))} />;
 }
 
 /** "Send now" for an invoice approved without sending. */
-export function SendNowButton({ invoiceId, number }: { invoiceId: string; number: string }) {
+export function SendNowButton({ invoiceId, number }: Readonly<{ invoiceId: string; number: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Button size="sm" variant="secondary" busy={busy} onClick={() => run(() => sendApprovedInvoiceAction(invoiceId))} aria-label={`Send now, ${number}`}>
@@ -52,7 +51,7 @@ export function SendNowButton({ invoiceId, number }: { invoiceId: string; number
 }
 
 /** Approve as written, edit then approve, or deny with an optional reason. */
-export function NoteReview({ noteId, body }: { noteId: string; body: string }) {
+export function NoteReview({ noteId, body }: Readonly<{ noteId: string; body: string }>) {
   const [mode, setMode] = useState<"idle" | "edit" | "deny">("idle");
   const [text, setText] = useState(body);
   const [comment, setComment] = useState("");
@@ -116,7 +115,7 @@ export function NoteReview({ noteId, body }: { noteId: string; body: string }) {
   );
 }
 
-export function FlagDecision({ requestId, who }: { requestId: string; who: string }) {
+export function FlagDecision({ requestId, who }: Readonly<{ requestId: string; who: string }>) {
   const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState("");
   const { run, busy } = useCoordAction();
@@ -155,7 +154,7 @@ export function FlagDecision({ requestId, who }: { requestId: string; who: strin
 }
 
 /** Lifts one person's sign-up lock for a few days, with a reason they are told. */
-export function LiftLock({ userId, name }: { userId: string; name: string }) {
+export function LiftLock({ userId, name }: Readonly<{ userId: string; name: string }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [days, setDays] = useState("3");

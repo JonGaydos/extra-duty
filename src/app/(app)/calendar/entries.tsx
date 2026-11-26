@@ -6,7 +6,7 @@ import { PayLabel } from "@/ui/components/PayLabel";
 import { clock, timeRange } from "../_personnel/format";
 
 /** Status stripe colors. Steady, never animated, and always next to the status in words. */
-export const STRIPE: Record<CalStatus, string> = {
+const STRIPE: Record<CalStatus, string> = {
   open: "bg-cal-open",
   filled: "bg-cal-filled",
   past: "bg-cal-past",
@@ -15,7 +15,7 @@ export const STRIPE: Record<CalStatus, string> = {
   canceled: "bg-field",
 };
 
-const TONE: Record<CalStatus, "success" | "danger" | "neutral" | "warning" | "coordinator"> = {
+export const TONE: Record<CalStatus, "success" | "danger" | "neutral" | "warning" | "coordinator"> = {
   open: "success",
   filled: "danger",
   past: "neutral",
@@ -26,20 +26,23 @@ const TONE: Record<CalStatus, "success" | "danger" | "neutral" | "warning" | "co
 
 const MINE_LABEL: Record<string, string> = { signed_up: "Signed up", backup: "Backup", pending_short: "Pending shorter", billed: "Billed", paid: "Paid" };
 
+/** "Vendor or title, Place", or the first part alone when there is no place. */
+export const withPlace = (text: string, place: string | null) => (place ? `${text}, ${place}` : text);
+
 /** Where an entry opens: the coordinator's page for staff, the deputy's page for everyone else. */
 export const entryHref = (e: CalEntry, staff: boolean) => (staff ? `/coordinate/details/${e.id}` : `/jobs/${e.id}`);
 
 /** What a screen reader hears after the entry's text. */
-export function statusWords(e: CalEntry): string {
+function statusWords(e: CalEntry): string {
   return [STATUS_LABEL[e.status], e.held ? "held" : null, e.mine ? "you are on it" : null].filter(Boolean).join(", ");
 }
 
 /** "7:00 AM Vendor name" in a month cell, with the title on hover. */
-export function CompactEntry({ e, staff }: { e: CalEntry; staff: boolean }) {
+export function CompactEntry({ e, staff }: Readonly<{ e: CalEntry; staff: boolean }>) {
   return (
     <Link
       href={entryHref(e, staff)}
-      title={`${e.title}${e.locationName ? `, ${e.locationName}` : ""}`}
+      title={withPlace(e.title, e.locationName)}
       data-card-link
       className="group flex min-h-6 items-stretch gap-1.5 rounded-xs py-0.5 pr-1 text-xs text-ink no-underline hover:bg-subtle hover:text-ink"
     >
@@ -59,7 +62,7 @@ export function CompactEntry({ e, staff }: { e: CalEntry; staff: boolean }) {
 }
 
 /** One entry in the day, week and list views. */
-export function EntryRow({ e, staff }: { e: CalEntry; staff: boolean }) {
+export function EntryRow({ e, staff }: Readonly<{ e: CalEntry; staff: boolean }>) {
   return (
     <div className="flex flex-col rounded-md border border-line bg-surface">
       <Link href={entryHref(e, staff)} data-card-link className="group flex items-stretch gap-3 rounded-md py-2.5 pr-3 pl-2.5 text-ink no-underline hover:bg-subtle hover:text-ink">
@@ -99,7 +102,7 @@ const LEGEND: Array<[CalStatus, string]> = [
 ];
 
 /** The color key under the calendar. */
-export function Legend({ staff }: { staff: boolean }) {
+export function Legend({ staff }: Readonly<{ staff: boolean }>) {
   return (
     <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1.5 p-0 text-xs text-muted" aria-label="Color key">
       {LEGEND.filter(([s]) => staff || s !== "requested").map(([s, text]) => (

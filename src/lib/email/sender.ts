@@ -4,16 +4,17 @@ import { guarded, outboxSender } from "./outbox";
 import type { EmailSender } from "./types";
 
 const notConfigured: EmailSender = {
-  async send() {
-    throw new Error("Email delivery is not configured.");
-  },
+  // A rejected promise, like a real send failure.
+  send: () => Promise.reject(new Error("Email delivery is not configured.")),
 };
 
 // Kept on globalThis: Next compiles instrumentation and each route separately, so every bundle gets its
 // own copy of this module, and a module-level variable would not be shared inside one Node process.
 const KEY = Symbol.for("extra-duty.email-sender");
 type Holder = { sender?: EmailSender };
-const holder = ((globalThis as Record<symbol, unknown>)[KEY] ??= {}) as Holder;
+const globals = globalThis as Record<symbol, unknown>;
+globals[KEY] ??= {};
+const holder = globals[KEY] as Holder;
 
 /**
  * The app-wide sender. The app installs the settings-backed one (see ensureEmailSender). In training mode it is

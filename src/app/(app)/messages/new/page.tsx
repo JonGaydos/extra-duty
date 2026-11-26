@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "New message" };
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Writing a message or a reply. `jobId` starts it addressed to that job's roster. */
-export default async function NewMessagePage({ searchParams }: Props) {
+export default async function NewMessagePage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";

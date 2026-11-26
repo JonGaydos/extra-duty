@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { StaffingGrid } from "@/ui/components/StaffingGrid";
 
-const count = (html: string, re: RegExp) => html.match(re)?.length ?? 0;
+/** How many times `re` (a global pattern) matches. */
+const count = (html: string, re: RegExp) => [...html.matchAll(re)].length;
 
 describe("StaffingGrid", () => {
   const html = renderToStaticMarkup(

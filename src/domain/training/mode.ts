@@ -7,11 +7,10 @@ import { assertCan, can } from "@/domain/auth/policy";
 import { loadActiveActor } from "@/domain/auth/sign-in-policy";
 import { ValidationError } from "@/domain/errors";
 
-export { dbFor, runnerFor, type DataMode } from "@/db/client";
-export { storageFor } from "@/lib/storage";
+export { type DataMode } from "@/db/client";
 
 export type PracticeRole = "deputy" | "coordinator" | "admin" | "vendor";
-export const PRACTICE_ROLES: readonly PracticeRole[] = ["deputy", "coordinator", "admin", "vendor"];
+const PRACTICE_ROLES: readonly PracticeRole[] = ["deputy", "coordinator", "admin", "vendor"];
 export const PRACTICE_ROLE_LABELS: Record<PracticeRole, string> = { deputy: "Deputy", coordinator: "Coordinator", admin: "Admin", vendor: "Vendor" };
 
 /** The demo account each practice role signs in as, in the training database (created by the demo seed). */

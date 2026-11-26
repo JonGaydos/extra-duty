@@ -6,7 +6,7 @@ import { agencyDateParts } from "../time/agency-time";
 
 export type AssignmentStatus = (typeof assignmentStatus.enumValues)[number];
 
-export type JobForRules = {
+type JobForRules = {
   id: string;
   number: number;
   vendorId: string;
@@ -62,13 +62,19 @@ function plural(n: number, one: string, many: string): string {
 function rankMessage(names: string[]): string {
   if (names.length <= 1) return `Requires the ${names[0] ?? ""} rank`;
   if (names.length === 2) return `Requires the ${names[0]} or ${names[1]} rank`;
-  return `Requires the ${names.slice(0, -1).join(", ")} or ${names[names.length - 1]} rank`;
+  return `Requires the ${names.slice(0, -1).join(", ")} or ${names.at(-1)} rank`;
 }
 
 function billingMessage(unbilled: number, unack: number): string {
   const bill = unbilled > 0 ? `Bill ${plural(unbilled, "past detail", "past details")}` : "";
-  const confirm = unack > 0 ? `${bill ? "confirm" : "Confirm"} payment on ${plural(unack, "invoice", "invoices")}` : "";
+  const confirmVerb = bill ? "confirm" : "Confirm";
+  const confirm = unack > 0 ? `${confirmVerb} payment on ${plural(unack, "invoice", "invoices")}` : "";
   return `${[bill, confirm].filter(Boolean).join(" and ")} to sign up again`;
+}
+
+function stateMessage(released: boolean, started: boolean): string | null {
+  if (!released) return "Not open for sign-up";
+  return started ? "This detail has started" : null;
 }
 
 /**
@@ -91,7 +97,7 @@ export function evaluateSignup(ctx: EligibilityContext): EligibilityResult {
 
   const released = isReleased({ held: job.held, releaseAt: job.releaseAt, state: job.state }, now);
   const started = now.getTime() >= (job.realStartAt ?? job.startAt).getTime();
-  add("state", !released ? "Not open for sign-up" : started ? "This detail has started" : null);
+  add("state", stateMessage(released, started));
   add("vendor_hold", job.vendorOnPaymentHold ? "Vendor on payment hold" : null);
   add("vendor_restricted", ctx.restrictedFromVendor ? "Not available to you. Contact a coordinator." : null);
   add("rank", position.eligibleRankIds.includes(person.rankId) ? null : rankMessage(position.eligibleRankNames));

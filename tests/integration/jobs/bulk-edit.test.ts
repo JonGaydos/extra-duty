@@ -1,11 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
-import { assignments, auditLog, jobPositions, jobSeries, jobs, notifications, vendorHolds } from "@/db/schema";
+import { assignments, auditLog, jobPositions, jobSeries, jobs, notifications, vendorHolds, vendorLocations } from "@/db/schema";
 import { signUp } from "@/domain/assignments/signup";
 import { applyEdit, clockTimes, previewEdit, seriesIds } from "@/domain/jobs/bulk-edit";
 import { ForbiddenError, ValidationError } from "@/domain/errors";
+import { updateJob } from "@/domain/jobs/jobs";
 import { updateSettings } from "@/domain/settings/settings";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { makeUser } from "../users/helpers";
@@ -17,7 +18,7 @@ describe("quick edit and bulk edit", () => {
 
   test("clock times apply on the detail's own date; an earlier end runs past midnight", () => {
     const job = { startAt: agencyInstant(2035, 3, 1, 17, 0), endAt: agencyInstant(2035, 3, 1, 23, 0) };
-    expect(clockTimes(job, "18:30", undefined)).toEqual({ startAt: agencyInstant(2035, 3, 1, 18, 30), endAt: job.endAt });
+    expect(clockTimes(job, "18:30")).toEqual({ startAt: agencyInstant(2035, 3, 1, 18, 30), endAt: job.endAt });
     expect(clockTimes(job, undefined, "01:00")).toEqual({ startAt: job.startAt, endAt: agencyInstant(2035, 3, 2, 1, 0) });
   });
 
@@ -33,7 +34,7 @@ describe("quick edit and bulk edit", () => {
     expect(rows[1].after!.description).toBe("Bring a vest");
     const stored = await get().db.select().from(jobs).where(eq(jobs.id, a.job.id));
     expect(stored[0].rateCents).toBe(7000);
-    expect((await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, a.job.id), eq(auditLog.action, "job.update")))).length).toBe(0);
+    expect(await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, a.job.id), eq(auditLog.action, "job.update")))).toHaveLength(0);
   });
 
   test("saving is all or nothing and names each refusal", async () => {
@@ -81,7 +82,7 @@ describe("quick edit and bulk edit", () => {
     expect(after[0].rateCents).toBe(8000);
     expect(after[0].endAt).toEqual(agencyInstant(2035, 3, 1, 23, 30));
     for (const id of [a.job.id, b.job.id]) {
-      expect((await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, id), eq(auditLog.action, "job.update")))).length).toBe(1);
+      expect(await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, id), eq(auditLog.action, "job.update")))).toHaveLength(1);
     }
     const toP = await get().db.select().from(notifications).where(and(eq(notifications.userId, p.userId), eq(notifications.type, "job.changed")));
     expect(toP).toHaveLength(1);
@@ -89,6 +90,23 @@ describe("quick edit and bulk edit", () => {
     const toQ = await get().db.select().from(notifications).where(and(eq(notifications.userId, q.userId), eq(notifications.type, "job.changed")));
     expect(toQ).toHaveLength(1);
     expect(toQ[0].title).toMatch(/^Detail changed/);
+  });
+
+  test("quick edit alerts list changed positions and description; a single edit lists a changed location", async () => {
+    const f = await setupFixture(get().db, "be7");
+    const a = await f.mkJob({ count: 2 });
+    const p = await f.person();
+    await f.run((tx) => signUp(p, tx, a.positionId, { warningVersion: 1 }));
+    const alerts = async () =>
+      (await get().db.select().from(notifications).where(and(eq(notifications.userId, p.userId), eq(notifications.type, "job.changed"))).orderBy(asc(notifications.id))).map((n) => n.body);
+
+    await f.run((tx) => applyEdit(f.coord, tx, [a.job.id], { positions: [{ positionTypeId: f.pos["Deputy Sheriff"], count: 3 }], description: "Bring a vest" }));
+    expect(await alerts()).toEqual(["The positions changed. The description changed."]);
+
+    const [loc] = await get().db.insert(vendorLocations).values({ vendorId: f.vendorId, name: "North lot" }).returning();
+    await f.run((tx) => updateJob(f.coord, tx, a.job.id, { locationId: loc.id, description: "Bring a coat" }, "one"));
+    // A single edit names the location but leaves the description out.
+    expect(await alerts()).toEqual(["The positions changed. The description changed.", "The location changed."]);
   });
 
   test("quick edit on a series changes times on this and later dates; positions sync", async () => {

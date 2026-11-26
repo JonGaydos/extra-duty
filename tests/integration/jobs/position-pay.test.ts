@@ -18,6 +18,7 @@ import { updateSettings } from "@/domain/settings/settings";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byNumber } from "@/lib/sort";
 
 const AFTER = new Date("2036-06-01T00:00:00Z");
 
@@ -91,7 +92,7 @@ describe("position pay differential", () => {
       }),
     );
     const positions = await get().db.select().from(jobPositions).where(eq(jobPositions.jobId, job.id)).orderBy(asc(jobPositions.createdAt));
-    expect(positions.map((p) => p.rateDifferentialCents).sort()).toEqual([0, 2500]);
+    expect(positions.map((p) => p.rateDifferentialCents).sort(byNumber)).toEqual([0, 2500]);
     const later = await mkDetail(5000, 3);
     const laterIc = (await get().db.select().from(jobPositions).where(eq(jobPositions.jobId, later.id))).find((p) => p.positionTypeId === ic.id)!;
     expect(laterIc.rateDifferentialCents).toBe(4000);
@@ -110,14 +111,14 @@ describe("position pay differential", () => {
     const job = await mkDetail(5000, 4);
     const card = async () => (await fx.run((tx) => loadJobCards(fx.coord, tx, [job])))[0];
     const before = await card();
-    expect(before.positions.map((p) => p.rateCents).sort()).toEqual([5000, 7500]);
+    expect(before.positions.map((p) => p.rateCents).sort(byNumber)).toEqual([5000, 7500]);
     // 4 hours: base $200, Incident Commander $300.
     expect(before.totalCents).toBe(20000);
     expect(before.maxTotalCents).toBe(30000);
     expect(before.maxRateCents).toBe(7500);
     const [after] = await fx.run((tx) => updateJob(fx.coord, tx, job.id, { rateCents: 6000 }, "one"));
     const again = (await fx.run((tx) => loadJobCards(fx.coord, tx, [after])))[0];
-    expect(again.positions.map((p) => p.rateCents).sort()).toEqual([6000, 8500]);
+    expect(again.positions.map((p) => p.rateCents).sort(byNumber)).toEqual([6000, 8500]);
   });
 
   test("billing an Incident Commander spot uses the position's rate, late cancellations too", async () => {

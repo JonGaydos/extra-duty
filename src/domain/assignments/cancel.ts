@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { leaveAssignment, type LeaveOptions } from "./backups";
 import type { Assignment } from "./signup";
 
-export { claimSpot, openSpot } from "./backups";
+export { claimSpot } from "./backups";
 
 const STARTED = "This detail has started. Ask a coordinator to remove you.";
 

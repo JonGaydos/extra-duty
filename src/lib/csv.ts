@@ -3,7 +3,7 @@ import type { Cents } from "@/domain/types";
 /** RFC 4180 quoting, plus a leading single quote on text that a spreadsheet would run as a formula. */
 export function csvCell(value: string): string {
   const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 /** Header and rows as CRLF-terminated CSV text. */

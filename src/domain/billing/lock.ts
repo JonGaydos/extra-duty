@@ -71,6 +71,7 @@ export async function loadUnbilledWhere(tx: Tx, where: SQL | undefined, now: Dat
     .innerJoin(jobs, eq(jobs.id, assignments.jobId))
     .where(and(where, inArray(assignments.status, ["signed_up", "late_canceled"]), isNull(assignments.writtenOffAt)));
   const out: Array<UnbilledItem & { userId: string }> = [];
+  // Sequential: these queries share one transaction's connection, which runs one at a time.
   for (const { a, job } of rows) {
     let endAt: Date;
     // Late-cancel pay counts once the detail's scheduled end has passed, like a worked detail: it cannot be billed before.
@@ -127,6 +128,77 @@ export const realBillingLockReader: BillingLockReader = async (tx, userId, now) 
   return billingLockStatus({ unbilled, unacknowledged, now, s, override });
 };
 
+type People = SQL | undefined;
+
+/**
+ * When the row is waiting to be billed, the end it counts from; otherwise null. Late-cancel pay counts after the
+ * scheduled end; a worked detail too, unless its job was canceled or declined or is locked by a vendor hold.
+ */
+function unbilledEnd(r: { status: string; state: string; endAt: Date; locked: boolean }, now: Date): Date | null {
+  if (r.endAt.getTime() > now.getTime()) return null;
+  if (r.status === "late_canceled") return r.endAt;
+  if (r.state === "canceled" || r.state === "declined") return null;
+  if (r.locked && (r.state === "requested" || r.state === "scheduled" || r.state === "active")) return null;
+  return r.endAt;
+}
+
+/** Per person, the ends of their details waiting to be billed. */
+async function unbilledByPerson(tx: Tx, people: People, now: Date): Promise<Map<string, Array<{ endAt: Date }>>> {
+  const unbilled = new Map<string, Array<{ endAt: Date }>>();
+  const rows = await tx
+    .select({
+      userId: assignments.userId,
+      status: assignments.status,
+      state: jobs.state,
+      endAt: jobs.endAt,
+      // Locked by an open vendor hold placed before the job started (see isJobLocked).
+      locked: sql<boolean>`exists (select 1 from vendor_holds h where h.vendor_id = ${jobs.vendorId} and h.resolved_at is null and ${jobs.startAt} > h.placed_at)`,
+    })
+    .from(assignments)
+    .innerJoin(jobs, eq(jobs.id, assignments.jobId))
+    .innerJoin(users, eq(users.id, assignments.userId))
+    .where(and(people, inArray(assignments.status, ["signed_up", "late_canceled"]), isNull(assignments.writtenOffAt)));
+  for (const r of rows) {
+    const endAt = unbilledEnd(r, now);
+    if (endAt) unbilled.set(r.userId, [...(unbilled.get(r.userId) ?? []), { endAt }]);
+  }
+  return unbilled;
+}
+
+/** Per person, their sent invoices that count toward the payment acknowledgment lock. */
+async function unacknowledgedByPerson(tx: Tx, people: People): Promise<Map<string, UnackInput[]>> {
+  const unack = new Map<string, UnackInput[]>();
+  const rows = await tx
+    .select({
+      userId: invoices.payeeUserId,
+      sentAt: invoices.sentAt,
+      deputyPaidAt: invoices.deputyPaidAt,
+      responsibleParty: invoices.responsibleParty,
+      responsibleSince: invoices.responsibleSince,
+      hasOpenIssue: exists(tx.select({ x: paymentIssues.id }).from(paymentIssues).where(and(eq(paymentIssues.invoiceId, invoices.id), eq(paymentIssues.status, "open")))),
+    })
+    .from(invoices)
+    .innerJoin(users, eq(users.id, invoices.payeeUserId))
+    .where(and(people, eq(invoices.status, "sent")));
+  for (const r of rows) {
+    if (!r.sentAt) continue;
+    unack.set(r.userId, [...(unack.get(r.userId) ?? []), { ...r, sentAt: r.sentAt, hasOpenIssue: Boolean(r.hasOpenIssue) }]);
+  }
+  return unack;
+}
+
+/** Per person, the newest override that has not expired. */
+async function activeOverrides(tx: Tx, ids: string[], now: Date): Promise<Map<string, { until: Date }>> {
+  const overrides = await tx
+    .select({ userId: billingLockOverrides.userId, until: billingLockOverrides.until })
+    .from(billingLockOverrides)
+    .where(and(inArray(billingLockOverrides.userId, ids), gt(billingLockOverrides.until, now)))
+    .orderBy(desc(billingLockOverrides.createdAt), desc(billingLockOverrides.id));
+  const override = new Map<string, { until: Date }>();
+  for (const o of overrides) if (!override.has(o.userId)) override.set(o.userId, { until: o.until });
+  return override;
+}
+
 /**
  * The same answer as `realBillingLockReader`, for every active personnel, coordinator and admin account at once,
  * in four queries (settings, unbilled assignments with open holds, sent invoices, overrides). Only locked people
@@ -136,62 +208,11 @@ export async function lockedPeople(tx: Tx, now: Date): Promise<Array<LockStatus 
   const s = await getSettings(tx);
   if (!s.billingLockEnabled && s.paymentAckLockMode === "off") return [];
   const people = and(eq(users.active, true), inArray(users.role, ["personnel", "coordinator", "admin"]));
-  const unbilled = new Map<string, Array<{ endAt: Date }>>();
-  if (s.billingLockEnabled) {
-    const rows = await tx
-      .select({
-        userId: assignments.userId,
-        status: assignments.status,
-        state: jobs.state,
-        endAt: jobs.endAt,
-        // Locked by an open vendor hold placed before the job started (see isJobLocked).
-        locked: sql<boolean>`exists (select 1 from vendor_holds h where h.vendor_id = ${jobs.vendorId} and h.resolved_at is null and ${jobs.startAt} > h.placed_at)`,
-      })
-      .from(assignments)
-      .innerJoin(jobs, eq(jobs.id, assignments.jobId))
-      .innerJoin(users, eq(users.id, assignments.userId))
-      .where(and(people, inArray(assignments.status, ["signed_up", "late_canceled"]), isNull(assignments.writtenOffAt)));
-    for (const r of rows) {
-      let endAt: Date;
-      if (r.status === "late_canceled") {
-        if (r.endAt.getTime() > now.getTime()) continue;
-        endAt = r.endAt;
-      } else {
-        if (r.state === "canceled" || r.state === "declined" || r.endAt.getTime() > now.getTime()) continue;
-        if (r.locked && (r.state === "requested" || r.state === "scheduled" || r.state === "active")) continue;
-        endAt = r.endAt;
-      }
-      unbilled.set(r.userId, [...(unbilled.get(r.userId) ?? []), { endAt }]);
-    }
-  }
-  const unack = new Map<string, UnackInput[]>();
-  if (s.paymentAckLockMode !== "off") {
-    const rows = await tx
-      .select({
-        userId: invoices.payeeUserId,
-        sentAt: invoices.sentAt,
-        deputyPaidAt: invoices.deputyPaidAt,
-        responsibleParty: invoices.responsibleParty,
-        responsibleSince: invoices.responsibleSince,
-        hasOpenIssue: exists(tx.select({ x: paymentIssues.id }).from(paymentIssues).where(and(eq(paymentIssues.invoiceId, invoices.id), eq(paymentIssues.status, "open")))),
-      })
-      .from(invoices)
-      .innerJoin(users, eq(users.id, invoices.payeeUserId))
-      .where(and(people, eq(invoices.status, "sent")));
-    for (const r of rows) {
-      if (!r.sentAt) continue;
-      unack.set(r.userId, [...(unack.get(r.userId) ?? []), { ...r, sentAt: r.sentAt, hasOpenIssue: Boolean(r.hasOpenIssue) }]);
-    }
-  }
+  const unbilled = s.billingLockEnabled ? await unbilledByPerson(tx, people, now) : new Map<string, Array<{ endAt: Date }>>();
+  const unack = s.paymentAckLockMode === "off" ? new Map<string, UnackInput[]>() : await unacknowledgedByPerson(tx, people);
   const ids = [...new Set([...unbilled.keys(), ...unack.keys()])];
   if (ids.length === 0) return [];
-  const overrides = await tx
-    .select({ userId: billingLockOverrides.userId, until: billingLockOverrides.until })
-    .from(billingLockOverrides)
-    .where(and(inArray(billingLockOverrides.userId, ids), gt(billingLockOverrides.until, now)))
-    .orderBy(desc(billingLockOverrides.createdAt), desc(billingLockOverrides.id));
-  const override = new Map<string, { until: Date }>();
-  for (const o of overrides) if (!override.has(o.userId)) override.set(o.userId, { until: o.until });
+  const override = await activeOverrides(tx, ids, now);
   const names = new Map((await tx.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.name]));
   const out: Array<LockStatus & { userId: string; name: string }> = [];
   for (const id of ids) {

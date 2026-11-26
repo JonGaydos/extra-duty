@@ -13,7 +13,7 @@ import { useCoordAction } from "../../coordinate/_coordinator/status";
 export type ListItem = { id: string; name: string; active: boolean; meta?: string; href?: string };
 
 /** "Add" form for a list: one text field and a button. */
-export function AddItem({ label, button, onAdd }: { label: string; button: string; onAdd: (name: string) => Promise<ActionResult> }) {
+export function AddItem({ label, button, onAdd }: Readonly<{ label: string; button: string; onAdd: (name: string) => Promise<ActionResult> }>) {
   const [name, setName] = useState("");
   const { run, busy } = useCoordAction();
   return (
@@ -37,7 +37,26 @@ export function AddItem({ label, button, onAdd }: { label: string; button: strin
   );
 }
 
-function ItemRow({ item, onRename, onActive, renameLabel }: { item: ListItem; onRename?: (id: string, name: string) => Promise<ActionResult>; onActive?: (id: string, active: boolean) => Promise<ActionResult>; renameLabel: string }) {
+/** The item's name (a link when it has a page), an Off chip when turned off, and its details line. */
+function ItemText({ item }: Readonly<{ item: ListItem }>) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <p className="m-0 flex flex-wrap items-center gap-2 font-semibold">
+        {item.href ? (
+          <Link href={item.href} className="text-ink hover:text-link">
+            {item.name}
+          </Link>
+        ) : (
+          item.name
+        )}
+        {!item.active ? <Chip>Off</Chip> : null}
+      </p>
+      {item.meta ? <p className="m-0 text-sm text-muted">{item.meta}</p> : null}
+    </div>
+  );
+}
+
+function ItemRow({ item, onRename, onActive, renameLabel }: Readonly<{ item: ListItem; onRename?: (id: string, name: string) => Promise<ActionResult>; onActive?: (id: string, active: boolean) => Promise<ActionResult>; renameLabel: string }>) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const { run, busy } = useCoordAction();
@@ -67,19 +86,7 @@ function ItemRow({ item, onRename, onActive, renameLabel }: { item: ListItem; on
         </form>
       ) : (
         <>
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="m-0 flex flex-wrap items-center gap-2 font-semibold">
-              {item.href ? (
-                <Link href={item.href} className="text-ink hover:text-link">
-                  {item.name}
-                </Link>
-              ) : (
-                item.name
-              )}
-              {!item.active ? <Chip>Off</Chip> : null}
-            </p>
-            {item.meta ? <p className="m-0 text-sm text-muted">{item.meta}</p> : null}
-          </div>
+          <ItemText item={item} />
           <div className="flex shrink-0 flex-wrap gap-2">
             {onRename ? (
               <Button size="sm" variant="secondary" aria-label={`Rename ${item.name}`} onClick={() => setEditing(true)}>
@@ -105,13 +112,13 @@ export function ListEditor({
   onRename,
   onActive,
   renameLabel = "New name",
-}: {
+}: Readonly<{
   items: ListItem[];
   empty: { title: string; text: string };
   onRename?: (id: string, name: string) => Promise<ActionResult>;
   onActive?: (id: string, active: boolean) => Promise<ActionResult>;
   renameLabel?: string;
-}) {
+}>) {
   if (!items.length)
     return (
       <Card pad={false}>

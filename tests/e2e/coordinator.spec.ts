@@ -44,19 +44,21 @@ function december(): number {
 
 type Screen = { name: string; path: () => Promise<string>; heading: string | RegExp };
 
+// Every path is a promise, since some screens look up a record id first; `at` gives a fixed path in that shape.
+const at = (path: string) => () => Promise.resolve(path);
 const SCREENS: Screen[] = [
-  { name: "todo", path: async () => "/coordinate", heading: /^Good (morning|afternoon|evening), Quinn/ },
-  { name: "details", path: async () => "/coordinate/details", heading: "Details" },
-  { name: "new-detail", path: async () => "/coordinate/details/new", heading: "New detail" },
+  { name: "todo", path: at("/coordinate"), heading: /^Good (morning|afternoon|evening), Quinn/ },
+  { name: "details", path: at("/coordinate/details"), heading: "Details" },
+  { name: "new-detail", path: at("/coordinate/details/new"), heading: "New detail" },
   { name: "detail", path: async () => `/coordinate/details/${await jobId(COORD.opsJob)}`, heading: COORD.opsJob },
   { name: "request", path: async () => `/coordinate/details/${await jobId(COORD.request)}`, heading: COORD.request },
-  { name: "vendors", path: async () => "/coordinate/vendors", heading: "Vendors" },
+  { name: "vendors", path: at("/coordinate/vendors"), heading: "Vendors" },
   { name: "vendor", path: async () => `/coordinate/vendors/${await vendorId(COORD.vendor)}`, heading: COORD.vendor },
   { name: "payments", path: async () => `/coordinate/payments?open=${await invoiceId(COORD.issueJob)}`, heading: "Payments" },
   { name: "invoice", path: async () => `/invoices/${await invoiceId(COORD.issueJob)}`, heading: /^Invoice / },
-  { name: "send-invoices", path: async () => "/coordinate/send-invoices", heading: "Send invoices" },
-  { name: "ops-plans", path: async () => "/coordinate/ops-plans", heading: "Ops plans" },
-  { name: "reports", path: async () => "/coordinate/reports", heading: "Reports" },
+  { name: "send-invoices", path: at("/coordinate/send-invoices"), heading: "Send invoices" },
+  { name: "ops-plans", path: at("/coordinate/ops-plans"), heading: "Ops plans" },
+  { name: "reports", path: at("/coordinate/reports"), heading: "Reports" },
   { name: "deputy-earnings", path: async () => `/coordinate/reports/deputies/${await userId(COORD.signed.email)}`, heading: `Earnings: ${COORD.signed.name}` },
 ];
 

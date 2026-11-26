@@ -19,7 +19,7 @@ const STATUS_TEXT: Record<CalStatus, string> = {
 
 const box = "size-4.5 shrink-0 accent-accent";
 
-function Group({ legend, name, options, picked }: { legend: string; name: string; options: Array<{ id: string; name: string }>; picked: string[] }) {
+function Group({ legend, name, options, picked }: Readonly<{ legend: string; name: string; options: Array<{ id: string; name: string }>; picked: string[] }>) {
   if (options.length === 0) return null;
   const n = picked.length;
   return (
@@ -55,7 +55,7 @@ const SORTS: Array<[DetailFilters["sort"], string]> = [
   ["vendor", "Vendor"],
 ];
 
-export function FilterPanel({ path, keep, filters, options, remember, active, staff, personal }: { path: string; keep: Record<string, string>; filters: DetailFilters; options: FilterOptions; remember: boolean; active: number; staff: boolean; personal?: { scheduleNote: string } }) {
+export function FilterPanel({ path, keep, filters, options, remember, active, staff, personal }: Readonly<{ path: string; keep: Record<string, string>; filters: DetailFilters; options: FilterOptions; remember: boolean; active: number; staff: boolean; personal?: { scheduleNote: string } }>) {
   const [open, setOpen] = useState(false);
   return (
     <aside aria-label="Filters" className="flex flex-col gap-2">
@@ -81,29 +81,24 @@ export function FilterPanel({ path, keep, filters, options, remember, active, st
               <Input name="num" defaultValue={filters.jobNumber ?? ""} inputMode="numeric" placeholder="1234" />
             </FormField>
             <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
-              <input type="checkbox" name="mine" value="1" defaultChecked={filters.mine} className={box} />
-              My details only
+              <input type="checkbox" name="mine" value="1" defaultChecked={filters.mine} className={box} />My details only
             </label>
             {personal ? (
               <fieldset className="m-0 flex flex-col border-0 p-0">
                 <legend className="mb-1 text-sm font-medium text-muted">For you</legend>
                 <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="open" value="1" defaultChecked={filters.openOnly} className={box} />
-                  Open spots only
+                  <input type="checkbox" name="open" value="1" defaultChecked={filters.openOnly} className={box} />Open spots only
                 </label>
                 <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="week" value="1" defaultChecked={filters.week} className={box} />
-                  This week
+                  <input type="checkbox" name="week" value="1" defaultChecked={filters.week} className={box} />This week
                 </label>
                 <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="flex" value="1" defaultChecked={filters.flex} className={box} />
-                  Flexible times
+                  <input type="checkbox" name="flex" value="1" defaultChecked={filters.flex} className={box} />Flexible times
                 </label>
                 <label className="flex min-h-10 items-start gap-2 py-1.5 text-sm pointer-coarse:min-h-11">
                   <input type="checkbox" name="workable" value="1" defaultChecked={filters.workable} className={`${box} mt-0.5`} />
                   <span className="flex flex-col">
-                    Only details I can work
-                    <span className="text-xs text-muted">{personal.scheduleNote}</span>
+                    Only details I can work<span className="text-xs text-muted">{personal.scheduleNote}</span>
                   </span>
                 </label>
                 <FormField label="Sort by">
@@ -145,8 +140,7 @@ export function FilterPanel({ path, keep, filters, options, remember, active, st
               </FormField>
             ) : null}
             <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input type="checkbox" name="remember" value="1" defaultChecked={remember} className={box} />
-              Remember my filters
+              <input type="checkbox" name="remember" value="1" defaultChecked={remember} className={box} />Remember my filters
             </label>
             <div className="flex flex-wrap gap-2">
               <Button type="submit">Apply</Button>

@@ -15,6 +15,9 @@ import { resetGeocoder } from "@/domain/vendors/geocode";
 import { addVendorContact, listVendorContacts, setVendorContactActive, updateVendorContact } from "@/domain/vendors/contacts";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
+
+// Fake fetches are async to match fetch; they answer at once.
 
 const HOUR = 3_600_000;
 
@@ -29,7 +32,7 @@ describe("vendor site contacts", () => {
   let typeId: string;
 
   const run = <T>(fn: (tx: Tx) => Promise<T>) => get().db.transaction(fn);
-  const auditActions = async (id: string) => (await get().db.select().from(auditLog).where(eq(auditLog.entityId, id))).map((a) => a.action).sort();
+  const auditActions = async (id: string) => (await get().db.select().from(auditLog).where(eq(auditLog.entityId, id))).map((a) => a.action).sort(byText);
 
   beforeAll(async () => {
     const { db } = get();
@@ -49,7 +52,7 @@ describe("vendor site contacts", () => {
 
   beforeEach(() => {
     resetGeocoder({ intervalMs: 0 });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("[]", { status: 200 }))));
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -164,6 +167,6 @@ describe("vendor site contacts", () => {
         }),
       ),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect((await get().db.select().from(jobs)).length).toBe(before);
+    expect(await get().db.select().from(jobs)).toHaveLength(before);
   });
 });

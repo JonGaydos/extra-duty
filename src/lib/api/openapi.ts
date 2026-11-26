@@ -52,7 +52,7 @@ function operation(def: RouteDef): Json {
   // The API key scopes this route needs (none on public routes).
   op["x-scopes"] = def.public ? [] : [def.method === "GET" || def.readOnly ? "read" : "write", ...(def.w9 ? ["w9"] : [])];
   if (def.public) op.security = [];
-  if (def.w9) op.description = `${def.description ? `${def.description} ` : ""}API keys need the w9 scope.`;
+  if (def.w9) op.description = def.description ? `${def.description} API keys need the w9 scope.` : "API keys need the w9 scope.";
   if (def.body) op.requestBody = { required: true, content: { "application/json": { schema: schemaOf(def.body, "input") } } };
   if (def.form) {
     op.requestBody = {

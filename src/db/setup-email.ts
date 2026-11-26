@@ -33,7 +33,7 @@ export async function setupEmail(db: Db, env: Env, opts: { replace?: boolean } =
   await db.transaction(async (tx) => {
     const [u] = await tx.select({ id: users.id }).from(users).where(eq(sql`lower(${users.email})`, email));
     const admin = u ? await loadActiveActor(tx, u.id) : null;
-    if (!admin || admin.role !== "admin") throw new Error(`No active admin account for ${email}. Run the release step with SEED_ADMIN_EMAIL set first.`);
+    if (admin?.role !== "admin") throw new Error(`No active admin account for ${email}. Run the release step with SEED_ADMIN_EMAIL set first.`);
     const before = (await getSettings(tx)).email;
     const configured = emailConfigProblem(before) === null;
     if (configured && !opts.replace) {

@@ -2,9 +2,14 @@ import { CAL_STATUSES, JOB_SORTS, NO_FILTERS, sharedOnly, type CalStatus, type D
 
 /** The shared Calendar and Details filters in the address bar, so a filtered view can be linked and reloaded. */
 
-type Params = Record<string, string | string[] | undefined>;
-const many = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []).flatMap((x) => x.split(",")).filter(Boolean).slice(0, 500);
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+type Param = string | string[] | undefined;
+type Params = Record<string, Param>;
+const asList = (v: Param): string[] => {
+  if (Array.isArray(v)) return v;
+  return v ? [v] : [];
+};
+const many = (v: Param) => asList(v).flatMap((x) => x.split(",")).filter(Boolean).slice(0, 500);
+const one = (v: Param) => (Array.isArray(v) ? v[0] : v) ?? "";
 
 const KEYS = ["vendor", "vtype", "type", "loc", "status", "person", "num", "q", "mine", "open", "week", "flex", "workable", "sort"] as const;
 

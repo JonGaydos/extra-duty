@@ -20,6 +20,7 @@ import { ForbiddenError, RuleViolation, ValidationError } from "@/domain/errors"
 import { createJob, type JobInput } from "@/domain/jobs/jobs";
 import { jobTypes } from "@/db/schema";
 import { agencyInstant } from "@/domain/time/agency-time";
+import { byText } from "@/lib/sort";
 
 const HOUR = 3_600_000;
 
@@ -157,7 +158,7 @@ describe("sign-up", () => {
     await sign(await person(), positionId);
     const posse = await person("Posse");
     const checks = await violation(sign(posse, positionId));
-    expect(checks.map((c) => c.check).sort()).toEqual(["rank", "state"]);
+    expect(checks.map((c) => c.check).sort(byText)).toEqual(["rank", "state"]);
   });
 
   test("backups are numbered 1, 2, 3 in order and need a full position", async () => {
@@ -219,6 +220,21 @@ describe("sign-up", () => {
       expect((await get().db.select().from(assignments).where(eq(assignments.id, pending.id)))[0].status).toBe("signed_up");
       const [note] = await get().db.select().from(notifications).where(eq(notifications.userId, me.userId));
       expect(note.type).toBe("signup.short_confirmed");
+    });
+
+    test("a pending request the person has since double-booked is declined with the overlap reason", async () => {
+      const { job, positionId, at } = await mkJob({ flex: { ...flex, allowShorter: true } });
+      const me = await person();
+      const pending = await sign(me, positionId, { now: new Date(job.startAt.getTime() - 72 * HOUR), plannedStartAt: at(18, 0), plannedEndAt: at(23, 0) });
+      const other = await mkJob();
+      await get().db.update(jobs).set({ startAt: at(19, 0), endAt: at(22, 0) }).where(eq(jobs.id, other.job.id));
+      await get().db.insert(assignments).values({ jobId: other.job.id, jobPositionId: other.positionId, userId: me.userId, status: "signed_up" });
+      await run((tx) => confirmPendingShortTick(new Date(job.startAt.getTime() - 23 * HOUR), tx));
+      const [after] = await get().db.select().from(assignments).where(eq(assignments.id, pending.id));
+      expect(after.status).toBe("canceled");
+      const [note] = await get().db.select().from(notifications).where(eq(notifications.userId, me.userId));
+      expect([note.type, note.body]).toEqual(["signup.short_declined", after.removalReason]);
+      expect(note.body).toBe(`Overlaps job #${other.job.number}`);
     });
 
     test("two pending requests confirm in request order", async () => {

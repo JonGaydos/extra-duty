@@ -1,4 +1,5 @@
 import { cloneElement, useId, type InputHTMLAttributes, type Ref, type ReactElement, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { withClass } from "./with-class";
 
 const CONTROL =
   "w-full border border-field bg-surface text-ink placeholder:text-muted " +
@@ -18,15 +19,15 @@ export function Input({
   ...rest
 }: Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & { size?: keyof typeof INPUT_SIZES; ref?: Ref<HTMLInputElement> }) {
   const height = INPUT_SIZES[size];
-  return <input className={`${CONTROL} ${height}${className ? ` ${className}` : ""}`} {...rest} />;
+  return <input className={withClass(`${CONTROL} ${height}`, className)} {...rest} />;
 }
 
-export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`${CONTROL} h-11 rounded-sm px-3 text-body${className ? ` ${className}` : ""}`} {...rest} />;
+export function Select({ className, ...rest }: Readonly<SelectHTMLAttributes<HTMLSelectElement>>) {
+  return <select className={withClass(`${CONTROL} h-11 rounded-sm px-3 text-body`, className)} {...rest} />;
 }
 
-export function TextArea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`${CONTROL} min-h-21 resize-y rounded-sm px-3 py-2.5 text-body${className ? ` ${className}` : ""}`} {...rest} />;
+export function TextArea({ className, ...rest }: Readonly<TextareaHTMLAttributes<HTMLTextAreaElement>>) {
+  return <textarea className={withClass(`${CONTROL} min-h-21 resize-y rounded-sm px-3 py-2.5 text-body`, className)} {...rest} />;
 }
 
 type ControlProps = { id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean };
@@ -40,12 +41,12 @@ export function FormField({
   hint,
   error,
   children,
-}: {
+}: Readonly<{
   label: string;
   hint?: string;
   error?: string;
   children: ReactElement<ControlProps>;
-}) {
+}>) {
   const auto = useId();
   const id = children.props.id ?? auto;
   const hintId = hint ? `${id}-hint` : undefined;

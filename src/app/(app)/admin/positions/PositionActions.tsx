@@ -11,7 +11,7 @@ import { Check, CheckGroup } from "../_admin/forms";
 type Option = { id: string; name: string };
 export type PositionFields = { name: string; eligibleRankIds: string[]; requiredQualificationIds: string[]; isIncidentCommander: boolean; vendorRequestable: boolean; differential: string };
 
-function PositionForm({ id, initial, ranks, flags, submit, onDone }: { id?: string; initial: PositionFields; ranks: Option[]; flags: Option[]; submit: string; onDone: () => void }) {
+function PositionForm({ id, initial, ranks, flags, submit, onDone }: Readonly<{ id?: string; initial: PositionFields; ranks: Option[]; flags: Option[]; submit: string; onDone: () => void }>) {
   const [v, setV] = useState(initial);
   const { run, busy } = useCoordAction();
   return (
@@ -51,7 +51,7 @@ function PositionForm({ id, initial, ranks, flags, submit, onDone }: { id?: stri
   );
 }
 
-export function AddPosition({ ranks, flags }: { ranks: Option[]; flags: Option[] }) {
+export function AddPosition({ ranks, flags }: Readonly<{ ranks: Option[]; flags: Option[] }>) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
@@ -73,7 +73,7 @@ export function AddPosition({ ranks, flags }: { ranks: Option[]; flags: Option[]
   );
 }
 
-export function PositionRowActions({ id, name, active, initial, ranks, flags }: { id: string; name: string; active: boolean; initial: PositionFields; ranks: Option[]; flags: Option[] }) {
+export function PositionRowActions({ id, name, active, initial, ranks, flags }: Readonly<{ id: string; name: string; active: boolean; initial: PositionFields; ranks: Option[]; flags: Option[] }>) {
   const [editing, setEditing] = useState(false);
   const { run, busy } = useCoordAction();
   if (editing)

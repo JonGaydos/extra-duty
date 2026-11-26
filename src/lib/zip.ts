@@ -1,7 +1,7 @@
 import { PassThrough, Readable } from "node:stream";
 import { createDeflateRaw, crc32 } from "node:zlib";
 
-export type ZipEntry = { name: string; chunks: AsyncIterable<string | Buffer> };
+export type ZipEntry = { name: string; chunks: AsyncIterable<string | Buffer> | Iterable<string | Buffer> };
 
 function dosTime(d: Date): { time: number; date: number } {
   return {
@@ -17,7 +17,7 @@ const DEFLATE = 8;
  * Writes the entries as a zip, one at a time and in order, without knowing any size up front: each entry is
  * deflated as it streams and followed by a data descriptor; the central directory comes last. Under 4 GB (no zip64).
  */
-export async function writeZip(entries: AsyncIterable<ZipEntry>, emit: (b: Buffer) => Promise<void>): Promise<void> {
+export async function writeZip(entries: AsyncIterable<ZipEntry> | Iterable<ZipEntry>, emit: (b: Buffer) => Promise<void>): Promise<void> {
   let offset = 0;
   let count = 0;
   const central: Buffer[] = [];

@@ -54,13 +54,23 @@ function open(key: Buffer, iv: Buffer, tag: Buffer, body: Buffer, aad: Buffer): 
 
 type Parsed = { keyId: Buffer | null; wrapAad: Buffer; wrapIv: Buffer; wrapTag: Buffer; wrapped: Buffer; data: Buffer };
 
+/** Bytes before the wrapped key: the version byte, plus the key id from version 2 on; -1 for an unknown version. */
+function headerLength(version: number): number {
+  if (version === V2) return 1 + KEY_ID;
+  return version === V1 ? 1 : -1;
+}
+
 function parse(blob: Buffer): Parsed {
   const version = blob[0];
-  const head = version === V2 ? 1 + KEY_ID : version === V1 ? 1 : -1;
+  const head = headerLength(version);
   if (head < 0) throw new Error("Unsupported encrypted file version.");
   if (blob.length < head + BODY) throw new Error("Encrypted file is malformed.");
   let o = head;
-  const take = (n: number) => blob.subarray(o, (o += n));
+  const take = (n: number) => {
+    const start = o;
+    o += n;
+    return blob.subarray(start, o);
+  };
   return {
     keyId: version === V2 ? blob.subarray(1, 1 + KEY_ID) : null,
     wrapAad: blob.subarray(0, head),

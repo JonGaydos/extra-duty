@@ -9,7 +9,7 @@ export function outboxActive(): boolean {
 }
 
 /** STAGING_EMAIL_ALLOWLIST: comma-separated addresses, compared without case. */
-export function stagingAllowlist(): Set<string> {
+function stagingAllowlist(): Set<string> {
   return new Set(
     (process.env.STAGING_EMAIL_ALLOWLIST ?? "")
       .split(",")

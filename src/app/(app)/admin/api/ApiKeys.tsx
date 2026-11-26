@@ -27,7 +27,7 @@ export type KeyRow = {
 const MONO = "[font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace]";
 const BLANK: NewKeyForm = { name: "", access: "read", w9: false, expiresOn: "" };
 
-function Choice({ name, value, checked, onChange, title, hint }: { name: string; value: string; checked: boolean; onChange: () => void; title: string; hint: string }) {
+function Choice({ name, value, checked, onChange, title, hint }: Readonly<{ name: string; value: string; checked: boolean; onChange: () => void; title: string; hint: string }>) {
   return (
     <label className={`flex cursor-pointer items-start gap-3 rounded-md p-3 ${checked ? "border-2 border-accent" : "border border-line"}`}>
       <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="mt-0.5 size-4.5 shrink-0 accent-accent" />
@@ -39,8 +39,10 @@ function Choice({ name, value, checked, onChange, title, hint }: { name: string;
   );
 }
 
+const COPY_NOTE = { yes: "The key is on your clipboard.", select: "Copying is blocked here. The key is selected: press Ctrl+C or Command+C." };
+
 /** The one time a new key is shown: the whole key, a copy button and the warning that it will not be shown again. */
-function NewKey({ value, onDone }: { value: string; onDone: () => void }) {
+function NewKey({ value, onDone }: Readonly<{ value: string; onDone: () => void }>) {
   const field = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState<"yes" | "select" | null>(null);
   const copy = async () => {
@@ -77,9 +79,9 @@ function NewKey({ value, onDone }: { value: string; onDone: () => void }) {
           {copied === "yes" ? "Copied" : "Copy key"}
         </Button>
       </div>
-      <p role="status" className="m-0 min-h-5 text-sm text-muted">
-        {copied === "yes" ? "The key is on your clipboard." : copied === "select" ? "Copying is blocked here. The key is selected: press Ctrl+C or Command+C." : ""}
-      </p>
+      <output className="block m-0 min-h-5 text-sm text-muted">
+        {copied ? COPY_NOTE[copied] : ""}
+      </output>
       <p className="m-0 text-sm text-muted">
         Send it as <code className={`text-ink ${MONO}`}>Authorization: Bearer</code> followed by the key.
       </p>
@@ -151,7 +153,7 @@ function access(scopes: string[]) {
   return scopes.includes("write") ? "Read and write" : "Read only";
 }
 
-function Revoke({ row }: { row: KeyRow }) {
+function Revoke({ row }: Readonly<{ row: KeyRow }>) {
   const [asking, setAsking] = useState(false);
   const { run, busy } = useCoordAction();
   if (!asking)
@@ -173,7 +175,18 @@ function Revoke({ row }: { row: KeyRow }) {
   );
 }
 
-export function KeyList({ rows }: { rows: KeyRow[] }) {
+/** Revoked (with when) or Expired, or nothing for a key in use. */
+function KeyState({ row }: Readonly<{ row: KeyRow }>) {
+  if (row.revoked) return <Chip tone="neutral">Revoked {row.revoked}</Chip>;
+  return row.expired ? <Chip tone="danger">Expired</Chip> : null;
+}
+
+function expiryText(row: KeyRow): string {
+  if (!row.expires) return "No expiry";
+  return `${row.expired ? "Expired" : "Expires"} ${row.expires}`;
+}
+
+export function KeyList({ rows }: Readonly<{ rows: KeyRow[] }>) {
   const live = rows.filter((r) => !r.revoked);
   return (
     <Card pad={false} aria-labelledby="keys-title">
@@ -199,7 +212,7 @@ export function KeyList({ rows }: { rows: KeyRow[] }) {
                   <span className={`font-semibold ${r.revoked ? "" : "text-ink"}`}>{r.name}</span>
                   <Chip tone={r.scopes.includes("write") ? "attention" : "info"}>{access(r.scopes)}</Chip>
                   {r.scopes.includes("w9") ? <Chip tone="warning">W-9 downloads</Chip> : null}
-                  {r.revoked ? <Chip tone="neutral">Revoked {r.revoked}</Chip> : r.expired ? <Chip tone="danger">Expired</Chip> : null}
+                  <KeyState row={r} />
                 </span>
                 <span className={`text-sm ${MONO}`}>
                   {r.prefix}
@@ -207,7 +220,7 @@ export function KeyList({ rows }: { rows: KeyRow[] }) {
                   <span className="sr-only">, the rest is hidden</span>
                 </span>
                 <span className="text-sm text-muted">
-                  {r.lastUsed ? `Last used ${r.lastUsed}` : "Never used"}. {r.expires ? `${r.expired ? "Expired" : "Expires"} ${r.expires}` : "No expiry"}. Made {r.created} by {r.createdBy}.
+                  {r.lastUsed ? `Last used ${r.lastUsed}` : "Never used"}. {expiryText(r)}. Made {r.created} by {r.createdBy}.
                 </span>
               </div>
               {r.revoked ? null : <Revoke row={r} />}

@@ -23,6 +23,7 @@ import {
   revokeQualification,
   setQualificationActive,
 } from "@/domain/jobs/qualifications";
+import { byText } from "@/lib/sort";
 
 describe("qualifications", () => {
   const get = useTestDb();
@@ -145,7 +146,7 @@ describe("qualifications", () => {
       }),
     );
     const grants = await db.select().from(userQualifications).where(eq(userQualifications.userId, u.id));
-    expect(grants.map((g) => g.qualificationId).sort()).toEqual([k9, src].sort());
+    expect(grants.map((g) => g.qualificationId).sort(byText)).toEqual([k9, src].sort(byText));
     expect(grants.every((g) => g.grantedBy === coord.userId)).toBe(true);
     const audits = await db.select().from(auditLog).where(eq(auditLog.entityId, u.id));
     expect(audits.filter((a) => a.action === "user.qualification_grant")).toHaveLength(2);

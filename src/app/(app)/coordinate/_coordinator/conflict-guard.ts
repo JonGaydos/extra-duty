@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ActionResult } from "../../_personnel/result";
 
 /** The engine's schedule checks a time change can fail for deputies already on a detail. */
-export const CONFLICT_CHECKS = new Set(["overlap", "cap_rolling", "cap_week", "cap_month", "schedule.window"]);
+const CONFLICT_CHECKS = new Set(["overlap", "cap_rolling", "cap_week", "cap_month", "schedule.window"]);
 
 /** Edit fields that can change which deputies conflict: times, the flexible window, the date and the scope. */
 const CONFLICT_FIELDS = new Set(["startTime", "endTime", "flex", "date", "scope"]);

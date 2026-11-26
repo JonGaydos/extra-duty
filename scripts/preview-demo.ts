@@ -3,8 +3,8 @@
  * Idempotent: anything already present is left alone. Uses the domain services;
  * the direct writes are the invite row (because invite tokens are otherwise
  * only emailed; acceptInvite then sets each password) and marking the sample details open for sign-up.
- * Reads DATABASE_URL from the environment. The shared demo password is stored
- * only in .local-preview/demo-accounts.txt.
+ * Reads DATABASE_URL from the environment. The shared demo password is DEMO_PASSWORD, or random when it is unset;
+ * the first run stores it in .local-preview/demo-accounts.txt and later runs keep that one.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -20,6 +20,7 @@ import { createJob, releaseJob, type JobInput } from "@/domain/jobs/jobs";
 import { joinBackup, signUp } from "@/domain/assignments/signup";
 import { getSettings } from "@/domain/settings/settings";
 import { stopBoss } from "@/jobs/boss";
+import { demoPassword } from "./demo-password";
 
 const FILE = join(process.cwd(), ".local-preview", "demo-accounts.txt");
 const DOMAIN = "preview.test";
@@ -30,11 +31,11 @@ const rows: Row[] = [];
 
 function readPassword(): string | null {
   if (!existsSync(FILE)) return null;
-  const m = readFileSync(FILE, "utf8").match(/^Password: (.+)$/m);
+  const m = /^Password: (.+)$/m.exec(readFileSync(FILE, "utf8"));
   return m ? m[1] : null;
 }
 const stored = readPassword();
-const password = stored ?? randomBytes(9).toString("base64url") + "-Demo7";
+const password = stored ?? demoPassword();
 // Saved before any account exists, so an interrupted run cannot leave accounts with a lost password.
 if (!stored) writeFileSync(FILE, `Demo accounts (local preview only)\nPassword: ${password}\n`, { mode: 0o600 });
 
@@ -152,6 +153,7 @@ async function main() {
 
     // The details are a week or so out, so they may fall in a month whose release time has not come: the
     // coordinator uses Release now, the same button as on the detail page.
+    // Sequential: one transaction per detail, as the coordinator's button releases them.
     for (const j of await db.select({ id: jobs.id }).from(jobs).where(and(eq(jobs.vendorId, vendor.id), inArray(jobs.state, ["scheduled", "active"])))) {
       await withTx((tx) => releaseJob(coordActor, tx, j.id, { scope: "one", now: true }));
     }
@@ -165,9 +167,11 @@ async function main() {
     }
   }
 
+  // Sequential: five accounts, each password set on its own.
   if (process.env.DEMO_RESET_PASSWORDS === "1") for (const u of [admin, coord, dep, cso, vuser]) await setPassword(u.id);
 
-  const note = (e: string) => (e === em("deputy") ? "Deputy Sheriff, Incident Commander" : e === em("cso") ? "CSO" : e === em("vendor") ? "Sample Brewing Company" : "");
+  const notes: Record<string, string> = { [em("deputy")]: "Deputy Sheriff, Incident Commander", [em("cso")]: "CSO", [em("vendor")]: "Sample Brewing Company" };
+  const note = (e: string) => notes[e] ?? "";
   admin = (await userByEmail(em("admin")))!;
   for (const u of [admin, coord, dep, cso, vuser]) rows.push({ email: u.email, name: u.name, role: u.role, note: note(u.email) });
   writeFileSync(

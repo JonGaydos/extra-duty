@@ -10,6 +10,7 @@ import { applyEdit } from "@/domain/jobs/bulk-edit";
 import { isReleased } from "@/domain/release/release";
 import { loadJobCards } from "@/domain/personnel/views";
 import { setupFixture, HOUR } from "../assignments/helpers";
+import { byText } from "@/lib/sort";
 
 describe("hold and release", () => {
   const get = useTestDb();
@@ -25,7 +26,7 @@ describe("hold and release", () => {
     const [held] = await f.run((tx) => holdJob(f.coord, tx, job.id, "one"));
     expect(held.held).toBe(true);
     // Nobody is alerted about a hold.
-    expect((await get().db.select().from(notifications)).length).toBe(before);
+    expect(await get().db.select().from(notifications)).toHaveLength(before);
     expect((await get().db.select().from(assignments).where(eq(assignments.jobId, job.id)))[0].status).toBe("signed_up");
 
     const other = await f.person();
@@ -77,7 +78,7 @@ describe("hold and release", () => {
     for (const j of [a, b, c]) await get().db.update(jobs).set({ seriesId: series.id }).where(eq(jobs.id, j.job.id));
 
     const held = await f.run((tx) => holdJob(f.coord, tx, b.job.id, "series"));
-    expect(held.map((j) => j.id).sort()).toEqual([b.job.id, c.job.id].sort());
+    expect(held.map((j) => j.id).sort(byText)).toEqual([b.job.id, c.job.id].sort(byText));
     const rows = await get().db.select().from(jobs).where(eq(jobs.seriesId, series.id));
     expect(rows.find((r) => r.id === a.job.id)!.held).toBe(false);
 

@@ -17,7 +17,7 @@ const md = (v: string) => `${MONTHS[Number(v.slice(0, 2)) - 1] ?? "?"} ${Number(
 const cap = (m: number | null) => (m === null ? "No cap" : hoursText(m));
 const hours = (m: number | null) => (m === null ? "" : String(Math.round((m / 60) * 100) / 100));
 
-function SeasonForm({ initial, id, rollingHours, onDone, submit }: { initial: SeasonFields; id?: string; rollingHours: number; onDone: () => void; submit: string }) {
+function SeasonForm({ initial, id, rollingHours, onDone, submit }: Readonly<{ initial: SeasonFields; id?: string; rollingHours: number; onDone: () => void; submit: string }>) {
   const [v, setV] = useState(initial);
   const { run, busy } = useCoordAction();
   const set = (k: keyof SeasonFields) => (e: React.ChangeEvent<HTMLInputElement>) => setV({ ...v, [k]: e.target.value });
@@ -66,7 +66,7 @@ function SeasonForm({ initial, id, rollingHours, onDone, submit }: { initial: Se
 }
 
 /** One season: its dates and caps, with Edit and Delete. */
-export function SeasonCard({ season, rollingHours }: { season: SeasonView; rollingHours: number }) {
+export function SeasonCard({ season, rollingHours }: Readonly<{ season: SeasonView; rollingHours: number }>) {
   const headingId = useId();
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -122,7 +122,7 @@ export function SeasonCard({ season, rollingHours }: { season: SeasonView; rolli
   );
 }
 
-export function AddSeason({ rollingHours }: { rollingHours: number }) {
+export function AddSeason({ rollingHours }: Readonly<{ rollingHours: number }>) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (

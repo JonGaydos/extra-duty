@@ -43,6 +43,33 @@ function capTile(label: string, use: CapUse) {
   return <StatTile label={label} value={wholeHours(use.usedMinutes)} unit={`/ ${wholeHours(use.limitMinutes)} h`} tone={close ? "warning" : "default"} />;
 }
 
+/** Open details that fit the person's schedule and caps, or why there are none while the goal is not met. */
+function Recommendations({ recs, remainingCents }: Readonly<{ recs: Awaited<ReturnType<typeof loadJobCards>>; remainingCents: number }>) {
+  if (recs.length === 0) return remainingCents > 0 ? <p className="m-0 text-sm text-muted">No open details fit your schedule and caps right now.</p> : null;
+  return (
+    <div className="flex flex-col gap-2 border-t border-divider pt-3">
+      <h3 className="m-0 text-sm font-semibold">Recommended for you</h3>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {recs.map((r) => (
+          <li key={r.id} className="flex items-center justify-between gap-3">
+            <span className="flex min-w-0 flex-col">
+              <Link href={`/jobs/${r.id}`} className="font-medium">
+                {r.vendorName}
+              </Link>
+              <span className="text-sm text-muted">
+                {dayLabel(r.startAt)}, {timeRange(r.startAt, r.endAt)}. <PayLabel variant="plain" totalCents={r.totalCents} rateCents={r.rateCents} />
+              </span>
+            </span>
+            <ButtonLink href={`/jobs/${r.id}#sign-up`} size="sm" aria-label={`Sign up for ${r.vendorName} on ${dayLabel(r.startAt)}`}>
+              Sign up
+            </ButtonLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The deputy's start page: goal, caps, what to bill, what is next, what is open, and what is owed. */
 export default async function HomePage() {
   const actor = await personnelActor();
@@ -140,30 +167,7 @@ export default async function HomePage() {
                   <b className="text-ink">{dollars(goal.remainingCents)}</b> to go
                 </span>
               </p>
-              {data.recs.length > 0 ? (
-                <div className="flex flex-col gap-2 border-t border-divider pt-3">
-                  <h3 className="m-0 text-sm font-semibold">Recommended for you</h3>
-                  <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                    {data.recs.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between gap-3">
-                        <span className="flex min-w-0 flex-col">
-                          <Link href={`/jobs/${r.id}`} className="font-medium">
-                            {r.vendorName}
-                          </Link>
-                          <span className="text-sm text-muted">
-                            {dayLabel(r.startAt)}, {timeRange(r.startAt, r.endAt)}. <PayLabel variant="plain" totalCents={r.totalCents} rateCents={r.rateCents} />
-                          </span>
-                        </span>
-                        <ButtonLink href={`/jobs/${r.id}#sign-up`} size="sm" aria-label={`Sign up for ${r.vendorName} on ${dayLabel(r.startAt)}`}>
-                          Sign up
-                        </ButtonLink>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : goal.remainingCents > 0 ? (
-                <p className="m-0 text-sm text-muted">No open details fit your schedule and caps right now.</p>
-              ) : null}
+              <Recommendations recs={data.recs} remainingCents={goal.remainingCents} />
             </Card>
           ) : (
             <Card>

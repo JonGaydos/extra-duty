@@ -27,7 +27,7 @@ export type ScheduledTick = {
 };
 
 /** The modes a tick runs in on this deployment, live first. */
-export function tickModes(t: Pick<ScheduledTick, "modes">): DataMode[] {
+function tickModes(t: Pick<ScheduledTick, "modes">): DataMode[] {
   return (t.modes ?? ["live", "training"]).filter((m) => m === "live" || trainingConfigured());
 }
 
@@ -89,6 +89,7 @@ export const tickQueue = (t: Pick<ScheduledTick, "name">) => `tick.${t.name}`;
  * stops the other database's run or the other ticks.
  */
 export async function runTick(t: ScheduledTick, now: Date = new Date()): Promise<void> {
+  // Sequential: each database runs in turn, so one failure never stops the other.
   for (const mode of tickModes(t)) {
     try {
       await runInMode(mode, () => t.run(now));
@@ -101,9 +102,11 @@ export async function runTick(t: ScheduledTick, now: Date = new Date()): Promise
 /** Creates one queue per tick, schedules it and registers its handler. Schedules of removed ticks are dropped. */
 export async function registerSchedule(boss: PgBoss, ticks: readonly ScheduledTick[] = SCHEDULE): Promise<void> {
   const wanted = new Set(ticks.map(tickQueue));
+  // Sequential: schedule setup at start, one queue at a time.
   for (const s of await boss.getSchedules()) {
     if (s.name.startsWith("tick.") && !wanted.has(s.name)) await boss.unschedule(s.name, s.key);
   }
+  // Sequential: schedule setup at start, one queue at a time.
   for (const t of ticks) {
     const queue = tickQueue(t);
     // The release step creates every known tick queue; only one it does not know (a test's) is created here.

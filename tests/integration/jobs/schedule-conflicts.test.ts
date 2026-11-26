@@ -103,7 +103,7 @@ describe("schedule conflicts on time edits", () => {
   });
 
   test("placing a deputy on an overlapping detail needs an override; the audit names the conflict", async () => {
-    const { f, p, a, b } = await twoDetails("sc6");
+    const { f, p, a } = await twoDetails("sc6");
     const c = await f.mkJob({ hours: [8, 12] });
     await get().db.update(jobs).set({ startAt: a.startAt, endAt: a.endAt }).where(eq(jobs.id, c.job.id));
     const err = await f.run((tx) => assignPerson(f.coord, tx, c.positionId, p.userId, { notify: false })).catch((e: unknown) => e);
@@ -113,7 +113,6 @@ describe("schedule conflicts on time edits", () => {
     const [audit] = await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, row.id), eq(auditLog.action, "assignment.assign")));
     expect(audit.reason).toBe("Covering the gate for ten minutes");
     expect(JSON.stringify(audit.after)).toContain(`Overlaps job #${a.number}`);
-    void b;
   });
 
   test("an override is bound to the conflicts that were shown; a different set is refused", async () => {

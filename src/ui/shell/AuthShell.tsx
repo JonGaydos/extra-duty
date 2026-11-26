@@ -22,7 +22,7 @@ export function AuthShell({
   title,
   children,
   footer,
-}: {
+}: Readonly<{
   agencyName: string;
   logo?: AgencyLogoData | null;
   /** The page's h1, at the top of the card. */
@@ -30,7 +30,7 @@ export function AuthShell({
   children: ReactNode;
   /** A muted line under the card. */
   footer?: ReactNode;
-}) {
+}>) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-110 flex-col gap-7 px-6 pt-14 pb-6 md:pt-20">
       <div className="flex flex-col items-center gap-3 text-center">

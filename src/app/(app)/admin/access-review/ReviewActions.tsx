@@ -19,7 +19,7 @@ export function StartReview() {
  * Keep, needs change (with a note) or turn off one account. Turning off is the same departure flow as on the
  * person's page: it asks for the last day, and the reason is "Access review".
  */
-export function DecideItem({ itemId, name, canDeactivate, today }: { itemId: string; name: string; canDeactivate: boolean; today: string }) {
+export function DecideItem({ itemId, name, canDeactivate, today }: Readonly<{ itemId: string; name: string; canDeactivate: boolean; today: string }>) {
   const [mode, setMode] = useState<"idle" | "change" | "deactivate">("idle");
   const [note, setNote] = useState("");
   const [lastDay, setLastDay] = useState(today);

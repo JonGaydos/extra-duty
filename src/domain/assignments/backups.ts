@@ -48,8 +48,9 @@ async function backupsOf(tx: Tx, positionId: string): Promise<Assignment[]> {
 }
 
 /** Re-numbers the position's remaining backups 1..n in their current order, one audit row per changed row. */
-export async function renumberBackups(tx: Tx, positionId: string): Promise<void> {
+async function renumberBackups(tx: Tx, positionId: string): Promise<void> {
   const rows = await backupsOf(tx, positionId);
+  // Sequential: updates and audits in this transaction, in backup order.
   for (const [i, b] of rows.entries()) {
     if (b.backupPosition === i + 1) continue;
     await tx.update(assignments).set({ backupPosition: i + 1 }).where(eq(assignments.id, b.id));
@@ -82,7 +83,7 @@ async function alertBackups(tx: Tx, job: Job, rows: Assignment[], type: Notifica
  * Alerts open watchers on the job who could take a spot now (eligible, unrestricted), once each: the watch
  * then ends. Used when a spot opens to everyone. The caller holds the job lock.
  */
-export async function alertWatchersOpened(tx: Tx, job: Job, position: PositionInfo, now: Date): Promise<number> {
+async function alertWatchersOpened(tx: Tx, job: Job, position: PositionInfo, now: Date): Promise<number> {
   const watches = await tx
     .select()
     .from(jobWatches)
@@ -95,6 +96,7 @@ export async function alertWatchersOpened(tx: Tx, job: Job, position: PositionIn
   let alerted = 0;
   // A hidden vendor's opening alerts are discovery alerts: skipped, and the watch stays open.
   const visible = new Set(await withoutHiddenVendor(tx, watches.map((w) => w.userId), job.vendorId));
+  // Sequential: reads and alert writes in this transaction, in watch order.
   for (const w of watches) {
     if (!visible.has(w.userId)) continue;
     const net = free - (await heldByOffers(tx, position.id, w.userId));
@@ -204,7 +206,7 @@ async function advanceOffer(tx: Tx, job: Job, position: PositionInfo, offer: Spo
  * the next backup who holds no offer (sequential), to all backups (all_backups), or opened to everyone. Does
  * nothing when the job is closed or started, or when open offers already hold every free spot.
  */
-export async function openSpot(tx: Tx, jobPositionId: string, now: Date): Promise<void> {
+async function openSpot(tx: Tx, jobPositionId: string, now: Date): Promise<void> {
   const job = await jobOfPosition(tx, jobPositionId);
   if (!openForSignup(job, now)) return;
   const position = await loadPosition(tx, jobPositionId);
@@ -215,7 +217,7 @@ export async function openSpot(tx: Tx, jobPositionId: string, now: Date): Promis
 }
 
 /** After a row leaves the list (caller holds the job lock): a signed_up row opens a spot; an offered backup passes the turn on. */
-export async function afterLeave(tx: Tx, before: Assignment, now: Date): Promise<void> {
+async function afterLeave(tx: Tx, before: Assignment, now: Date): Promise<void> {
   if (before.status === "signed_up") {
     await openSpot(tx, before.jobPositionId, now);
     return;
@@ -275,7 +277,7 @@ export async function leaveAssignment(actor: Actor, tx: Tx, assignmentId: string
  */
 export async function claimablePositionId(tx: Tx, assignmentId: string, now: Date): Promise<string | null> {
   const [a] = await tx.select().from(assignments).where(eq(assignments.id, assignmentId));
-  if (!a || a.status !== "backup") return null;
+  if (a?.status !== "backup") return null;
   if (!openForSignup(await jobOfPosition(tx, a.jobPositionId), now)) return null;
   const position = await loadPosition(tx, a.jobPositionId);
   const free = position.count - (await signedUpCount(tx, position.id));
@@ -326,6 +328,7 @@ export async function claimSpot(actor: Actor, tx: Tx, jobPositionId: string, inp
   if (problems.length > 0) throw new RuleViolation(problems);
 
   let used: SpotOffer | undefined;
+  // Sequential: stops at the first offer the person is entitled to.
   for (const o of await openOffers(tx, position.id)) {
     if (await entitledToOffer(tx, o, actor.userId)) {
       used = o;
@@ -367,6 +370,7 @@ export async function processJobOffers(tx: Tx, job: Job, now: Date): Promise<num
   const settings = await getSettings(tx);
   let ended = 0;
   const firstCome = new Map<string, PositionInfo>();
+  // Sequential: each offer is ended or advanced in this transaction, and later ones see the spots it freed.
   for (const { offer } of offers) {
     const position = await loadPosition(tx, offer.jobPositionId);
     const free = position.count - (await signedUpCount(tx, position.id));
@@ -389,6 +393,7 @@ export async function processJobOffers(tx: Tx, job: Job, now: Date): Promise<num
     }
   }
   // Alert once per position, however many offers ended.
+  // Sequential: alert writes in this transaction.
   for (const position of firstCome.values()) {
     await alertBackups(tx, job, await backupsOf(tx, position.id), "spot.opened_first_come", `A spot opened for ${position.name}. First come, first served.`);
     await alertWatchersOpened(tx, job, position, now);

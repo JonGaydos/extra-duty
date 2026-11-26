@@ -28,13 +28,19 @@ async function check(mode: DataMode): Promise<{ database: Check; queue: Check }>
   }
 }
 
+/** The training database: off when there is none, else whether it answers. */
+async function trainingStatus(): Promise<"ok" | "down" | "off"> {
+  if (!trainingConfigured()) return "off";
+  return (await check("training")).database === "ok" ? "ok" : "down";
+}
+
 /**
  * For the container health check and uptime monitors: 200 when the live database and the queue answer, 503
  * otherwise. Public, and it never shows error details. The training database is reported but never fails the check.
  */
 export async function GET(): Promise<Response> {
   const live = await check("live");
-  const training = trainingConfigured() ? ((await check("training")).database === "ok" ? "ok" : "down") : "off";
+  const training = await trainingStatus();
   const ok = live.database === "ok" && live.queue === "ok";
   return Response.json(
     { status: ok ? "ok" : "unavailable", appEnv: appEnvFromProcess(), ...live, training },

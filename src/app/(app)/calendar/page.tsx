@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { withTx } from "@/ui/shell/request";
 import { appUrl } from "@/domain/auth/invites";
-import { calendarEntries, filterOptions, getFilterPrefs, type CalEntry } from "@/domain/calendar/calendar";
+import { calendarEntries, filterOptions, getFilterPrefs, listedDay, type CalEntry, type DetailRange } from "@/domain/calendar/calendar";
 import { detailFormOptions } from "@/domain/coordinator/views";
 import { editBlockReason } from "@/domain/jobs/bulk-edit";
 import { calendarTokenStatus } from "@/domain/planning/ics-feed";
@@ -18,7 +18,7 @@ import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { activeCount, filterParams, resolveFilters } from "../_shared/detail-filters";
 import { FilterPanel } from "../_shared/FilterPanel";
 import { SelectableDetails, type SelectableItem } from "../coordinate/_coordinator/SelectableDetails";
-import { CompactEntry, EntryRow, Legend, entryHref } from "./entries";
+import { CompactEntry, EntryRow, Legend, TONE, entryHref, withPlace } from "./entries";
 import { FeedCard } from "./FeedCard";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -41,7 +41,7 @@ const start = (a: Ymd) => agencyInstant(a.y, a.m, a.d, 0, 0);
 const weekday = (a: Ymd) => new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay();
 const LIST_DAYS = 60;
 
-function DayList({ days, byDay, staff, empty }: { days: Ymd[]; byDay: Map<string, CalEntry[]>; staff: boolean; empty: string }) {
+function DayList({ days, byDay, staff, empty }: Readonly<{ days: Ymd[]; byDay: Map<string, CalEntry[]>; staff: boolean; empty: string }>) {
   const shown = days.filter((day) => byDay.has(key(day)));
   if (shown.length === 0)
     return (
@@ -72,12 +72,184 @@ function DayList({ days, byDay, staff, empty }: { days: Ymd[]; byDay: Map<string
   );
 }
 
+type Href = (v: View, date?: Ymd) => string;
+type Filters = ReturnType<typeof resolveFilters>;
+type DetailOptions = Awaited<ReturnType<typeof detailFormOptions>>;
+
+/** The days a view shows: the focus day, its week, its month in whole weeks, or the next 60 days from today. */
+function viewDays(view: View, focus: Ymd, weekStartsOn: number, now: Date): Ymd[] {
+  if (view === "day") return [focus];
+  if (view === "week") {
+    const from = add(focus, -((weekday(focus) - weekStartsOn + 7) % 7));
+    return Array.from({ length: 7 }, (_, i) => add(from, i));
+  }
+  if (view === "month") {
+    const first = { ...focus, d: 1 };
+    const from = add(first, -((weekday(first) - weekStartsOn + 7) % 7));
+    const span = Math.round((start(add(first, 0, 1)).getTime() - start(from).getTime()) / 86_400_000);
+    return Array.from({ length: Math.ceil(span / 7) * 7 }, (_, i) => add(from, i));
+  }
+  return Array.from({ length: LIST_DAYS }, (_, i) => add(ymd(now), i));
+}
+
+/** The view's dates. The list and today's day view also show a detail that started earlier and is still running, under today. */
+function viewRange(view: View, days: Ymd[], today: string, now: Date): DetailRange {
+  const running = view === "list" || (view === "day" && key(days[0]) === today);
+  return { from: start(days[0]), to: start(add(days.at(-1)!, 1)), ...(running ? { runningAt: now } : {}) };
+}
+
+/** How far Previous and Next move. */
+const STEP: Record<View, { d: number; m: number }> = { day: { d: 1, m: 0 }, week: { d: 7, m: 0 }, month: { d: 0, m: 1 }, list: { d: 0, m: 1 } };
+
+const EMPTY_TITLE: Record<View, string> = { day: "No details this day", week: "No details this week", month: "No details in the next 60 days", list: "No details in the next 60 days" };
+
+const STATUS_TEXT: Record<CalEntry["status"], string> = { open: "Open", filled: "Filled", not_released: "Not released", past: "Past", canceled: "Canceled", requested: "Vendor request" };
+
+function viewTitle(view: View, focus: Ymd, days: Ymd[]): string {
+  if (view === "day") return longDay(start(focus));
+  if (view === "week") return `Week of ${dayLabel(start(days[0]))}`;
+  if (view === "month") return monthYear(start(focus));
+  return "Next 60 days";
+}
+
+const dateParam = (date?: Ymd) => (date ? `&date=${key(date)}` : "");
+
+/** The desktop day number: filled for today, muted outside the month. */
+function dayNumberClass(isToday: boolean, inMonth: boolean): string {
+  if (isToday) return "bg-accent font-bold text-on-accent hover:text-on-accent";
+  return `font-medium hover:bg-subtle ${inMonth ? "text-ink" : "text-muted"}`;
+}
+
+/** One day of the month grid: on phones the day and its count, on desktop a count and the day's entries. */
+function MonthDay({ day, list, inMonth, isToday, staff, href }: Readonly<{ day: Ymd; list: CalEntry[]; inMonth: boolean; isToday: boolean; staff: boolean; href: Href }>) {
+  const dayName = `${longDay(start(day))}${isToday ? ", today" : ""}`;
+  return (
+    <td className={`h-16 border-l border-divider p-1 align-top first:border-l-0 md:h-36 ${isToday ? "bg-accent-soft" : ""}`} aria-current={isToday ? "date" : undefined}>
+      {/* Phones: the day and its count; the day opens its list. */}
+      <Link
+        href={href("day", day)}
+        data-button-link
+        className={`flex h-full flex-col items-center gap-1 rounded-xs p-0.5 text-ink no-underline hover:bg-subtle hover:text-ink md:hidden ${inMonth ? "" : "text-muted"}`}
+      >
+        <span className="sr-only">
+          {dayName}, {plural(list.length, "detail")}
+        </span>
+        <span aria-hidden className={`flex size-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-accent font-bold text-on-accent" : "font-medium"}`} data-numeric>
+          {day.d}
+        </span>
+        {list.length ? (
+          <span aria-hidden className="rounded-full bg-sunken px-1.5 text-micro font-semibold" data-numeric>
+            {list.length}
+          </span>
+        ) : null}
+      </Link>
+      {/* Desktop: a count and a scrolling list of "7:00 AM Vendor" entries. */}
+      <div className="hidden h-full flex-col gap-0.5 md:flex">
+        <div className="flex items-center justify-between gap-1">
+          <Link href={href("day", day)} data-button-link className={`flex size-6 items-center justify-center rounded-full text-xs no-underline ${dayNumberClass(isToday, inMonth)}`} data-numeric>
+            <span aria-hidden>{day.d}</span>
+            <span className="sr-only">{dayName}, open the day</span>
+          </Link>
+          {list.length ? (
+            <span className="text-micro font-medium text-muted" data-numeric>
+              {plural(list.length, "detail")}
+            </span>
+          ) : null}
+        </div>
+        {list.length ? (
+          <ul className="m-0 flex max-h-28 list-none flex-col overflow-y-auto p-0" aria-label={`${dayName} details`}>
+            {list.map((e) => (
+              <li key={e.id}>
+                <CompactEntry e={e} staff={staff} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </td>
+  );
+}
+
+/** The month as a table of weeks, then the legend. */
+function MonthGrid({ title, days, byDay, focus, today, staff, href }: Readonly<{ title: string; days: Ymd[]; byDay: Map<string, CalEntry[]>; focus: Ymd; today: string; staff: boolean; href: Href }>) {
+  const weekdays = days.slice(0, 7).map((d) => new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(d.y, d.m - 1, d.d))));
+  return (
+    <>
+      <Card pad={false} className="overflow-hidden">
+        <table className="w-full table-fixed border-collapse text-sm">
+          <caption className="sr-only">{title}: details by day</caption>
+          <thead>
+            <tr>
+              {weekdays.map((w) => (
+                <th key={w} scope="col" className="py-2 text-xs font-semibold text-muted">
+                  {w}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: days.length / 7 }, (_, r) => (
+              <tr key={r} className="border-t border-divider">
+                {days.slice(r * 7, r * 7 + 7).map((day) => (
+                  <MonthDay key={key(day)} day={day} list={byDay.get(key(day)) ?? []} inMonth={day.m === focus.m} isToday={key(day) === today} staff={staff} href={href} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      <Legend staff={staff} />
+      <p className="m-0 text-xs text-muted md:hidden">Tap a day to see its details.</p>
+    </>
+  );
+}
+
+/** Staff's list view: the details with checkboxes for bulk edit. */
+function StaffList({ entries, edit, now }: Readonly<{ entries: CalEntry[]; edit: DetailOptions; now: Date }>) {
+  if (entries.length === 0)
+    return (
+      <Card pad={false}>
+        <EmptyState title="No details in the next 60 days">Change the filters to see more.</EmptyState>
+      </Card>
+    );
+  return (
+    <SelectableDetails
+      types={edit.positionTypes}
+      defaultTypeId={edit.defaultPositionTypeId ?? edit.positionTypes[0]?.id ?? ""}
+      items={entries.map(
+        (e): SelectableItem => ({
+          id: e.id,
+          href: entryHref(e, true),
+          title: `#${e.number} ${e.title}`,
+          meta: `${withPlace(e.vendorName, e.locationName)}. ${dayLabel(e.startAt)}`,
+          pay: e.pay,
+          chips: [{ tone: TONE[e.status], text: STATUS_TEXT[e.status] }, ...(e.held ? [{ tone: "warning" as const, text: "Held" }] : [])],
+          blocked: editBlockReason(e, now),
+        }),
+      )}
+    />
+  );
+}
+
+/** "12 details, yours only, filtered." */
+function CountLine({ count, filters, truncated }: Readonly<{ count: number; filters: Filters; truncated: boolean }>) {
+  const mineFilters = filters.mine ? 1 : 0;
+  return (
+    <output className="block m-0 text-sm text-muted">
+      {plural(count, "detail")}
+      {filters.mine ? ", yours only" : ""}
+      {activeCount(filters, false) > mineFilters ? ", filtered" : ""}
+      {truncated ? ". Only the first 2,000 are shown; narrow the filters." : "."}
+    </output>
+  );
+}
+
 /**
  * Every detail the person may see by day, week, month or as a list, with the shared filter panel (My details only,
  * status, vendor, type, place, person, job number, search). Staff also see vendor requests and can bulk edit from
  * the list. Personnel keep their personal calendar link.
  */
-export default async function CalendarPage({ searchParams }: Props) {
+export default async function CalendarPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const staff = actor.role === "coordinator" || actor.role === "admin";
   const sp = await searchParams;
@@ -89,21 +261,9 @@ export default async function CalendarPage({ searchParams }: Props) {
 
   const base = await withTx(async (tx) => ({ settings: await getSettings(tx), prefs: await getFilterPrefs(actor, tx) }));
   const filters = resolveFilters(sp, base.prefs, { personal: false });
-  let days: Ymd[];
-  if (view === "day") {
-    days = [focus];
-  } else if (view === "week") {
-    const from = add(focus, -((weekday(focus) - base.settings.weekStartsOn + 7) % 7));
-    days = Array.from({ length: 7 }, (_, i) => add(from, i));
-  } else if (view === "month") {
-    const first = { ...focus, d: 1 };
-    const from = add(first, -((weekday(first) - base.settings.weekStartsOn + 7) % 7));
-    const span = Math.round((start(add(first, 0, 1)).getTime() - start(from).getTime()) / 86_400_000);
-    days = Array.from({ length: Math.ceil(span / 7) * 7 }, (_, i) => add(from, i));
-  } else {
-    days = Array.from({ length: LIST_DAYS }, (_, i) => add(ymd(now), i));
-  }
-  const range = { from: start(days[0]), to: start(add(days[days.length - 1], 1)) };
+  const days = viewDays(view, focus, base.settings.weekStartsOn, now);
+  const today = agencyDayKey(now);
+  const range = viewRange(view, days, today, now);
 
   const data = await withTx(async (tx) => ({
     ...(await calendarEntries(actor, tx, range, filters, now)),
@@ -113,21 +273,29 @@ export default async function CalendarPage({ searchParams }: Props) {
   }));
   const byDay = new Map<string, CalEntry[]>();
   for (const e of data.entries) {
-    const k = agencyDayKey(e.startAt);
+    const k = listedDay(e.startAt, range.from);
     byDay.set(k, [...(byDay.get(k) ?? []), e]);
   }
 
   // The configured app URL, never a request header, so a spoofed Host cannot change the link a person copies.
   const origin = appUrl();
-  const step = view === "day" ? { d: 1, m: 0 } : view === "week" ? { d: 7, m: 0 } : { d: 0, m: 1 };
+  const step = STEP[view];
   const prev = add(focus, -step.d, -step.m);
   const next = add(focus, step.d, step.m);
-  const title = view === "day" ? longDay(start(focus)) : view === "week" ? `Week of ${dayLabel(start(days[0]))}` : view === "month" ? monthYear(start(focus)) : "Next 60 days";
+  const title = viewTitle(view, focus, days);
   const fq = filterParams(filters).toString();
-  const href = (v: View, date?: Ymd) => `/calendar?view=${v}${date ? `&date=${key(date)}` : ""}&${fq}`;
-  const today = agencyDayKey(now);
-  const weekdays = days.slice(0, 7).map((d) => new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(d.y, d.m - 1, d.d))));
+  const href: Href = (v, date) => `/calendar?view=${v}${dateParam(date)}&${fq}`;
   const keep: Record<string, string> = { view, ...(view === "list" ? {} : { date: key(focus) }) };
+  let body: React.ReactNode;
+  if (view === "month") body = <MonthGrid title={title} days={days} byDay={byDay} focus={focus} today={today} staff={staff} href={href} />;
+  else if (view === "list" && staff && data.edit) body = <StaffList entries={data.entries} edit={data.edit} now={now} />;
+  else
+    body = (
+      <>
+        <DayList days={days} byDay={byDay} staff={staff} empty={EMPTY_TITLE[view]} />
+        <Legend staff={staff} />
+      </>
+    );
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -166,120 +334,9 @@ export default async function CalendarPage({ searchParams }: Props) {
               </Link>
             </div>
           ) : null}
-          <p className="m-0 text-sm text-muted" role="status">
-            {plural(data.entries.length, "detail")}
-            {filters.mine ? ", yours only" : ""}
-            {activeCount(filters, false) > (filters.mine ? 1 : 0) ? ", filtered" : ""}
-            {data.truncated ? ". Only the first 2,000 are shown; narrow the filters." : "."}
-          </p>
+          <CountLine count={data.entries.length} filters={filters} truncated={data.truncated} />
 
-          {view === "month" ? (
-            <>
-              <Card pad={false} className="overflow-hidden">
-                <table className="w-full table-fixed border-collapse text-sm">
-                  <caption className="sr-only">{title}: details by day</caption>
-                  <thead>
-                    <tr>
-                      {weekdays.map((w) => (
-                        <th key={w} scope="col" className="py-2 text-xs font-semibold text-muted">
-                          {w}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: days.length / 7 }, (_, r) => (
-                      <tr key={r} className="border-t border-divider">
-                        {days.slice(r * 7, r * 7 + 7).map((day) => {
-                          const list = byDay.get(key(day)) ?? [];
-                          const inMonth = day.m === focus.m;
-                          const isToday = key(day) === today;
-                          const dayName = `${longDay(start(day))}${isToday ? ", today" : ""}`;
-                          return (
-                            <td key={key(day)} className={`h-16 border-l border-divider p-1 align-top first:border-l-0 md:h-36 ${isToday ? "bg-accent-soft" : ""}`} aria-current={isToday ? "date" : undefined}>
-                              {/* Phones: the day and its count; the day opens its list. */}
-                              <Link
-                                href={href("day", day)}
-                                data-button-link
-                                className={`flex h-full flex-col items-center gap-1 rounded-xs p-0.5 text-ink no-underline hover:bg-subtle hover:text-ink md:hidden ${inMonth ? "" : "text-muted"}`}
-                              >
-                                <span className="sr-only">
-                                  {dayName}, {plural(list.length, "detail")}
-                                </span>
-                                <span aria-hidden className={`flex size-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-accent font-bold text-on-accent" : "font-medium"}`} data-numeric>
-                                  {day.d}
-                                </span>
-                                {list.length ? (
-                                  <span aria-hidden className="rounded-full bg-sunken px-1.5 text-micro font-semibold" data-numeric>
-                                    {list.length}
-                                  </span>
-                                ) : null}
-                              </Link>
-                              {/* Desktop: a count and a scrolling list of "7:00 AM Vendor" entries. */}
-                              <div className="hidden h-full flex-col gap-0.5 md:flex">
-                                <div className="flex items-center justify-between gap-1">
-                                  <Link href={href("day", day)} data-button-link className={`flex size-6 items-center justify-center rounded-full text-xs no-underline ${isToday ? "bg-accent font-bold text-on-accent hover:text-on-accent" : `font-medium hover:bg-subtle ${inMonth ? "text-ink" : "text-muted"}`}`} data-numeric>
-                                    <span aria-hidden>{day.d}</span>
-                                    <span className="sr-only">{dayName}, open the day</span>
-                                  </Link>
-                                  {list.length ? (
-                                    <span className="text-micro font-medium text-muted" data-numeric>
-                                      {plural(list.length, "detail")}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                {list.length ? (
-                                  <ul className="m-0 flex max-h-28 list-none flex-col overflow-y-auto p-0" aria-label={`${dayName} details`}>
-                                    {list.map((e) => (
-                                      <li key={e.id}>
-                                        <CompactEntry e={e} staff={staff} />
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : null}
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-              <Legend staff={staff} />
-              <p className="m-0 text-xs text-muted md:hidden">Tap a day to see its details.</p>
-            </>
-          ) : view === "list" && staff && data.edit ? (
-            data.entries.length === 0 ? (
-              <Card pad={false}>
-                <EmptyState title="No details in the next 60 days">Change the filters to see more.</EmptyState>
-              </Card>
-            ) : (
-              <SelectableDetails
-                types={data.edit.positionTypes}
-                defaultTypeId={data.edit.defaultPositionTypeId ?? data.edit.positionTypes[0]?.id ?? ""}
-                items={data.entries.map(
-                  (e): SelectableItem => ({
-                    id: e.id,
-                    href: entryHref(e, true),
-                    title: `#${e.number} ${e.title}`,
-                    meta: `${e.vendorName}${e.locationName ? `, ${e.locationName}` : ""}. ${dayLabel(e.startAt)}`,
-                    pay: e.pay,
-                    chips: [
-                      { tone: e.status === "open" ? "success" : e.status === "filled" ? "danger" : e.status === "not_released" ? "warning" : e.status === "requested" ? "coordinator" : "neutral", text: { open: "Open", filled: "Filled", not_released: "Not released", past: "Past", canceled: "Canceled", requested: "Vendor request" }[e.status] },
-                      ...(e.held ? [{ tone: "warning" as const, text: "Held" }] : []),
-                    ],
-                    blocked: editBlockReason(e, now),
-                  }),
-                )}
-              />
-            )
-          ) : (
-            <>
-              <DayList days={days} byDay={byDay} staff={staff} empty={view === "day" ? "No details this day" : view === "week" ? "No details this week" : "No details in the next 60 days"} />
-              <Legend staff={staff} />
-            </>
-          )}
+          {body}
 
           {data.feed ? (
             <Card>

@@ -19,6 +19,7 @@ import { AGENCY_TZ } from "@/domain/time/agency-time";
 import { vendorViewJob } from "@/domain/vendor-portal/requests";
 import { makeUser } from "../users/helpers";
 import { HOUR, setupFixture } from "../assignments/helpers";
+import { byText } from "@/lib/sort";
 
 const day = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: AGENCY_TZ, dateStyle: "medium" }).format(d);
 const REASON = "Canceled the wrong date";
@@ -141,14 +142,14 @@ describe("reactivate a canceled detail", () => {
     await s.f.run((tx) => cancelJob(s.f.coord, tx, job.id, REASON, { now: t0 }));
     await s.f.run((tx) => reactivateJob(s.f.coord, tx, job.id, WHY, t0));
     const told = await alerts(job.id, "job.reactivated");
-    expect(told.map((n) => n.userId).sort()).toEqual([on.userId, s.vendor.userId].sort());
+    expect(told.map((n) => n.userId).sort(byText)).toEqual([on.userId, s.vendor.userId].sort(byText));
 
     const preview = await s.f.run((tx) => reactivationPreview(s.f.coord, tx, s.job.id));
-    expect(preview.notify.map((n) => n.userId).sort()).toEqual([s.a.userId, s.b.userId, s.c.userId].sort());
+    expect(preview.notify.map((n) => n.userId).sort(byText)).toEqual([s.a.userId, s.b.userId, s.c.userId].sort(byText));
     await s.f.run((tx) => reactivateJob(s.f.coord, tx, s.job.id, WHY, s.now));
     const sent = await alerts(s.job.id, "job.reactivated");
     const deputies = sent.filter((n) => n.userId !== s.vendor.userId);
-    expect(deputies.map((n) => n.userId).sort()).toEqual([s.a.userId, s.b.userId, s.c.userId].sort());
+    expect(deputies.map((n) => n.userId).sort(byText)).toEqual([s.a.userId, s.b.userId, s.c.userId].sort(byText));
     for (const n of deputies) expect(n.body).toBe(`Detail #${s.job.number} on ${day(s.job.startAt)} is back on. Sign up again if you still want it.`);
     const [toVendor] = sent.filter((n) => n.userId === s.vendor.userId);
     expect(toVendor.body).toBe(`Detail #${s.job.number} on ${day(s.job.startAt)} has been reactivated.`);
@@ -248,13 +249,13 @@ describe("reactivate a canceled detail", () => {
     expect((await s.f.run((tx) => loadUnbilled(tx, p.userId, afterEnd))).map((u) => u.jobId)).toEqual([s.job.id]);
     expect((await s.f.run((tx) => jobAdmin(s.f.coord, tx, s.job.id))).lateCanceled).toBe(3);
     const preview = await s.f.run((tx) => reactivationPreview(s.f.coord, tx, s.job.id));
-    expect(preview.unbilled.map((u) => u.userId).sort()).toEqual([p.userId, q.userId, r.userId].sort());
+    expect(preview.unbilled.map((u) => u.userId).sort(byText)).toEqual([p.userId, q.userId, r.userId].sort(byText));
 
     await s.f.run((tx) => reactivateJob(s.f.coord, tx, s.job.id, WHY, s.now));
     const after = await rows(s.job.id);
-    expect(after.map((x) => [x.status, x.removalReason])).toEqual(Array(3).fill(["canceled", "detail reactivated"]));
+    expect(after.map((x) => [x.status, x.removalReason])).toEqual(new Array(3).fill(["canceled", "detail reactivated"]));
     const audits = await get().db.select().from(auditLog).where(and(eq(auditLog.action, "assignment.late_cancel_void"), inArray(auditLog.entityId, after.map((x) => x.id))));
-    expect(audits.map((x) => x.reason)).toEqual(Array(3).fill("detail reactivated"));
+    expect(audits.map((x) => x.reason)).toEqual(new Array(3).fill("detail reactivated"));
     expect(audits.every((x) => (x.before as { status: string }).status === "late_canceled" && x.actorUserId === s.f.coord.userId)).toBe(true);
     // The pay no longer counts anywhere, even after the end.
     expect(await s.f.run((tx) => loadUnbilled(tx, p.userId, afterEnd))).toEqual([]);
@@ -277,7 +278,7 @@ describe("reactivate a canceled detail", () => {
     await get().db.insert(invoices).values({ assignmentId: a.id, vendorId: s.f.vendorId, payeeUserId: p.userId, minutes: 240, rateCents: 7000, totalCents: 28000, status: "sent", emailStatus: "sent", kind: "late_cancel" });
     expect(await ruleMessage(s.f.run((tx) => reactivateJob(s.f.coord, tx, s.job.id, WHY, s.now)))).toEqual(["Late-cancel pay for this detail was already billed, so it cannot be reactivated"]);
     expect((await get().db.select().from(jobs).where(eq(jobs.id, s.job.id)))[0].state).toBe("canceled");
-    expect((await rows(s.job.id)).map((x) => x.status).sort()).toEqual(["billed", "late_canceled", "late_canceled"]);
+    expect((await rows(s.job.id)).map((x) => x.status).sort(byText)).toEqual(["billed", "late_canceled", "late_canceled"]);
   });
 
   test("cancel, reactivate, cancel, reactivate: the history keeps every step in order, and each round tells that cancel's people", async () => {

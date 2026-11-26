@@ -16,10 +16,12 @@ import { TaxYearPicker } from "./TaxYearPicker";
  * One person's earnings: this month, this year, outstanding, year by year, and a tax summary per year with PDF and
  * CSV downloads. The person's own page and the coordinators' deputy lookup share it; the services decide access.
  */
-export async function EarningsView({ actor, userId, asked, path, back }: { actor: Actor; userId: string; asked: number; path: string; back: React.ReactNode }) {
+export async function EarningsView({ actor, userId, asked, path, back }: Readonly<{ actor: Actor; userId: string; asked: number; path: string; back: React.ReactNode }>) {
   const now = new Date();
   const thisYear = agencyDateParts(now).year;
   const self = userId === actor.userId;
+  const who = self ? "you" : "the deputy";
+  const forUser = self ? "" : `&userId=${userId}`;
   const data = await withTx(async (tx) => {
     const dash = await earningsDashboard(actor, tx, userId, now);
     const years = [...new Set([thisYear, ...dash.byYear.map((y) => y.year)])].sort((a, b) => b - a);
@@ -53,11 +55,11 @@ export async function EarningsView({ actor, userId, asked, path, back }: { actor
         <Table
           caption="Year by year"
           columns={[
-            { header: "Year", cell: (r) => String(r.year) },
-            { header: "Details", cell: (r) => String(r.details), align: "end" },
-            { header: "Hours", cell: (r) => hoursText(r.minutes), align: "end" },
-            { header: "Billed", cell: (r) => dollars(r.billedCents), align: "end" },
-            { header: "Received", cell: (r) => dollars(r.paidCents), align: "end" },
+            { header: "Year", render: (r) => String(r.year) },
+            { header: "Details", render: (r) => String(r.details), align: "end" },
+            { header: "Hours", render: (r) => hoursText(r.minutes), align: "end" },
+            { header: "Billed", render: (r) => dollars(r.billedCents), align: "end" },
+            { header: "Received", render: (r) => dollars(r.paidCents), align: "end" },
           ]}
           rows={dash.byYear}
           rowKey={(r) => String(r.year)}
@@ -69,7 +71,7 @@ export async function EarningsView({ actor, userId, asked, path, back }: { actor
             <CardTitle>Tax summary</CardTitle>
             <TaxYearPicker years={data.years} year={data.year} path={path} />
           </div>
-          <p className="m-0 text-sm text-muted">Counted in the year {self ? "you" : "the deputy"} marked payment received. Not tax advice.</p>
+          <p className="m-0 text-sm text-muted">Counted in the year {who} marked payment received. Not tax advice.</p>
           {tax.byVendor.length === 0 ? (
             <p className="m-0 text-sm">No payments received in {data.year}.</p>
           ) : (
@@ -88,15 +90,15 @@ export async function EarningsView({ actor, userId, asked, path, back }: { actor
           {mismatches.length > 0 ? (
             <Notice tone="warning">
               {plural(mismatches.length, "payment straddles", "payments straddle")} the year
-              {mismatches[0].vendorPaidAt && mismatches[0].paidAt ? `: vendor paid ${dateLabel(mismatches[0].vendorPaidAt)}, ${self ? "you" : "the deputy"} received ${dateLabel(mismatches[0].paidAt)}` : ""}. Check it against their 1099.
+              {mismatches[0].vendorPaidAt && mismatches[0].paidAt ? `: vendor paid ${dateLabel(mismatches[0].vendorPaidAt)}, ${who} received ${dateLabel(mismatches[0].paidAt)}` : ""}. Check it against their 1099.
             </Notice>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <a href={`/api/v1/reports/tax/${data.year}/export?format=pdf${self ? "" : `&userId=${userId}`}`} data-button-link className="inline-flex h-11 items-center gap-2 rounded-md border border-line bg-surface px-4 font-semibold text-ink no-underline hover:bg-subtle hover:text-ink" download>
+            <a href={`/api/v1/reports/tax/${data.year}/export?format=pdf${forUser}`} data-button-link className="inline-flex h-11 items-center gap-2 rounded-md border border-line bg-surface px-4 font-semibold text-ink no-underline hover:bg-subtle hover:text-ink" download>
               <Icon name="download" size={18} />
               Download PDF
             </a>
-            <a href={`/api/v1/reports/tax/${data.year}/export?format=csv${self ? "" : `&userId=${userId}`}`} data-button-link className="inline-flex h-11 items-center gap-2 rounded-md border border-line bg-surface px-4 font-semibold text-ink no-underline hover:bg-subtle hover:text-ink" download>
+            <a href={`/api/v1/reports/tax/${data.year}/export?format=csv${forUser}`} data-button-link className="inline-flex h-11 items-center gap-2 rounded-md border border-line bg-surface px-4 font-semibold text-ink no-underline hover:bg-subtle hover:text-ink" download>
               <Icon name="download" size={18} />
               Download CSV
             </a>

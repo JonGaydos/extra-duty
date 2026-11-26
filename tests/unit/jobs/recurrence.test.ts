@@ -119,3 +119,37 @@ describe("expandSelection (the date picker's wire)", () => {
     expect(expandSelection({ kind: "range", from: "2026-12-05", to: "2026-12-07" }, "2026-12-05")).toEqual(["2026-12-05", "2026-12-06", "2026-12-07"]);
   });
 });
+
+describe("pattern dates (each kind and end)", () => {
+  const pattern = (recurrence: Parameters<typeof expandRecurrence>[1], firstDate: string) => expandDates({ kind: "pattern", recurrence }, firstDate);
+  const until = (y: number, m: number, d: number) => ({ until: agencyInstant(y, m, d, 12, 0) });
+
+  test("daily counts and steps by the interval", () => {
+    expect(pattern({ kind: "daily", every: 3, end: { count: 3 } }, "2026-12-30")).toEqual(["2026-12-30", "2027-01-02", "2027-01-05"]);
+  });
+
+  test("weekly skips days before the first date and stops at the until date, even mid-week", () => {
+    expect(pattern({ kind: "weekly", every: 1, weekdays: [5, 1, 1], end: until(2026, 12, 14) }, "2026-12-02")).toEqual(["2026-12-04", "2026-12-07", "2026-12-11", "2026-12-14"]);
+    expect(pattern({ kind: "weekly", every: 3, weekdays: [2], end: until(2027, 1, 1) }, "2026-12-01")).toEqual(["2026-12-01", "2026-12-22"]);
+  });
+
+  test("monthly starts at the first matching day on or after the first date and steps by the interval", () => {
+    expect(pattern({ kind: "monthly", every: 2, dayOfMonth: 5, end: { count: 3 } }, "2026-10-25")).toEqual(["2026-12-05", "2027-02-05", "2027-04-05"]);
+    expect(pattern({ kind: "monthly", every: 1, dayOfMonth: 30, end: until(2027, 3, 29) }, "2027-01-30")).toEqual(["2027-01-30", "2027-02-28"]);
+  });
+
+  test("bad counts, end dates, weekdays and days of the month are refused with their own messages", () => {
+    const daily = (end: { count: number } | { until: Date }) => () => pattern({ kind: "daily", every: 1, end }, "2026-12-01");
+    expect(daily({ count: 0 })).toThrow("The number of occurrences must be at least 1.");
+    expect(daily({ count: 1.5 })).toThrow("The number of occurrences must be at least 1.");
+    expect(daily({ count: 367 })).toThrow("A series can hold at most 366 dates.");
+    expect(daily({ until: new Date(Number.NaN) })).toThrow("An end date is required.");
+    expect(daily(until(2028, 1, 1))).toThrow("A series can hold at most 366 dates.");
+    expect(() => pattern({ kind: "daily", every: 1.5, end: { count: 2 } }, "2026-12-01")).toThrow("A repeat interval must be a whole number of at least 1.");
+    expect(() => pattern({ kind: "weekly", every: 1, weekdays: [7], end: { count: 2 } }, "2026-12-01")).toThrow("Weekdays must be numbers from 0 (Sunday) to 6 (Saturday).");
+    for (const dayOfMonth of [0, 32, 2.5]) {
+      expect(() => pattern({ kind: "monthly", every: 1, dayOfMonth, end: { count: 2 } }, "2026-12-01")).toThrow("The day of the month must be from 1 to 31.");
+    }
+    expect(() => pattern({ kind: "weekly", every: 1, weekdays: [0, 1, 2, 3, 4, 5, 6], end: until(2028, 1, 1) }, "2026-12-01")).toThrow("A series can hold at most 366 dates.");
+  });
+});

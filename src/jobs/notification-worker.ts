@@ -10,6 +10,7 @@ import { notificationEmail } from "@/lib/email/templates/notification";
 import { isGone, pushConfigured, sendPush } from "@/lib/push/push";
 import { NOTIFY_EMAIL_QUEUE, NOTIFY_PUSH_QUEUE } from "./boss";
 import type { QueuedJob } from "./email-worker";
+import { trimTrailingSlashes } from "@/lib/text";
 
 let warnedNoBase = false;
 
@@ -22,7 +23,7 @@ function appLink(link: string): string | null {
     }
     return null;
   }
-  return `${base.replace(/\/+$/, "")}${link}`;
+  return `${trimTrailingSlashes(base)}${link}`;
 }
 
 /** Sends the alert to the address on file at send time. A failure throws, so the queue retries it. */
@@ -46,6 +47,7 @@ export async function handlePushJob(job: QueuedJob<NotifyJob> & { id?: string })
   const subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, c.userId));
   const payload = { title: c.title, body: c.body, url: c.link };
   let failure: unknown;
+  // Sequential: one endpoint at a time; the ones sent are recorded so a retry skips them.
   for (const s of subs) {
     if (done.has(s.endpoint)) continue;
     try {
@@ -67,9 +69,11 @@ export async function handlePushJob(job: QueuedJob<NotifyJob> & { id?: string })
 /** Works `boss`'s alert queues; `mode` is the database the boss is bound to, and every job runs in it. */
 export async function registerNotificationHandlers(boss: PgBoss, mode: DataMode = "live"): Promise<void> {
   await boss.work<NotifyJob>(NOTIFY_EMAIL_QUEUE, { includeMetadata: true }, async (jobs) => {
+    // Sequential: jobs are handled in queue order.
     for (const job of jobs) await runInMode(mode, () => handleNotificationEmailJob(job));
   });
   await boss.work<NotifyJob>(NOTIFY_PUSH_QUEUE, { includeMetadata: true }, async (jobs) => {
+    // Sequential: jobs are handled in queue order.
     for (const job of jobs) await runInMode(mode, () => handlePushJob(job));
   });
 }

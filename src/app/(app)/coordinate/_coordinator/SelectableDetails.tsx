@@ -20,7 +20,7 @@ export type SelectableItem = {
 };
 
 /** The coordinator's detail rows with a checkbox each, and Edit selected for a bulk edit across any vendors. */
-export function SelectableDetails({ items, types, defaultTypeId }: { items: SelectableItem[]; types: Array<{ id: string; name: string }>; defaultTypeId: string }) {
+export function SelectableDetails({ items, types, defaultTypeId }: Readonly<{ items: SelectableItem[]; types: Array<{ id: string; name: string }>; defaultTypeId: string }>) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const editable = items.filter((i) => !i.blocked);
@@ -38,13 +38,12 @@ export function SelectableDetails({ items, types, defaultTypeId }: { items: Sele
       {editable.length ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" className="size-4.5 accent-accent" checked={all} onChange={() => setPicked(all ? new Set() : new Set(editable.map((i) => i.id)))} />
-            Select all shown that can change
+            <input type="checkbox" className="size-4.5 accent-accent" checked={all} onChange={() => setPicked(all ? new Set() : new Set(editable.map((i) => i.id)))} />Select all shown that can change
           </label>
           <span className="flex items-center gap-2">
-            <span className="text-sm text-muted" role="status" data-numeric>
+            <output className="text-sm text-muted" data-numeric>
               {ids.length ? `${ids.length} selected` : ""}
-            </span>
+            </output>
             <Button size="sm" disabled={ids.length === 0} onClick={() => setEditing(true)} aria-expanded={editing}>
               Edit selected
             </Button>

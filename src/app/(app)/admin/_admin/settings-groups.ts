@@ -1,4 +1,5 @@
 import type { AgencySettings } from "@/domain/settings/settings";
+import { scalarText } from "@/lib/text";
 
 /**
  * The settings screens, as data. Each group is one page with one Save; each field names its place in the
@@ -6,7 +7,7 @@ import type { AgencySettings } from "@/domain/settings/settings";
  * with the agency settings schema, so a field's limits live in one place.
  */
 
-export type FieldKind = "int" | "float" | "hours" | "dollars" | "dollarsOptional" | "phone" | "text" | "textarea" | "email" | "time" | "select" | "weekday" | "date" | "switch" | "reviewers" | "positionType";
+type FieldKind = "int" | "float" | "hours" | "dollars" | "dollarsOptional" | "phone" | "text" | "textarea" | "email" | "time" | "select" | "weekday" | "date" | "switch" | "reviewers" | "positionType";
 
 export type Field = {
   key: string;
@@ -253,14 +254,26 @@ export const GROUPS = {
 export type GroupSlug = keyof typeof GROUPS;
 /** Groups on the shared settings page route; the rest have their own pages. */
 export const PAGE_GROUPS = ["release", "signup", "billing", "reminders", "vendors", "ops-plans", "map"] as const satisfies readonly GroupSlug[];
-/** Groups only admins may change. */
-export const SYSTEM_GROUPS = ["security"] as const satisfies readonly GroupSlug[];
 
-export type FieldValue = string | boolean | string[];
+type FieldValue = string | boolean | string[];
 export type GroupValues = Record<string, FieldValue>;
 
 export function getPath(obj: unknown, key: string): unknown {
   return key.split(".").reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), obj);
+}
+
+/** Cents as dollars for a form: "70" for whole dollars, "72.50" otherwise, blank for no amount. */
+function dollarsText(v: unknown): string {
+  if (typeof v !== "number") return "";
+  return v % 100 === 0 ? String(v / 100) : (v / 100).toFixed(2);
+}
+
+/** A typed field's starting text, from its saved value. */
+function fieldText(f: Field, v: unknown): string {
+  if (f.kind === "dollars" && f.blankIsZero && v === 0) return "";
+  if (f.kind === "dollars" || f.kind === "dollarsOptional") return dollarsText(v);
+  if (f.kind === "hours") return typeof v === "number" ? String(Math.round((v / 60) * 100) / 100) : "";
+  return scalarText(v);
 }
 
 /** The form's starting values, from the saved settings. */
@@ -270,10 +283,7 @@ export function groupValues(group: Group, s: AgencySettings): GroupValues {
     const v = getPath(s, f.key);
     if (f.kind === "switch") out[f.key] = v === true;
     else if (f.kind === "reviewers") out[f.key] = Array.isArray(v) ? (v as string[]) : [];
-    else if (f.kind === "dollars" && f.blankIsZero && v === 0) out[f.key] = "";
-    else if (f.kind === "dollars" || f.kind === "dollarsOptional") out[f.key] = typeof v === "number" ? (v % 100 === 0 ? String(v / 100) : (v / 100).toFixed(2)) : "";
-    else if (f.kind === "hours") out[f.key] = typeof v === "number" ? String(Math.round((v / 60) * 100) / 100) : "";
-    else out[f.key] = v === null || v === undefined ? "" : String(v);
+    else out[f.key] = fieldText(f, v);
   }
   return out;
 }

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Block, Inline } from "@/domain/manuals/markdown";
 import { chapterSlug, desktopVariant, helpImageUrl } from "@/domain/manuals/manuals";
 import { Notice } from "@/ui/components/Notice";
+import { keyedByContent } from "@/lib/list-keys";
 
 export type ImageSizes = Record<string, { width: number; height: number }>;
 
@@ -16,44 +17,58 @@ type Ctx = {
 function href(target: string, manual: string): string {
   if (/^https?:\/\//.test(target)) return target;
   const m = /^(?:\.\.\/([a-z-]+)\/)?([0-9a-z-]+)\.md(#.*)?$/.exec(target);
-  return m ? `/help/${m[1] ?? manual}/${chapterSlug(`${m[2]}.md`)}${m[3] ?? ""}` : target;
+  if (!m) return target;
+  const chapter = chapterSlug(`${m[2]}.md`);
+  return `/help/${m[1] ?? manual}/${chapter}${m[3] ?? ""}`;
 }
 
-function Text({ inline, ctx }: { inline: Inline[]; ctx: Ctx }) {
-  return (
-    <>
-      {inline.map((p, i) =>
-        p.t === "strong" ? (
-          <strong key={i} className="font-semibold">
-            {p.v}
-          </strong>
-        ) : p.t === "code" ? (
-          <kbd key={i} className="rounded-xs border border-line bg-subtle px-1.5 py-px font-sans text-sm font-semibold">
-            {p.v}
-          </kbd>
-        ) : p.t === "link" ? (
-          /^https?:/.test(p.href) ? (
-            <a key={i} href={p.href} target="_blank" rel="noreferrer">
-              {p.v}
-            </a>
-          ) : (
-            <Link key={i} href={href(p.href, ctx.manual)}>
-              {p.v}
-            </Link>
-          )
-        ) : (
-          <span key={i}>{p.v}</span>
-        ),
-      )}
-    </>
-  );
+function textNode(key: string, p: Inline, ctx: Ctx) {
+  if (p.t === "strong") {
+    return (
+      <strong key={key} className="font-semibold">
+        {p.v}
+      </strong>
+    );
+  }
+  if (p.t === "code") {
+    return (
+      <kbd key={key} className="rounded-xs border border-line bg-subtle px-1.5 py-px font-sans text-sm font-semibold">
+        {p.v}
+      </kbd>
+    );
+  }
+  if (p.t === "link" && /^https?:/.test(p.href)) {
+    return (
+      <a key={key} href={p.href} target="_blank" rel="noreferrer">
+        {p.v}
+      </a>
+    );
+  }
+  if (p.t === "link") {
+    return (
+      <Link key={key} href={href(p.href, ctx.manual)}>
+        {p.v}
+      </Link>
+    );
+  }
+  return <span key={key}>{p.v}</span>;
+}
+
+function Text({ inline, ctx }: Readonly<{ inline: Inline[]; ctx: Ctx }>) {
+  return <>{keyedByContent(inline).map(({ key, item: p }) => textNode(key, p, ctx))}</>;
+}
+
+/** A phone shot is phone sized unless a desktop twin takes over from 768 px; a desktop shot fills the column. */
+function shotWidth(phone: boolean, hasTwin: boolean): string {
+  if (!phone) return "w-full";
+  return hasTwin ? "w-full max-w-70 md:max-w-full" : "w-full max-w-70";
 }
 
 /**
  * A screenshot. A phone shot with a desktop twin shows the desktop picture from 768 px up; a lone phone shot stays
  * phone sized; a desktop shot fills the column.
  */
-function Shot({ alt, src, ctx }: { alt: string; src: string; ctx: Ctx }) {
+function Shot({ alt, src, ctx }: Readonly<{ alt: string; src: string; ctx: Ctx }>) {
   const url = helpImageUrl(src);
   if (!url) return null;
   const key = url.replace(/^\/help-images\//, "");
@@ -72,7 +87,7 @@ function Shot({ alt, src, ctx }: { alt: string; src: string; ctx: Ctx }) {
       height={size?.height}
       loading="lazy"
       decoding="async"
-      className={`${frame} ${phone ? (twinSize ? "w-full max-w-70 md:max-w-full" : "w-full max-w-70") : "w-full"}`}
+      className={`${frame} ${shotWidth(phone, Boolean(twinSize))}`}
     />
   );
   return (
@@ -90,15 +105,13 @@ function Shot({ alt, src, ctx }: { alt: string; src: string; ctx: Ctx }) {
   );
 }
 
-function BlockView({ block, ctx, nested = false }: { block: Block; ctx: Ctx; nested?: boolean }): ReactNode {
+function BlockView({ block, ctx, nested = false }: Readonly<{ block: Block; ctx: Ctx; nested?: boolean }>): ReactNode {
   switch (block.type) {
     case "heading":
       // The chapter's own title is the page h1; headings inside a chapter start at h2.
-      return block.level === 1 ? null : block.level === 2 ? (
-        <h2 className="m-0 mt-4 text-title font-semibold md:text-base">{block.text}</h2>
-      ) : (
-        <h3 className="m-0 mt-2 text-body font-semibold">{block.text}</h3>
-      );
+      if (block.level === 1) return null;
+      if (block.level === 2) return <h2 className="m-0 mt-4 text-title font-semibold md:text-base">{block.text}</h2>;
+      return <h3 className="m-0 mt-2 text-body font-semibold">{block.text}</h3>;
     case "paragraph":
       return (
         <p className={`m-0 max-w-[70ch]${nested ? "" : " text-body"}`}>
@@ -118,14 +131,14 @@ function BlockView({ block, ctx, nested = false }: { block: Block; ctx: Ctx; nes
     case "list":
       return block.ordered ? (
         <ol role="list" className="m-0 flex list-none flex-col gap-6 p-0">
-          {block.items.map((item, i) => (
-            <li key={i} className="grid grid-cols-[28px_1fr] gap-x-3 gap-y-3">
+          {keyedByContent(block.items).map(({ key, item, index: i }) => (
+            <li key={key} className="grid grid-cols-[28px_1fr] gap-x-3 gap-y-3">
               <span className="flex size-7 items-center justify-center rounded-full bg-sunken text-sm font-bold text-ink" data-numeric>
                 {i + 1}
               </span>
               <div className="flex min-w-0 flex-col gap-3 pt-0.5">
-                {item.map((b, j) => (
-                  <BlockView key={j} block={b} ctx={ctx} nested />
+                {keyedByContent(item).map(({ key: inner, item: b }) => (
+                  <BlockView key={inner} block={b} ctx={ctx} nested />
                 ))}
               </div>
             </li>
@@ -133,10 +146,10 @@ function BlockView({ block, ctx, nested = false }: { block: Block; ctx: Ctx; nes
         </ol>
       ) : (
         <ul className="m-0 flex max-w-[70ch] list-disc flex-col gap-1.5 pl-5">
-          {block.items.map((item, i) => (
-            <li key={i} className="pl-1">
-              {item.map((b, j) => (
-                <BlockView key={j} block={b} ctx={ctx} nested />
+          {keyedByContent(block.items).map(({ key, item }) => (
+            <li key={key} className="pl-1">
+              {keyedByContent(item).map(({ key: inner, item: b }) => (
+                <BlockView key={inner} block={b} ctx={ctx} nested />
               ))}
             </li>
           ))}
@@ -145,12 +158,12 @@ function BlockView({ block, ctx, nested = false }: { block: Block; ctx: Ctx; nes
   }
 }
 
-export function ManualBlocks({ blocks, manual, sizes }: { blocks: Block[]; manual: string; sizes: ImageSizes }) {
+export function ManualBlocks({ blocks, manual, sizes }: Readonly<{ blocks: Block[]; manual: string; sizes: ImageSizes }>) {
   const ctx = { manual, sizes };
   return (
     <div className="flex flex-col gap-4">
-      {blocks.map((b, i) => (
-        <BlockView key={i} block={b} ctx={ctx} />
+      {keyedByContent(blocks).map(({ key, item: b }) => (
+        <BlockView key={key} block={b} ctx={ctx} />
       ))}
     </div>
   );

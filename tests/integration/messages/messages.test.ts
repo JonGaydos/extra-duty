@@ -16,6 +16,7 @@ import { updateSettings } from "@/domain/settings/settings";
 import { NOTIFY_EMAIL_QUEUE, NOTIFY_PUSH_QUEUE } from "@/jobs/boss";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
+import { byText } from "@/lib/sort";
 
 describe("message center", () => {
   const get = useTestDb();
@@ -36,7 +37,7 @@ describe("message center", () => {
   const send = (actor: Actor, audiences: Parameters<typeof sendMessage>[2]["audiences"], extra: Record<string, unknown> = {}) =>
     run((tx) => sendMessage(actor, tx, { audiences, subject: "Parking", body: "Use lot B on Friday.", ...extra }));
   const recipients = async (id: string) =>
-    (await get().db.select({ u: messageRecipients.userId }).from(messageRecipients).where(eq(messageRecipients.messageId, id))).map((r) => r.u).sort();
+    (await get().db.select({ u: messageRecipients.userId }).from(messageRecipients).where(eq(messageRecipients.messageId, id))).map((r) => r.u).sort(byText);
   const inbox = (a: Actor, o: { text?: string; unreadOnly?: boolean; page?: number } = {}) => run((tx) => listInbox(a, tx, { page: 1, ...o }));
 
   beforeAll(async () => {
@@ -59,12 +60,12 @@ describe("message center", () => {
     const [deputy, a, b, other] = [await person(), await person(), await person(), await person()];
     for (const p of [deputy, a, b, other]) await sub(p.userId);
     const m = await send(deputy, [{ kind: "users", userIds: [a.userId, b.userId, deputy.userId] }]);
-    expect(await recipients(m.id)).toEqual([a.userId, b.userId].sort());
+    expect(await recipients(m.id)).toEqual([a.userId, b.userId].sort(byText));
     expect(m.recipientCount).toBe(2);
     await drain();
-    expect(push.sendNotification.mock.calls.map((c) => c[0].endpoint).sort()).toEqual([`https://push.example.test/${a.userId}`, `https://push.example.test/${b.userId}`].sort());
+    expect(push.sendNotification.mock.calls.map((c) => c[0].endpoint).sort(byText)).toEqual([`https://push.example.test/${a.userId}`, `https://push.example.test/${b.userId}`].sort(byText));
     const rows = await get().db.select().from(notifications).where(eq(notifications.type, "message.received"));
-    expect(rows.filter((r) => r.link === `/messages/${m.id}`).map((r) => r.userId).sort()).toEqual([a.userId, b.userId].sort());
+    expect(rows.filter((r) => r.link === `/messages/${m.id}`).map((r) => r.userId).sort(byText)).toEqual([a.userId, b.userId].sort(byText));
     expect(rows.find((r) => r.userId === a.userId)).toMatchObject({ title: "Parking", body: "Use lot B on Friday." });
     expect(await inbox(deputy)).toHaveLength(0);
     expect((await inbox(a))[0]).toMatchObject({ messageId: m.id, subject: "Parking", read: false, senderName: expect.any(String) });
@@ -114,7 +115,7 @@ describe("message center", () => {
     const before = (await get().db.select().from(messages)).length;
     await expect(send(deputy, [{ kind: "users", userIds: [a.userId, v.userId] }])).rejects.toBeInstanceOf(ValidationError);
     await expect(send(deputy, [{ kind: "users", userIds: [a.userId, "00000000-0000-7000-8000-000000000000"] }])).rejects.toBeInstanceOf(ValidationError);
-    expect((await get().db.select().from(messages)).length).toBe(before);
+    expect(await get().db.select().from(messages)).toHaveLength(before);
   });
 
   test("the job audience is signed-up, pending short and backup people only, for any personnel", async () => {
@@ -132,7 +133,7 @@ describe("message center", () => {
     await put("removed");
     const bystander = await person();
     const m = await send(deputy, [{ kind: "job", jobId: job.id }], { jobId: job.id });
-    expect(await recipients(m.id)).toEqual([signed, backup, pending].sort());
+    expect(await recipients(m.id)).toEqual([signed, backup, pending].sort(byText));
     expect(await recipients(m.id)).not.toContain(bystander.userId);
     expect(m.jobId).toBe(job.id);
     await expect(send(deputy, [{ kind: "job", jobId: "00000000-0000-7000-8000-000000000000" }])).rejects.toBeInstanceOf(NotFoundError);
@@ -220,7 +221,7 @@ describe("message center", () => {
     await run((tx) => hideMessages(s, tx, [m.id]));
     expect(await inbox(b)).toHaveLength(1);
     const audit = await get().db.select().from(auditLog).where(and(eq(auditLog.entityType, "message"), eq(auditLog.entityId, m.id)));
-    expect(audit.map((r) => r.action).sort()).toEqual(["message.hide", "message.send"]);
+    expect(audit.map((r) => r.action).sort(byText)).toEqual(["message.hide", "message.send"]);
   });
 
   test("the send audit records the id, audience kinds and recipient count, not the body", async () => {
@@ -237,7 +238,7 @@ describe("message center", () => {
     await run((tx) => hideMessages(b, tx, [orig.id]));
     await get().db.update(users).set({ active: false }).where(eq(users.id, c.userId));
     const reply = await run((tx) => sendMessage(s, tx, { audiences: [], subject: "Re: Parking", body: "Update.", replyToMessageId: orig.id }));
-    expect(await recipients(reply.id)).toEqual([a.userId, b.userId].sort());
+    expect(await recipients(reply.id)).toEqual([a.userId, b.userId].sort(byText));
     // a recipient who hid the original can still reply to the sender
     const back = await run((tx) => sendMessage(b, tx, { audiences: [], subject: "Re", body: "Thanks.", replyToMessageId: orig.id }));
     expect(await recipients(back.id)).toEqual([s.userId]);
@@ -250,10 +251,24 @@ describe("message center", () => {
     await expect(send(s, [null as never])).rejects.toBeInstanceOf(ValidationError);
     await expect(send(s, [{ kind: "nobody" } as never])).rejects.toBeInstanceOf(ValidationError);
     await send(s, [{ kind: "users", userIds: [r.userId] }]);
-    for (const page of [0, -1, 1.5, Infinity, NaN]) {
+    for (const page of [0, -1, 1.5, Infinity, Number.NaN]) {
       await expect(inbox(r, { page })).rejects.toBeInstanceOf(ValidationError);
       await expect(run((tx) => listSent(s, tx, { page }))).rejects.toBeInstanceOf(ValidationError);
     }
+  });
+
+  test("malformed or unknown ids are refused with their own messages, and an empty audience has no one to send to", async () => {
+    const s = await person();
+    const unknown = "00000000-0000-7000-8000-000000000000";
+    const refused = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => [(e as Error).constructor.name, (e as Error).message]);
+    expect(await refused(send(s, [{ kind: "users", userIds: ["nope"] }]))).toEqual(["ValidationError", "A recipient is not valid."]);
+    expect(await refused(send(s, [{ kind: "rank", rankIds: "x" as never }]))).toEqual(["ValidationError", "A rank is not valid."]);
+    expect(await refused(send(s, [{ kind: "job", jobId: "nope" }]))).toEqual(["NotFoundError", "Job not found."]);
+    expect(await refused(send(s, [{ kind: "users", userIds: [] }], { jobId: "nope" }))).toEqual(["NotFoundError", "Job not found."]);
+    expect(await refused(send(s, [{ kind: "users", userIds: [] }], { jobId: unknown }))).toEqual(["NotFoundError", "Job not found."]);
+    expect(await refused(send(s, [], { replyToMessageId: "nope" }))).toEqual(["NotFoundError", "Message not found."]);
+    expect(await refused(send(s, [{ kind: "users", userIds: [] }, { kind: "rank", rankIds: [] }]))).toEqual(["ValidationError", "There is no one to send this message to."]);
+    expect(await refused(send(s, [{ kind: "rank", rankIds: [unknown] }]))).toEqual(["ValidationError", "There is no one to send this message to."]);
   });
 
   test("getMessage: sender, recipient and a recipient who hid it can read; a stranger and a malformed id get not found; a vendor is forbidden", async () => {

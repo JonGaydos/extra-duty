@@ -54,6 +54,14 @@ describe("manual Markdown", () => {
     expect(blocks[5]).toEqual({ type: "note", inline: [{ t: "text", v: "Nothing is billed before the end time." }] });
   });
 
+  test("an indented image outside a list is an image, and parsing ends", () => {
+    expect(parseMarkdown("Intro\n\n  ![Map](map.png)\n\nAfter")).toEqual([
+      { type: "paragraph", inline: [{ t: "text", v: "Intro" }] },
+      { type: "image", alt: "Map", src: "map.png" },
+      { type: "paragraph", inline: [{ t: "text", v: "After" }] },
+    ]);
+  });
+
   test("lists every image, nested or not", () => {
     expect(imageRefs(parseMarkdown(md))).toEqual(["../images/deputy/09-billing-1-phone.webp"]);
   });

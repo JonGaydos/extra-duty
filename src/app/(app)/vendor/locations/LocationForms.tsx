@@ -16,7 +16,7 @@ const wire = (v: Values) => {
   return { name: v.name, address: v.address.address, notes: v.notes, ...(pin === undefined ? {} : { pin }) };
 };
 
-function Fields({ v, set }: { v: Values; set: (v: Values) => void }) {
+function Fields({ v, set }: Readonly<{ v: Values; set: (v: Values) => void }>) {
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -73,7 +73,7 @@ export function AddLocation() {
   );
 }
 
-export function EditLocation({ location }: { location: SavedLocation }) {
+export function EditLocation({ location }: Readonly<{ location: SavedLocation }>) {
   const initial: Values = { name: location.name, address: addressValue(location.address, location.lat, location.lng, location.source), notes: location.notes };
   const [open, setOpen] = useState(false);
   const [v, setV] = useState<Values>(initial);

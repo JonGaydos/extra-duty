@@ -51,8 +51,8 @@ export { expect };
 export const PHONE = { width: 390, height: 844 };
 export const DESKTOP = { width: 1280, height: 900 };
 export const TZ = "America/Chicago";
-/** Every flow account's password. */
-export const PASSWORD = "Flow-walkthrough-2026";
+/** Every flow account's password, random for each run. */
+export const PASSWORD = randomBytes(18).toString("base64url");
 
 const DAY = 86_400_000;
 const QUARTER = 15 * 60_000;
@@ -87,7 +87,7 @@ export class Mailbox {
 
 /** Quoted-printable soft breaks and escapes, enough to read a code or a sentence. */
 function unQuote(s: string): string {
-  return s.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)));
+  return s.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h: string) => String.fromCodePoint(Number.parseInt(h, 16)));
 }
 
 function parseRaw(raw: string, rcpt: string[]): Mail {
@@ -95,6 +95,30 @@ function parseRaw(raw: string, rcpt: string[]): Mail {
   const subject = /^Subject: (.*(?:\r?\n[ \t].*)*)/im.exec(head)?.[1].replace(/\r?\n[ \t]/g, " ") ?? "";
   const attachments = [...new Set([...raw.matchAll(/filename="?([^";\r\n]+)"?/g)].map((x) => x[1]))];
   return { to: rcpt, subject, text: unQuote(raw), attachments, files: [], at: Date.now() };
+}
+
+/** Runs every job waiting in one queue, in order; a failed job is failed in the queue and listed in `errors`. */
+async function drain(boss: Awaited<ReturnType<typeof getBoss>>, queue: string, handle: (job: never) => Promise<void>, errors: string[]): Promise<void> {
+  // Sequential: each batch is fetched after the last is handled, and jobs run in queue order, as the worker runs them.
+  for (;;) {
+    const batch = await boss.fetch(queue, { batchSize: 100, includeMetadata: true });
+    if (!batch.length) return;
+    for (const job of batch) {
+      try {
+        await handle(job as never);
+        await boss.complete(queue, job.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(`${queue} job ${job.id}: ${message}`);
+        await boss.fail(queue, job.id, { message });
+      }
+    }
+  }
+}
+
+/** The SMTP capture is listening, so mail sent to it is kept. */
+function assertCapturing(smtp: Server): void {
+  if (!smtp.listening) throw new Error("The SMTP capture is not listening.");
 }
 
 /** A tiny SMTP server that keeps every message (no TLS, no auth). */
@@ -125,7 +149,7 @@ function startSmtp(box: Mailbox, port: number): Promise<Server> {
         const cmd = line.slice(0, 4).toUpperCase();
         if (cmd === "EHLO") socket.write("250-flow-capture\r\n250 8BITMIME\r\n");
         else if (cmd === "RCPT") {
-          rcpt.push(/<([^>]*)>/.exec(line)?.[1] ?? "");
+          rcpt.push(/<([^<>]*)>/.exec(line)?.[1] ?? "");
           socket.write("250 OK\r\n");
         } else if (cmd === "DATA") {
           data = "";
@@ -361,7 +385,7 @@ export class Clock {
   /** Moves a detail so its release, start or end (plus `minutes`) is now. */
   async advanceTo(jobId: string, moment: "release" | "start" | "end", minutes = 1): Promise<void> {
     const j = await one<{ release_at: Date; start_at: Date; end_at: Date }>("select release_at, start_at, end_at from jobs where id = $1", [jobId]);
-    const at = moment === "release" ? j.release_at : moment === "start" ? j.start_at : j.end_at;
+    const at = { release: j.release_at, start: j.start_at, end: j.end_at }[moment];
     await this.advance(jobId, new Date(at.getTime() + minutes * 60_000));
   }
 
@@ -375,9 +399,11 @@ export class Clock {
   /** Delivers queued email (plain, invoice, batch and alert email) into the mailbox, the way the worker would. Throws if any send failed. */
   async deliver(): Promise<void> {
     setEmailSender({
-      send: async (msg) => {
+      // EmailSender.send returns a promise; the capture stores the message at once.
+      send: (msg) => {
         const files = (msg.attachments ?? []).map((a) => ({ filename: a.filename, content: a.content }));
         this.mailbox.messages.push({ to: msg.to, subject: msg.subject, text: msg.text, attachments: files.map((f) => f.filename), files, at: Date.now() });
+        return Promise.resolve();
       },
     });
     const boss = await getBoss();
@@ -390,22 +416,8 @@ export class Clock {
     // A handler that throws fails its job (as the worker would) and fails the test after the rest are delivered, so a
     // check that no email arrived can never pass because sending broke.
     const errors: string[] = [];
-    for (const [queue, handle] of queues) {
-      for (;;) {
-        const batch = await boss.fetch(queue, { batchSize: 100, includeMetadata: true });
-        if (!batch.length) break;
-        for (const job of batch) {
-          try {
-            await handle(job as never);
-            await boss.complete(queue, job.id);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            errors.push(`${queue} job ${job.id}: ${message}`);
-            await boss.fail(queue, job.id, { message });
-          }
-        }
-      }
-    }
+    // Sequential: one queue after another, in order, as the worker would.
+    for (const [queue, handle] of queues) await drain(boss, queue, handle, errors);
     if (errors.length) throw new Error(`Queued email failed to send:\n${errors.join("\n")}`);
   }
 }
@@ -482,11 +494,13 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     { scope: "worker" },
   ],
   mail: async ({ mailbox, smtp }, provide) => {
-    void smtp;
+    // Named so Playwright starts the SMTP capture first.
+    assertCapturing(smtp);
     await provide(mailbox);
   },
-  agency: async ({ mail }, provide) => {
-    void mail;
+  agency: async ({ smtp }, provide) => {
+    // Named so Playwright starts the SMTP capture before mail is pointed at it.
+    assertCapturing(smtp);
     const agency = await Agency.create();
     // Mail leaves through the capture; another suite may have pointed it elsewhere.
     await agency.settings({

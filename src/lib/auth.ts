@@ -77,7 +77,7 @@ function throttleError(kind: ThrottleKind, retryAfterMs: number): APIError {
  * share an office IP never lock each other out. They replace Better Auth's defaults of three per 10 seconds (sign-in,
  * two-factor) and three per minute (password reset requests).
  */
-export const IP_RATE_LIMITS = {
+const IP_RATE_LIMITS = {
   "/sign-in/*": { window: 60, max: 60 },
   "/two-factor/*": { window: 60, max: 120 },
   "/request-password-reset": { window: 600, max: 20 },
@@ -211,11 +211,14 @@ export function createAuth(o: CreateAuthOptions) {
       revokeSessionsOnPasswordReset: true,
       // Not awaited: a request for an address with an account must answer as fast as one without, so the
       // response time never reveals which addresses have accounts. A failed send is logged without the link.
-      sendResetPassword: async ({ user, url }) => {
-        o.emailSender.send(resetEmail(user.email, url)).catch((err: unknown) => {
-          console.error("password reset email failed:", err instanceof Error ? err.message : String(err));
-        });
-      },
+      // better-auth expects a promise: it resolves at once, and a throw while starting the send still rejects it.
+      sendResetPassword: ({ user, url }) =>
+        new Promise<void>((resolve) => {
+          o.emailSender.send(resetEmail(user.email, url)).catch((err: unknown) => {
+            console.error("password reset email failed:", err instanceof Error ? err.message : String(err));
+          });
+          resolve();
+        }),
       onPasswordReset: async ({ user }) => {
         await completePasswordReset(db, user.id);
       },
@@ -271,7 +274,7 @@ export async function getAuth(): Promise<Auth> {
   if (app && now - app.checkedAt < SETTINGS_RECHECK_MS) return app.auth;
   const { security } = await appDb.transaction((tx) => getSettings(tx));
   const key = JSON.stringify(security);
-  if (app && app.key === key) {
+  if (app?.key === key) {
     app.checkedAt = now;
     return app.auth;
   }

@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/ui/components/Button";
 import { FormField, Input } from "@/ui/components/FormField";
-import { ActionStatus } from "../../_personnel/use-action";
+import { ActionStatus, uploadResult } from "../../_personnel/use-action";
 
 /** The Incident Commander uploads the ops plan, or a new version after a denial or a change. */
-export function OpsPlanUpload({ jobId, again }: { jobId: string; again: boolean }) {
+export function OpsPlanUpload({ jobId, again }: Readonly<{ jobId: string; again: boolean }>) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +40,7 @@ export function OpsPlanUpload({ jobId, again }: { jobId: string; again: boolean 
       <Button type="submit" variant="secondary" busy={busy} disabled={!file} className="w-fit">
         {again ? "Submit new version" : "Submit ops plan"}
       </Button>
-      <ActionStatus result={msg ? (msg.ok ? { ok: true, message: msg.text } : { ok: false, error: msg.text }) : null} />
+      <ActionStatus result={uploadResult(msg)} />
     </form>
   );
 }

@@ -7,7 +7,7 @@ import { FormField, Input } from "@/ui/components/FormField";
 import { useCoordAction } from "../../coordinate/_coordinator/status";
 import { createPresetAction, presetActiveAction, updatePresetAction } from "../_admin/actions";
 
-export function PresetRow({ id, text, active }: { id: string; text: string; active: boolean }) {
+export function PresetRow({ id, text, active }: Readonly<{ id: string; text: string; active: boolean }>) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(text);
   const { run, busy } = useCoordAction();
@@ -55,7 +55,7 @@ export function PresetRow({ id, text, active }: { id: string; text: string; acti
   );
 }
 
-export function AddPreset({ context, label }: { context: string; label: string }) {
+export function AddPreset({ context, label }: Readonly<{ context: string; label: string }>) {
   const [text, setText] = useState("");
   const { run, busy } = useCoordAction();
   return (

@@ -32,12 +32,12 @@ export type EditPatch = {
   conflictOverride?: { reason: string; fingerprints: Record<string, string> } | null;
 };
 
-export type EditSnapshot = { startAt: Date; endAt: Date; rateCents: Cents; description: string | null; positions: Array<{ name: string; count: number }> };
+type EditSnapshot = { startAt: Date; endAt: Date; rateCents: Cents; description: string | null; positions: Array<{ name: string; count: number }> };
 /** `conflicts`: deputies on the detail the new times would double-book or put over a cap. */
 export type EditRow = { jobId: string; number: number; title: string; vendorName: string; before: EditSnapshot; after: EditSnapshot | null; problem: string | null; conflicts: ScheduleConflict[]; conflictFingerprint: string | null };
 
 /** At most this many details in one bulk edit. */
-export const MAX_BULK_EDIT = 200;
+const MAX_BULK_EDIT = 200;
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const DAY = new Intl.DateTimeFormat("en-US", { timeZone: AGENCY_TZ, weekday: "short", month: "short", day: "numeric" });
@@ -138,6 +138,7 @@ async function run(actor: Actor, tx: Tx, ids: string[], patch: EditPatch, now: D
     // Every detail is edited in save order inside one savepoint, so each is checked against the others' new times
     // exactly as the save does; a preview rolls the whole savepoint back at the end.
     await tx.transaction(async (all) => {
+      // Sequential: each detail is edited in save order and checked against the ones before it.
       for (const { job, vendorName } of targets) {
         const before = await snapshot(all, job);
         const row: EditRow = { jobId: job.id, number: job.number, title: job.title, vendorName, before, after: null, problem: await blocked(all, job, patch, now), conflicts: [], conflictFingerprint: null };
@@ -185,13 +186,15 @@ export async function applyEdit(actor: Actor, tx: Tx, ids: string[], patch: Edit
   const { rows, changes, unresolved } = await run(actor, tx, ids, patch, now, true);
   const refused = rows.filter((r) => r.problem);
   if (refused.length) {
-    throw new ValidationError(`Nothing was saved. ${refused.map((r) => `#${r.number} ${r.title}, ${DAY.format(r.before.startAt)}: ${r.problem}`).join(" ")}`);
+    const reasons = refused.map((r) => `#${r.number} ${r.title}, ${DAY.format(r.before.startAt)}: ${r.problem}`).join(" ");
+    throw new ValidationError(`Nothing was saved. ${reasons}`);
   }
   // Deputy conflicts not covered by a matching override refuse the whole save (the caller's transaction rolls back),
   // listing every conflict with the fingerprints the preview showed.
   if (unresolved) throw new ScheduleConflictError(rows.flatMap((r) => r.conflicts));
   const byPerson = new Map<string, JobChange[]>();
   for (const c of changes) for (const u of c.audience) byPerson.set(u, [...(byPerson.get(u) ?? []), c]);
+  // Sequential: alert writes in this transaction.
   for (const [userId, list] of byPerson) {
     const one = list.length === 1;
     await emit(tx, {

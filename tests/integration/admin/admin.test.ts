@@ -28,6 +28,8 @@ import { agencyDateParts, agencyInstant } from "@/domain/time/agency-time";
 import { GROUPS, groupValues } from "@/app/(app)/admin/_admin/settings-groups";
 import { saveGroup } from "@/app/(app)/admin/_admin/settings-save";
 
+// Fake email senders and fetches are async to match the real ones; they answer at once.
+
 let PNG: Buffer;
 const SVG = Buffer.from('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#123c8c"/></svg>');
 
@@ -203,9 +205,14 @@ describe("management read models and services", () => {
     expect(await sendTestEmail(admin, (fn) => db.transaction(fn), () => sender)).toBe("admin@example.test");
     expect(sender.sent).toHaveLength(1);
     expect(sender.sent[0]).toMatchObject({ to: ["admin@example.test"], subject: "Extra Duty test email" });
+    expect(sender.sent[0].text).toContain("goes out through the email server mail.example.test. If you can read this, it works.");
     await expect(sendTestEmail(coordinator, (fn) => db.transaction(fn), () => sender)).rejects.toBeInstanceOf(ForbiddenError);
-    const failing = { send: async () => { throw new Error("connection refused"); } };
+    const failing = { send: () => Promise.reject(new Error("connection refused")) };
     await expect(sendTestEmail(admin, (fn) => db.transaction(fn), () => failing)).rejects.toThrow("The test email was not sent: connection refused");
+    await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "postmark", apiKey: "test-token" } }));
+    await sendTestEmail(admin, (fn) => db.transaction(fn), () => sender);
+    expect(sender.sent.at(-1)!.text).toContain("goes out through the postmark provider. If you can read this, it works.");
+    await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "smtp", apiKey: "" } }));
   });
 
   test("only admins send an invite to an admin account", async () => {

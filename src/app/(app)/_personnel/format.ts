@@ -8,7 +8,6 @@ const LONG_DATE = fmt({ weekday: "long", month: "long", day: "numeric" });
 const MONTH_DAY_YEAR = fmt({ month: "short", day: "numeric", year: "numeric" });
 const MONTH_DAY = fmt({ month: "short", day: "numeric" });
 const MONTH_YEAR = fmt({ month: "long", year: "numeric" });
-const WEEKDAY = fmt({ weekday: "short" });
 
 /** "2:00 PM", or "2 PM" with `short`. */
 export function clock(d: Date, short = false): string {
@@ -37,7 +36,6 @@ export const dateLabel = (d: Date) => MONTH_DAY_YEAR.format(d);
 export const monthDay = (d: Date) => MONTH_DAY.format(d);
 /** "November 2026". */
 export const monthYear = (d: Date) => MONTH_YEAR.format(d);
-export const weekdayShort = (d: Date) => WEEKDAY.format(d);
 
 /** "Today", "Tomorrow" or "Tue, Dec 1". */
 export function relativeDay(d: Date, now: Date): string {
@@ -83,11 +81,15 @@ export function fromLocalInput(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** `before` then the value, or nothing when there is no value: prefixed(", ", "Gym") is ", Gym". */
+export const prefixed = (before: string, value: string | null | undefined) => (value ? `${before}${value}` : "");
+
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "18:00" to "6 PM", "06:30" to "6:30 AM". */
 export function hhmmText(v: string): string {
   const [h, m] = v.split(":").map(Number);
   const hh = h % 12 === 0 ? 12 : h % 12;
-  return `${hh}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
+  const mm = m ? `:${String(m).padStart(2, "0")}` : "";
+  return `${hh}${mm} ${h < 12 ? "AM" : "PM"}`;
 }

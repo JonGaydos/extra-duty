@@ -8,7 +8,7 @@ import { ActionStatus, useAction } from "../_personnel/use-action";
 type Row = { id: string; title: string; body: string | null; link: string | null; when: string; read: boolean };
 
 /** Alerts with "Mark all read"; opening one (or Mark read) marks it read. */
-export function AlertList({ alerts, unread }: { alerts: Row[]; unread: number }) {
+export function AlertList({ alerts, unread }: Readonly<{ alerts: Row[]; unread: number }>) {
   const { run, busy, result } = useAction();
   return (
     <div className="flex flex-col gap-2.5">

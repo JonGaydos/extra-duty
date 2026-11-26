@@ -22,6 +22,7 @@ export type RotationResult = { rotated: number; alreadyNew: number; failed: Arra
 export async function rotateFileKey(db: Db, storage: Storage, oldKey: Buffer, newKey: Buffer): Promise<RotationResult> {
   const rows = await db.select({ id: files.id, storageKey: files.storageKey }).from(files).where(eq(files.encrypted, true)).orderBy(asc(files.id));
   const result: RotationResult = { rotated: 0, alreadyNew: 0, failed: [] };
+  // Sequential: one file at a time, so a failure is recorded for that file and memory stays bounded.
   for (const row of rows) {
     try {
       const blob = await storage.get(row.storageKey);
@@ -53,6 +54,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (oldKey.equals(newKey)) throw new Error("FILE_MASTER_KEY_OLD and FILE_MASTER_KEY are the same key.");
     const modes: DataMode[] = trainingConfigured() ? ["live", "training"] : ["live"];
     let failed = 0;
+    // Sequential: each mode is rotated and its pool closed before the next starts.
     for (const mode of modes) {
       const r = await runInMode(mode, () => rotateFileKey(dbFor(mode), storageFor(mode), oldKey, newKey));
       console.log(`rotate-file-key: ${mode}: ${r.rotated} moved to the new key, ${r.alreadyNew} already on it, ${r.failed.length} failed`);

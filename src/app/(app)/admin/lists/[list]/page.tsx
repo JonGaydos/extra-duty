@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** A simple named list: add, rename, turn off and on. Nothing is deleted, because records use these names. */
-export default async function NamedListPage({ params }: Props) {
+export default async function NamedListPage({ params }: Readonly<Props>) {
   const actor = await managementActor();
   const l = listOf((await params).list);
   if (!l) notFound();

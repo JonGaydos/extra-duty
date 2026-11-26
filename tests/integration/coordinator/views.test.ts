@@ -202,7 +202,7 @@ describe("coordinator to-do loading", () => {
       if (s.locked) expected.push({ userId: p.userId, unbilled: s.unbilledCount, unacknowledged: s.unacknowledgedCount });
     }
     expect(todo.locks.map(({ userId, unbilled, unacknowledged }) => ({ userId, unbilled, unacknowledged })).sort((a, b) => a.userId.localeCompare(b.userId))).toEqual(
-      expected.sort((a, b) => a.userId.localeCompare(b.userId)),
+      expected.toSorted((a, b) => a.userId.localeCompare(b.userId)),
     );
     expect(expected.length).toBeGreaterThan(0);
 

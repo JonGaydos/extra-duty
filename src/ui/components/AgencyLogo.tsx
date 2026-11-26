@@ -13,15 +13,15 @@ const PLATE: Record<Exclude<LogoPlace, "pdf">, string> = {
  * 1.3:1 and wider. Always contained, never cropped or stretched. By day it sits on white. At night a logo with no
  * transparency (a JPG, or a PNG on an opaque background) keeps a light plate so its background does not glare as
  * a hard box edge; a transparent logo sits directly on the dark surface. The agency's name is printed beside it,
- * so the image itself is decorative.
+ * so the image itself is decorative unless `alt` names it (where the logo is shown on its own).
  */
-export function AgencyLogo({ logo, place }: { logo: AgencyLogoData; place: Exclude<LogoPlace, "pdf"> }) {
+export function AgencyLogo({ logo, place, alt = "" }: Readonly<{ logo: AgencyLogoData; place: Exclude<LogoPlace, "pdf">; alt?: string }>) {
   const slot = logoSlot(place, logo.width, logo.height);
   const size = containSize(logo.width, logo.height, slot);
   const plate = logo.transparent ? "bg-logo-clear" : "bg-logo-plate";
   return (
     <span data-logo-shape={slot.shape} data-logo-plate={logo.transparent ? "day" : "always"} className={`inline-flex shrink-0 items-center justify-center ${plate} ${PLATE[place]}`}>
-      <Image src={`/api/v1/agency/logo?v=${logo.fileId}`} alt="" width={size.width} height={size.height} unoptimized priority={place === "signIn"} className="block object-contain" style={{ width: size.width, height: size.height }} />
+      <Image src={`/api/v1/agency/logo?v=${logo.fileId}`} alt={alt} width={size.width} height={size.height} unoptimized priority={place === "signIn"} className="block object-contain" style={{ width: size.width, height: size.height }} />
     </span>
   );
 }

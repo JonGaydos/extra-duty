@@ -30,10 +30,12 @@ function chip(i: VendorInvoiceRow): { text: string; tone: ChipTone } {
 /** "You marked this paid on Dec 3 by Ramp, #1042." */
 function paidSentence(i: VendorInvoiceRow): string | null {
   if (!i.vendorPaid) return null;
-  return `You marked this paid on ${monthDay(i.vendorPaid.at)}${i.vendorPaid.method ? ` by ${i.vendorPaid.method}` : ""}${i.vendorPaid.reference ? `, #${i.vendorPaid.reference}` : ""}.`;
+  const method = i.vendorPaid.method ? ` by ${i.vendorPaid.method}` : "";
+  const reference = i.vendorPaid.reference ? `, #${i.vendorPaid.reference}` : "";
+  return `You marked this paid on ${monthDay(i.vendorPaid.at)}${method}${reference}.`;
 }
 
-function InvoiceCard({ i, methods, today }: { i: VendorInvoiceRow; methods: Array<{ id: string; name: string }>; today: string }) {
+function InvoiceCard({ i, methods, today }: Readonly<{ i: VendorInvoiceRow; methods: Array<{ id: string; name: string }>; today: string }>) {
   const c = chip(i);
   const paid = paidSentence(i);
   return (
@@ -74,8 +76,7 @@ function InvoiceCard({ i, methods, today }: { i: VendorInvoiceRow; methods: Arra
       {i.status === "paid" && i.deputyPaidAt ? <p className="m-0 text-sm">The deputy confirmed payment on {monthDay(i.deputyPaidAt)}.</p> : null}
       <div className="flex flex-wrap items-center gap-x-4 border-t border-divider pt-1">
         <a href={`/api/v1/invoices/${i.id}/pdf`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold">
-          Download PDF
-          <span className="sr-only">, invoice {i.number}</span>
+          Download PDF<span className="sr-only">, invoice {i.number}</span>
           <Icon name="download" size={16} />
         </a>
       </div>

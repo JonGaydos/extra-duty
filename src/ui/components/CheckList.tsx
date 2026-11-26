@@ -8,7 +8,7 @@ export type CheckItem = {
 };
 
 /** Rules and whether each is met (sign-up checks, caps). State is in words for screen readers, not only the icon. */
-export function CheckList({ items }: { items: CheckItem[] }) {
+export function CheckList({ items }: Readonly<{ items: CheckItem[] }>) {
   return (
     <ul className="m-0 flex list-none flex-col gap-2.25 p-0 text-body">
       {items.map((c) => (

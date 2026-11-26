@@ -7,9 +7,9 @@ import { ValidationError } from "@/domain/errors";
 import { agencyDateParts } from "@/domain/time/agency-time";
 
 export const LIBRARY_PAGE_SIZE = 25;
-export const LIBRARY_TEXT_MAX = 200;
+const LIBRARY_TEXT_MAX = 200;
 /** Minimum `pg_trgm` similarity between a new job's title and a prior plan's event name. */
-export const PRIOR_PLAN_SIMILARITY = 0.6;
+const PRIOR_PLAN_SIMILARITY = 0.6;
 
 export type OpsPlanSummary = {
   opsPlanId: string;
@@ -25,8 +25,6 @@ export type OpsPlanSummary = {
   fileId: string;
   filename: string;
 };
-/** One library row; the same shape as a suggestion. */
-export type OpsPlanLibraryRow = OpsPlanSummary;
 
 export type LibraryFilter = { text?: string; vendorId?: string; year?: number; location?: string };
 

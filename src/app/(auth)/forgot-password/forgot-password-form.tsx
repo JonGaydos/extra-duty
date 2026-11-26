@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { Button } from "@/ui/components/Button";
 import { FormField, Input } from "@/ui/components/FormField";
 import { FormMessage, type Message } from "../form-message";
 import { waitText } from "@/domain/auth/wait-text";
 import { postAuth } from "../post-json";
+import { formText } from "@/lib/form-text";
 
 export function ForgotPasswordForm() {
   const [message, setMessage] = useState<Message>(null);
   const [busy, setBusy] = useState(false);
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    const email = String(new FormData(e.currentTarget).get("email") ?? "");
+    const email = formText(new FormData(e.currentTarget), "email");
     setBusy(true);
     try {
       const result = await postAuth("/request-password-reset", { email, redirectTo: "/reset-password" });

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { GEOCODE_ANSWER_WITHIN_MS, GEOCODE_CACHE_MAX, GEOCODE_MAX_WAITING, GEOCODE_PER_USER_PER_MINUTE, geocodeAddress, lookupAddress, resetGeocoder } from "@/domain/vendors/geocode";
 
+// Fake fetches are async to match fetch; they answer at once.
+
 const HOUR = 3_600_000;
 const item = (o: Record<string, unknown> = {}) => ({
   lat: "30.4",
@@ -15,7 +17,7 @@ describe("geocoder", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     resetGeocoder();
-    fetchMock = vi.fn(async () => ok([item()]));
+    fetchMock = vi.fn(() => Promise.resolve(ok([item()])));
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
@@ -38,9 +40,9 @@ describe("geocoder", () => {
   test("lookups across callers start at least one second apart", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
     const starts: number[] = [];
-    fetchMock.mockImplementation(async () => {
+    fetchMock.mockImplementation(() => {
       starts.push(Date.now());
-      return ok([item()]);
+      return Promise.resolve(ok([item()]));
     });
     const all = Promise.all(["1 A St", "2 B St", "3 C St"].map((a) => lookupAddress(a)));
     await vi.advanceTimersByTimeAsync(2500);

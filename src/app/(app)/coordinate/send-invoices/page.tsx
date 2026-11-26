@@ -15,6 +15,12 @@ import { SendBatchForm } from "./SendBatchForm";
 
 export const metadata: Metadata = { title: "Send invoices" };
 
+function sendSummary(vendors: number, due: number): string {
+  if (!vendors) return "Approved invoices wait here for each vendor's send day.";
+  const dueText = due ? `, ${due} due` : "";
+  return `${plural(vendors, "vendor")} with invoices ready to send${dueText}.`;
+}
+
 const SCHEDULE_TEXT: Record<VendorBatch["schedule"], string> = {
   immediate: "Sends right away",
   weekly: "Weekly send",
@@ -22,7 +28,7 @@ const SCHEDULE_TEXT: Record<VendorBatch["schedule"], string> = {
   monthly: "Monthly send",
 };
 
-function BatchCard({ b }: { b: VendorBatch }) {
+function BatchCard({ b }: Readonly<{ b: VendorBatch }>) {
   const headingId = `vendor-${b.vendorId}-heading`;
   const ready = b.invoices.filter((i) => !i.waiting);
   const held = b.invoices.length - ready.length;
@@ -122,7 +128,7 @@ export default async function SendInvoicesPage() {
   const due = batches.filter((b) => b.due).length;
   return (
     <div className="flex flex-col gap-4.5">
-      <PageTitle sub={batches.length ? `${plural(batches.length, "vendor")} with invoices ready to send${due ? `, ${due} due` : ""}.` : "Approved invoices wait here for each vendor's send day."}>
+      <PageTitle sub={sendSummary(batches.length, due)}>
         Send invoices
       </PageTitle>
       {batches.length === 0 ? (

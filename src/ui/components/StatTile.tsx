@@ -7,13 +7,13 @@ export function StatTile({
   value,
   unit,
   tone = "default",
-}: {
+}: Readonly<{
   label: string;
   value: string | number;
   /** Shown after the value in the muted style, such as "/ 16 h". */
   unit?: string;
   tone?: "default" | "warning";
-}) {
+}>) {
   const warn = tone === "warning";
   return (
     <div

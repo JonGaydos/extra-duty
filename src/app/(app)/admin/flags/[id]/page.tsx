@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Special flag" };
 type Props = { params: Promise<{ id: string }> };
 
 /** Who holds one flag; grant it to someone or revoke it. */
-export default async function FlagPage({ params }: Props) {
+export default async function FlagPage({ params }: Readonly<Props>) {
   const actor = await managementActor();
   const { id } = await params;
   const rec = await withTx(async (tx) => {

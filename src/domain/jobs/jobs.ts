@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, gte, ilike, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, gte, ilike, inArray, isNull, lt, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { assignments, auditLog, hiddenVendors, invoices, jobAttachments, jobPositions, jobs, jobTypes, positionTypes, qualifications, ranks, vendorLocations, users, vendorRestrictions, vendors } from "@/db/schema";
 import type { Actor } from "../actor";
@@ -22,7 +22,7 @@ import { applySafety, loadSafety, type JobSafetyView, type SafetyInput } from ".
 import { conflictsAt, overrideReason, ScheduleConflictError, type ConflictOverride, type ScheduleConflict } from "./schedule-conflicts";
 
 export type Job = typeof jobs.$inferSelect;
-export type JobPosition = typeof jobPositions.$inferSelect;
+type JobPosition = typeof jobPositions.$inferSelect;
 export type JobAttachment = typeof jobAttachments.$inferSelect;
 
 export type PositionInput = {
@@ -65,7 +65,7 @@ export type JobInput = {
 
 export const JOBS_PAGE_SIZE = 50;
 /** The widest range "only details I can work" will filter, since it reads every job in the range. */
-export const MAX_WORKABLE_RANGE_DAYS = 400;
+const MAX_WORKABLE_RANGE_DAYS = 400;
 
 const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 const money = (c: Cents) => `$${Math.floor(c / 100)}.${String(c % 100).padStart(2, "0")}`;
@@ -117,7 +117,7 @@ function rangeOverride(actor: Actor, rate: Cents, settings: AgencySettings, reas
   throw new ValidationError(`${label}${rateRangeMessage(settings)}.`);
 }
 
-export const MAX_OVERRIDE_REASON = 500;
+const MAX_OVERRIDE_REASON = 500;
 
 const NO_OVERRIDE = { rateOverrideReason: null, rateOverrideBy: null, rateOverrideAt: null } as const;
 
@@ -128,6 +128,31 @@ type Normalized = Omit<PositionInput, "eligibleRankIdsOverride" | "requiredQuali
   rateDifferentialCents: Cents;
 };
 
+/** The ids without repeats, after checking each exists (`find` returns the ones found); null stays null. */
+async function existingIds(ids: string[] | null | undefined, find: (ids: string[]) => Promise<unknown[]>, missing: string): Promise<string[] | null> {
+  if (!ids) return null;
+  const unique = [...new Set(ids)];
+  const found = unique.length ? await find(unique) : [];
+  if (found.length !== unique.length) throw new ValidationError(missing);
+  return unique;
+}
+
+async function normalizePosition(tx: Tx, p: PositionInput): Promise<Normalized> {
+  if (!Number.isInteger(p.count) || p.count < 1) throw new ValidationError("Each position needs a count of at least 1.");
+  const [pt] = await tx
+    .select({ id: positionTypes.id, active: positionTypes.active, differential: positionTypes.rateDifferentialCents })
+    .from(positionTypes)
+    .where(eq(positionTypes.id, p.positionTypeId));
+  if (!pt?.active) throw new ValidationError("Position type not found.");
+  const rankIds = await existingIds(p.eligibleRankIdsOverride, (ids) => tx.select({ id: ranks.id }).from(ranks).where(inArray(ranks.id, ids)), "An eligible rank was not found.");
+  const qualIds = await existingIds(
+    p.requiredQualificationIdsOverride,
+    (ids) => tx.select({ id: qualifications.id }).from(qualifications).where(inArray(qualifications.id, ids)),
+    "A required qualification was not found.",
+  );
+  return { positionTypeId: p.positionTypeId, count: p.count, eligibleRankIdsOverride: rankIds, requiredQualificationIdsOverride: qualIds, rateDifferentialCents: pt.differential };
+}
+
 async function normalizePositions(tx: Tx, given: PositionInput[], settings: AgencySettings): Promise<Normalized[]> {
   let list = given;
   if (list.length === 0) {
@@ -135,25 +160,8 @@ async function normalizePositions(tx: Tx, given: PositionInput[], settings: Agen
     list = [{ positionTypeId: settings.defaultPositionTypeId, count: 1 }];
   }
   const out: Normalized[] = [];
-  for (const p of list) {
-    if (!Number.isInteger(p.count) || p.count < 1) throw new ValidationError("Each position needs a count of at least 1.");
-    const [pt] = await tx
-      .select({ id: positionTypes.id, active: positionTypes.active, differential: positionTypes.rateDifferentialCents })
-      .from(positionTypes)
-      .where(eq(positionTypes.id, p.positionTypeId));
-    if (!pt || !pt.active) throw new ValidationError("Position type not found.");
-    const rankIds = p.eligibleRankIdsOverride ? [...new Set(p.eligibleRankIdsOverride)] : null;
-    if (rankIds) {
-      const found = rankIds.length ? await tx.select({ id: ranks.id }).from(ranks).where(inArray(ranks.id, rankIds)) : [];
-      if (found.length !== rankIds.length) throw new ValidationError("An eligible rank was not found.");
-    }
-    const qualIds = p.requiredQualificationIdsOverride ? [...new Set(p.requiredQualificationIdsOverride)] : null;
-    if (qualIds) {
-      const found = qualIds.length ? await tx.select({ id: qualifications.id }).from(qualifications).where(inArray(qualifications.id, qualIds)) : [];
-      if (found.length !== qualIds.length) throw new ValidationError("A required qualification was not found.");
-    }
-    out.push({ positionTypeId: p.positionTypeId, count: p.count, eligibleRankIdsOverride: rankIds, requiredQualificationIdsOverride: qualIds, rateDifferentialCents: pt.differential });
-  }
+  // Sequential: one transaction's queries, and the first invalid position is the one reported.
+  for (const p of list) out.push(await normalizePosition(tx, p));
   return out;
 }
 
@@ -163,12 +171,12 @@ async function assertRefs(tx: Tx, vendorId: string, locationId: string | null, t
   if (requireActiveVendor && !vendor.active) throw new ValidationError("That vendor is inactive.");
   if (locationId) {
     const [loc] = await tx.select().from(vendorLocations).where(eq(vendorLocations.id, locationId));
-    if (!loc || loc.vendorId !== vendorId) throw new ValidationError("Location not found for this vendor.");
+    if (loc?.vendorId !== vendorId) throw new ValidationError("Location not found for this vendor.");
     if (!loc.active) throw new ValidationError("That location is inactive.");
   }
   if (typeId) {
     const [type] = await tx.select({ id: jobTypes.id, active: jobTypes.active }).from(jobTypes).where(eq(jobTypes.id, typeId));
-    if (!type || !type.active) throw new ValidationError("Job type not found.");
+    if (!type?.active) throw new ValidationError("Job type not found.");
   }
   return vendor;
 }
@@ -259,6 +267,7 @@ async function syncPositions(tx: Tx, jobId: string, wanted: Normalized[]): Promi
   }
 
   let changed = false;
+  // Sequential: position writes in this transaction, in plan order.
   for (const { w, match } of plan) {
     if (!match) {
       await tx.insert(jobPositions).values({ jobId, ...w });
@@ -322,41 +331,17 @@ export async function editOne(actor: Actor, tx: Tx, before: Job, patch: Partial<
   return { job, change, conflicts, resolved };
 }
 
-async function updateOne(
-  actor: Actor,
-  tx: Tx,
-  before: Job,
-  patch: Partial<JobInput>,
-  settings: AgencySettings,
-  positions: Normalized[] | null,
-  scope: "one" | "series",
-  collect?: (c: JobChange) => void,
-  onConflicts?: (c: ScheduleConflict[], resolved: boolean) => void,
-  /**
-   * Quick and bulk edit: never throw on deputy conflicts; save past them and report whether a valid override covered
-   * them, so the caller checks every detail in save order and refuses the whole edit (rolling it back) if any is
-   * unresolved. Never set from a client.
-   */
-  collectConflicts = false,
-): Promise<Job> {
-  if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined job cannot be changed.");
-  if (patch.vendorId !== undefined && patch.vendorId !== before.vendorId) throw new ValidationError("A job cannot move to another vendor.");
+/** The flexible window after an edit: unchanged when the patch leaves it out, cleared when the patch sets none. */
+function patchedFlex(flex: JobInput["flex"], before: Job) {
+  if (flex === undefined) return { earliestStartAt: before.flexEarliestStartAt, latestEndAt: before.flexLatestEndAt, allowShorter: before.flexAllowShorter };
+  return flex ?? { earliestStartAt: null, latestEndAt: null, allowShorter: false };
+}
 
-  // Only a changed type or location is re-validated, so a deactivated type never blocks edits to its existing jobs.
-  const newLocation = patch.locationId && patch.locationId !== before.locationId ? patch.locationId : null;
-  const newType = patch.typeId && patch.typeId !== before.typeId ? patch.typeId : null;
-  const vendor = await assertRefs(tx, before.vendorId, newLocation, newType, false);
-  const startAt = patch.startAt ?? before.startAt;
-  const endAt = patch.endAt ?? before.endAt;
-  const flex =
-    patch.flex === undefined
-      ? { earliestStartAt: before.flexEarliestStartAt, latestEndAt: before.flexLatestEndAt, allowShorter: before.flexAllowShorter }
-      : patch.flex
-        ? patch.flex
-        : { earliestStartAt: null, latestEndAt: null, allowShorter: false };
-  assertTimes(startAt, endAt, flex);
+type JobSet = Partial<typeof jobs.$inferInsert>;
+type Flex = ReturnType<typeof patchedFlex>;
 
-  const set: Partial<typeof jobs.$inferInsert> = {};
+/** The text and flag columns an edit sets directly. */
+function setPlainFields(set: JobSet, patch: Partial<JobInput>, before: Job): void {
   if (patch.locationId !== undefined) set.locationId = patch.locationId;
   if (patch.typeId !== undefined) set.typeId = patch.typeId;
   if (patch.title !== undefined) {
@@ -369,6 +354,11 @@ async function updateOne(
   if (patch.contactName !== undefined) set.contactName = cleanChangedContactName(patch.contactName, before.contactName);
   if (patch.contactPhone !== undefined) set.contactPhone = cleanChangedPhone(patch.contactPhone, before.contactPhone);
   if (patch.held !== undefined) set.held = patch.held;
+}
+
+/** The time columns an edit sets: the times, the release date that follows the start, the flexible window and the ops plan due date. */
+function setScheduleFields(set: JobSet, patch: Partial<JobInput>, before: Job, next: { startAt: Date; endAt: Date; flex: Flex }, settings: AgencySettings): void {
+  const { startAt, endAt, flex } = next;
   if (patch.startAt !== undefined || patch.endAt !== undefined) {
     set.startAt = startAt;
     set.endAt = endAt;
@@ -388,6 +378,21 @@ async function updateOne(
     set.opsPlanRequired = opsRequired;
     set.opsPlanDueAt = opsDue(opsRequired, due, startAt, settings.opsPlanDefaultDueHours);
   }
+}
+
+/**
+ * The rate columns an edit sets, and whether the rate changed. A rate that did not change keeps its standing (old
+ * details outside a new range keep their pay). A new rate outside the range needs an override reason on this one
+ * detail; one back inside the range drops the override.
+ */
+function setRateFields(
+  actor: Actor,
+  set: JobSet,
+  patch: Partial<JobInput>,
+  before: Job,
+  ctx: { vendor: typeof vendors.$inferSelect; settings: AgencySettings; scope: "one" | "series"; collecting: boolean },
+): boolean {
+  const { vendor, settings, scope } = ctx;
   let rateChanged = false;
   const finalRate = patch.rateCents !== undefined ? resolveRate(patch.rateCents, vendor.defaultRateCents, settings.agencyDefaultRateCents) : before.rateCents;
   if (patch.rateCents !== undefined) {
@@ -397,36 +402,33 @@ async function updateOne(
       rateChanged = true;
     }
   }
-  // A rate that did not change keeps its standing (old details outside a new range keep their pay). A new rate
-  // outside the range needs an override reason on this one detail; one back inside the range drops the override.
   const reason = scope === "one" ? patch.rateOverrideReason : undefined;
   if (rateChanged || (reason?.trim() && !before.rateOverrideReason)) {
     // Quick and bulk edit show each refusal on the detail's own row, so it needs no label there.
-    const label = scope === "series" && !collect ? `${before.title}, ${when(before.startAt)}: ` : "";
+    const label = scope === "series" && !ctx.collecting ? `${before.title}, ${when(before.startAt)}: ` : "";
     const override = rangeOverride(actor, finalRate, settings, reason, scope === "one", label);
     if (override) Object.assign(set, override);
     else if (before.rateOverrideReason) Object.assign(set, NO_OVERRIDE);
   }
+  return rateChanged;
+}
 
-  // New times are checked against every deputy holding a spot: overlap with their other details and their caps.
-  let conflicts: ScheduleConflict[] = [];
+/** Deputies on the detail the new times or window conflict with: their other details and their caps. None when neither changed. */
+async function editConflicts(tx: Tx, patch: Partial<JobInput>, before: Job, next: { startAt: Date; endAt: Date; flex: Flex }, settings: AgencySettings): Promise<ScheduleConflict[]> {
+  const { startAt, endAt, flex } = next;
   const timesChanged = startAt.getTime() !== before.startAt.getTime() || endAt.getTime() !== before.endAt.getTime();
   const windowChanged =
     patch.flex !== undefined &&
     (flex.earliestStartAt?.getTime() !== before.flexEarliestStartAt?.getTime() || flex.latestEndAt?.getTime() !== before.flexLatestEndAt?.getTime());
-  if (timesChanged || windowChanged) {
-    conflicts = await conflictsAt(tx, { ...before, startAt, endAt, flexEarliestStartAt: flex.earliestStartAt, flexLatestEndAt: flex.latestEndAt }, settings, new Date());
-  }
-  const conflictReason = conflicts.length ? overrideReason(actor, conflicts, patch.conflictOverride) : null;
-  onConflicts?.(conflicts, !conflicts.length || !!conflictReason);
-  if (conflicts.length && !conflictReason && !collectConflicts) throw new ScheduleConflictError(conflicts);
+  if (!timesChanged && !windowChanged) return [];
+  return conflictsAt(tx, { ...before, startAt, endAt, flexEarliestStartAt: flex.earliestStartAt, flexLatestEndAt: flex.latestEndAt }, settings, new Date());
+}
 
-  let after = before;
-  if (Object.keys(set).length) {
-    [after] = await tx.update(jobs).set(set).where(eq(jobs.id, before.id)).returning();
-  }
-  // A fixed-time detail carries everyone's planned times with it, so billing, calendars, the .ics feed and later
-  // checks use the new times. A flexible detail keeps each person's own planned shift.
+/**
+ * A fixed-time detail carries everyone's planned times with it, so billing, calendars, the .ics feed and later
+ * checks use the new times. A flexible detail keeps each person's own planned shift.
+ */
+async function carryPlannedTimes(tx: Tx, before: Job, after: Job, flex: Flex, timesChanged: boolean): Promise<void> {
   const fixedAfter = !(flex.earliestStartAt && flex.latestEndAt);
   // Turning a flexible detail into a fixed one does the same even with the times unchanged: no partial shift stays.
   const becameFixed = fixedAfter && before.flexEarliestStartAt !== null && before.flexLatestEndAt !== null;
@@ -436,32 +438,12 @@ async function updateOne(
       .set({ plannedStartAt: after.startAt, plannedEndAt: after.endAt })
       .where(and(eq(assignments.jobId, before.id), inArray(assignments.status, ["signed_up", "pending_short", "backup"])));
   }
-  if (conflicts.length && conflictReason) {
-    await recordAudit(tx, {
-      actor,
-      action: "job.schedule_conflict_override",
-      entityType: "job",
-      entityId: before.id,
-      before: { startAt: before.startAt, endAt: before.endAt },
-      after: { startAt: after.startAt, endAt: after.endAt, conflicts: conflicts.map((c) => ({ userId: c.userId, name: c.name, check: c.check, message: c.message })) },
-      reason: conflictReason,
-    });
-  }
-  const positionsBefore = positions ? await tx.select().from(jobPositions).where(eq(jobPositions.jobId, before.id)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id)) : null;
-  const positionsChanged = positions ? await syncPositions(tx, before.id, positions) : false;
-  const hasSignups = (rateChanged || patch.safety) && (await signupCount(tx, before.id)) > 0;
+}
 
-  if (Object.keys(set).length || positionsChanged) {
-    const positionsAfter = positionsChanged ? await tx.select().from(jobPositions).where(eq(jobPositions.jobId, before.id)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id)) : null;
-    await recordAudit(tx, {
-      actor,
-      action: "job.update",
-      entityType: "job",
-      entityId: before.id,
-      before: positionsChanged ? { ...before, positions: positionsBefore } : before,
-      after: positionsChanged ? { ...after, positions: positionsAfter } : after,
-    });
-  }
+const positionRows = (tx: Tx, jobId: string) => tx.select().from(jobPositions).where(eq(jobPositions.jobId, jobId)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id));
+
+/** The rate override audit rows: set or cleared, and a changed rate on a detail people signed up for. */
+async function auditRate(actor: Actor, tx: Tx, before: Job, after: Job, rateChanged: boolean, hasSignups: boolean): Promise<void> {
   if (after.rateOverrideReason !== before.rateOverrideReason || after.rateOverrideAt?.getTime() !== before.rateOverrideAt?.getTime()) {
     const pick = (j: Job) => ({ rateCents: j.rateCents, rateOverrideReason: j.rateOverrideReason, rateOverrideBy: j.rateOverrideBy, rateOverrideAt: j.rateOverrideAt });
     await recordAudit(tx, { actor, action: after.rateOverrideReason ? "job.rate_override" : "job.rate_override_cleared", entityType: "job", entityId: before.id, before: pick(before), after: pick(after), reason: after.rateOverrideReason ?? undefined });
@@ -476,36 +458,141 @@ async function updateOne(
       after: { rateCents: after.rateCents },
     });
   }
-  // Alerts go to the people on the job (spec 14); the vendor and coordinators made the edit and are not alerted.
+}
+
+/** The lines of the change alert. Quick and bulk edit (collecting) also tell people when the positions or description changed. */
+function changeDetails(before: Job, after: Job, rateChanged: boolean, positionsChanged: boolean, collecting: boolean): string[] {
   const details: string[] = [];
   if (rateChanged) details.push(`The hourly rate changed from ${money(before.rateCents)} to ${money(after.rateCents)}.`);
   if (after.startAt.getTime() !== before.startAt.getTime() || after.endAt.getTime() !== before.endAt.getTime()) {
     details.push(`The time changed to ${when(after.startAt)} to ${when(after.endAt)}.`);
   }
   if (after.locationId !== before.locationId) details.push("The location changed.");
-  // Quick and bulk edit also tell people when the positions or description changed.
-  if (collect && positionsChanged) details.push("The positions changed.");
-  if (collect && after.description !== before.description) details.push("The description changed.");
-  if (details.length && collect) {
+  if (collecting && positionsChanged) details.push("The positions changed.");
+  if (collecting && after.description !== before.description) details.push("The description changed.");
+  return details;
+}
+
+/** The job's vendor, after checking a new location or type. */
+function assertEditRefs(tx: Tx, before: Job, patch: Partial<JobInput>): Promise<typeof vendors.$inferSelect> {
+  // Only a changed type or location is re-validated, so a deactivated type never blocks edits to its existing jobs.
+  const newLocation = patch.locationId && patch.locationId !== before.locationId ? patch.locationId : null;
+  const newType = patch.typeId && patch.typeId !== before.typeId ? patch.typeId : null;
+  return assertRefs(tx, before.vendorId, newLocation, newType, false);
+}
+
+function assertJobEditable(before: Job, patch: Partial<JobInput>): void {
+  if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined job cannot be changed.");
+  if (patch.vendorId !== undefined && patch.vendorId !== before.vendorId) throw new ValidationError("A job cannot move to another vendor.");
+}
+
+async function auditConflictOverride(actor: Actor, tx: Tx, before: Job, after: Job, conflicts: ScheduleConflict[], reason: string): Promise<void> {
+  await recordAudit(tx, {
+    actor,
+    action: "job.schedule_conflict_override",
+    entityType: "job",
+    entityId: before.id,
+    before: { startAt: before.startAt, endAt: before.endAt },
+    after: { startAt: after.startAt, endAt: after.endAt, conflicts: conflicts.map((c) => ({ userId: c.userId, name: c.name, check: c.check, message: c.message })) },
+    reason,
+  });
+}
+
+/** The job.update audit row; with `positionsBefore` (the positions changed) both sides also list the positions. */
+async function auditJobUpdate(actor: Actor, tx: Tx, before: Job, after: Job, positionsBefore: Array<typeof jobPositions.$inferSelect> | null): Promise<void> {
+  const positionsAfter = positionsBefore ? await positionRows(tx, before.id) : null;
+  await recordAudit(tx, {
+    actor,
+    action: "job.update",
+    entityType: "job",
+    entityId: before.id,
+    before: positionsBefore ? { ...before, positions: positionsBefore } : before,
+    after: positionsBefore ? { ...after, positions: positionsAfter } : after,
+  });
+}
+
+/**
+ * Alerts go to the people on the job (spec 14); the vendor and coordinators made the edit and are not alerted. Quick
+ * and bulk edit collect the alert instead, so the caller sends one per person.
+ */
+async function alertChange(tx: Tx, before: Job, after: Job, details: string[], collect: ((c: JobChange) => void) | undefined): Promise<void> {
+  if (!details.length) return;
+  if (collect) {
     collect({ jobId: before.id, title: after.title, startAt: after.startAt, details, audience: await jobAudience(tx, after) });
-  } else if (details.length) {
-    await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: ${after.title}`, body: details.join(" "), link: `/jobs/${before.id}` });
+    return;
   }
-  if (patch.safety) {
-    const changed = await applySafety(actor, tx, before.id, patch.safety);
-    if (changed && hasSignups) {
-      await recordAudit(tx, { actor, action: "job.safety_changed", entityType: "job", entityId: before.id });
-    }
-    if (changed) {
-      await emit(tx, {
-        recipients: await jobAudience(tx, after),
-        type: "job.safety_changed",
-        title: `Officer safety information changed: ${after.title}`,
-        body: "Review the officer safety notes and addresses before the detail.",
-        link: `/jobs/${before.id}`,
-      });
-    }
+  await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: ${after.title}`, body: details.join(" "), link: `/jobs/${before.id}` });
+}
+
+/** Saves the safety change; when it changed anything, audits it (if people signed up) and alerts the people on the job. */
+async function applySafetyEdit(actor: Actor, tx: Tx, before: Job, after: Job, safety: NonNullable<JobInput["safety"]>, hasSignups: boolean): Promise<void> {
+  const changed = await applySafety(actor, tx, before.id, safety);
+  if (changed && hasSignups) {
+    await recordAudit(tx, { actor, action: "job.safety_changed", entityType: "job", entityId: before.id });
   }
+  if (changed) {
+    await emit(tx, {
+      recipients: await jobAudience(tx, after),
+      type: "job.safety_changed",
+      title: `Officer safety information changed: ${after.title}`,
+      body: "Review the officer safety notes and addresses before the detail.",
+      link: `/jobs/${before.id}`,
+    });
+  }
+}
+
+async function updateOne(
+  actor: Actor,
+  tx: Tx,
+  before: Job,
+  patch: Partial<JobInput>,
+  settings: AgencySettings,
+  positions: Normalized[] | null,
+  scope: "one" | "series",
+  collect?: (c: JobChange) => void,
+  onConflicts?: (c: ScheduleConflict[], resolved: boolean) => void,
+  /**
+   * Quick and bulk edit: never throw on deputy conflicts; save past them and report whether a valid override covered
+   * them, so the caller checks every detail in save order and refuses the whole edit (rolling it back) if any is
+   * unresolved. Never set from a client.
+   */
+  collectConflicts = false,
+): Promise<Job> {
+  assertJobEditable(before, patch);
+
+  const vendor = await assertEditRefs(tx, before, patch);
+  const startAt = patch.startAt ?? before.startAt;
+  const endAt = patch.endAt ?? before.endAt;
+  const flex = patchedFlex(patch.flex, before);
+  assertTimes(startAt, endAt, flex);
+  const next = { startAt, endAt, flex };
+
+  const set: JobSet = {};
+  setPlainFields(set, patch, before);
+  setScheduleFields(set, patch, before, next, settings);
+  const rateChanged = setRateFields(actor, set, patch, before, { vendor, settings, scope, collecting: Boolean(collect) });
+
+  // New times are checked against every deputy holding a spot: overlap with their other details and their caps.
+  const conflicts = await editConflicts(tx, patch, before, next, settings);
+  const conflictReason = conflicts.length ? overrideReason(actor, conflicts, patch.conflictOverride) : null;
+  onConflicts?.(conflicts, !conflicts.length || !!conflictReason);
+  if (conflicts.length && !conflictReason && !collectConflicts) throw new ScheduleConflictError(conflicts);
+
+  let after = before;
+  if (Object.keys(set).length) {
+    [after] = await tx.update(jobs).set(set).where(eq(jobs.id, before.id)).returning();
+  }
+  const timesChanged = startAt.getTime() !== before.startAt.getTime() || endAt.getTime() !== before.endAt.getTime();
+  await carryPlannedTimes(tx, before, after, flex, timesChanged);
+  if (conflictReason) await auditConflictOverride(actor, tx, before, after, conflicts, conflictReason);
+  const positionsBefore = positions ? await positionRows(tx, before.id) : null;
+  const positionsChanged = positions ? await syncPositions(tx, before.id, positions) : false;
+  const hasSignups = (rateChanged || patch.safety) && (await signupCount(tx, before.id)) > 0;
+
+  if (Object.keys(set).length || positionsChanged) await auditJobUpdate(actor, tx, before, after, positionsChanged ? positionsBefore : null);
+  await auditRate(actor, tx, before, after, rateChanged, Boolean(hasSignups));
+  await alertChange(tx, before, after, changeDetails(before, after, rateChanged, positionsChanged, Boolean(collect)), collect);
+  if (patch.safety) await applySafetyEdit(actor, tx, before, after, patch.safety, Boolean(hasSignups));
   return after;
 }
 
@@ -536,6 +623,7 @@ export async function updateJobUnchecked(actor: Actor, tx: Tx, id: string, patch
   const settings = await getSettings(tx);
   const positions = patch.positions ? await normalizePositions(tx, patch.positions, settings) : null;
   const out: Job[] = [];
+  // Sequential: each detail of the series is saved in order in this transaction.
   for (const t of targets) out.push(await updateOne(actor, tx, t, patch, settings, positions, scope));
   return out;
 }
@@ -590,6 +678,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
     .set({ status: "canceled", removalReason: "Detail canceled" })
     .where(and(eq(assignments.jobId, id), eq(assignments.status, "pending_short")))
     .returning();
+  // Sequential: writes and alerts in this transaction.
   for (const a of pending) {
     await recordAudit(tx, { actor, action: "assignment.short_declined", entityType: "assignment", entityId: a.id, before: { ...a, status: "pending_short" }, after: a, reason: "Detail canceled" });
     await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: ${after.title}`, body: "Detail canceled", link: `/jobs/${id}` });
@@ -601,6 +690,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
         .where(and(eq(assignments.jobId, id), eq(assignments.status, "signed_up")))
         .returning()
     : [];
+  // Sequential: writes and alerts in this transaction.
   for (const a of lateRows) {
     await recordAudit(tx, { actor, action: "assignment.late_cancel", entityType: "assignment", entityId: a.id, before: { ...a, status: "signed_up" }, after: a, reason: why });
   }
@@ -610,6 +700,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
     .set({ status: "canceled", removalReason: why })
     .where(and(eq(assignments.jobId, id), inArray(assignments.status, ["signed_up", "backup"])))
     .returning();
+  // Sequential: writes and alerts in this transaction.
   for (const a of released) {
     await recordAudit(tx, { actor, action: "assignment.job_canceled", entityType: "assignment", entityId: a.id, before: { ...a, status: a.backupPosition === null ? "signed_up" : "backup" }, after: a, reason: why });
   }
@@ -662,7 +753,7 @@ async function lastCancel(tx: Tx, jobId: string): Promise<{ at: Date; priorState
   return { at: row.at, priorState: prior };
 }
 
-export type ReactivationPerson = { userId: string; name: string };
+type ReactivationPerson = { userId: string; name: string };
 export type ReactivationPreview = {
   /** Everyone on the detail when it was canceled (signed up, backup or waiting on a shorter shift). */
   notify: ReactivationPerson[];
@@ -671,7 +762,7 @@ export type ReactivationPreview = {
 };
 
 /** The audit reason (and removal reason) for late-cancel pay a reactivation cancels: the late cancel did not happen. */
-export const REACTIVATED_REASON = "detail reactivated";
+const REACTIVATED_REASON = "detail reactivated";
 
 async function peopleAtCancel(tx: Tx, jobId: string, since: Date | null): Promise<ReactivationPerson[]> {
   if (!since) return [];
@@ -736,6 +827,7 @@ export async function reactivateJob(actor: Actor, tx: Tx, jobId: string, reason:
     .set({ status: "canceled", removalReason: REACTIVATED_REASON })
     .where(and(eq(assignments.jobId, jobId), eq(assignments.status, "late_canceled")))
     .returning();
+  // Sequential: writes and alerts in this transaction.
   for (const a of voided) {
     await recordAudit(tx, { actor, action: LATE_CANCEL_VOID_ACTION, entityType: "assignment", entityId: a.id, before: { ...a, status: "late_canceled", removalReason: null }, after: a, reason: REACTIVATED_REASON });
   }
@@ -766,6 +858,7 @@ async function scopeTargets(tx: Tx, id: string, scope: "one" | "series"): Promis
 export async function holdJob(actor: Actor, tx: Tx, id: string, scope: "one" | "series"): Promise<Job[]> {
   assertCan(actor, "job.update");
   const out: Job[] = [];
+  // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, scope)) {
     if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined detail cannot be held.");
     if (before.held) {
@@ -786,6 +879,7 @@ export async function holdJob(actor: Actor, tx: Tx, id: string, scope: "one" | "
 export async function releaseJob(actor: Actor, tx: Tx, id: string, opts: { scope: "one" | "series"; now: boolean }, at: Date = new Date()): Promise<Job[]> {
   assertCan(actor, "job.update");
   const out: Job[] = [];
+  // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, opts.scope)) {
     if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined detail cannot be released.");
     const set: Partial<typeof jobs.$inferInsert> = {};
@@ -865,6 +959,8 @@ export type JobSort = "date" | "vendor" | "location" | "rate" | "total_pay";
 export type JobFilter = {
   from: Date;
   to: Date;
+  /** Also lists details that started before `from` and are still running at this instant (a "today" or upcoming list). */
+  runningAt?: Date;
   status?: JobState[];
   typeIds?: string[];
   vendorIds?: string[];
@@ -904,55 +1000,79 @@ function orderFor(sort: JobSort, direction: "asc" | "desc", settings: AgencySett
   }
 }
 
-/**
- * Jobs starting in [from, to], 50 per page (page is 1-based), soonest first unless `sort` says otherwise. Vendors see
- * only their own. Personnel lists leave out vendors on payment hold, vendors the person hid and vendors they are
- * restricted from, except for details the person is already on.
- */
-export async function listJobs(actor: Actor, tx: Tx, filter: JobFilter, page: number): Promise<Job[]> {
+function assertCanList(actor: Actor): void {
   if (actor.role === "vendor") {
     if (!actor.vendorId) throw new NotFoundError("Job not found.");
     assertCan(actor, "job.read", { vendorId: actor.vendorId });
   } else {
     assertCan(actor, "job.read");
   }
-  const conds: SQL[] = [gte(jobs.startAt, filter.from), lte(jobs.startAt, filter.to)];
+}
+
+/** A search on the title, description, vendor, location, or the job number ("1234" or "#1234"). */
+function textMatch(q: string): SQL | undefined {
+  const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+  const number = /^#?(\d{1,9})$/.exec(q);
+  return or(
+    ilike(jobs.title, like),
+    ilike(jobs.description, like),
+    ilike(vendors.name, like),
+    ilike(vendorLocations.name, like),
+    ...(number ? [eq(jobs.number, Number(number[1]))] : []),
+  );
+}
+
+/**
+ * Details of a vendor on payment hold leave a person's open lists; so do hidden and restricted vendors (discovery
+ * only), and held details. People already on a detail keep seeing it.
+ */
+function openListVisibility(tx: Tx, userId: string): SQL | undefined {
+  const heldVendors = tx.select({ id: vendors.id }).from(vendors).where(eq(vendors.paymentHold, true));
+  const hiddenByMe = tx.select({ id: hiddenVendors.vendorId }).from(hiddenVendors).where(eq(hiddenVendors.userId, userId));
+  const restrictedFromMe = tx
+    .select({ id: vendorRestrictions.vendorId })
+    .from(vendorRestrictions)
+    .where(and(eq(vendorRestrictions.userId, userId), isNull(vendorRestrictions.liftedAt)));
+  const mineRows = tx
+    .select({ jobId: assignments.jobId })
+    .from(assignments)
+    .where(and(eq(assignments.userId, userId), notInArray(assignments.status, ["canceled", "removed"])));
+  return or(and(eq(jobs.held, false), notInArray(jobs.vendorId, heldVendors), notInArray(jobs.vendorId, hiddenByMe), notInArray(jobs.vendorId, restrictedFromMe)), inArray(jobs.id, mineRows));
+}
+
+/**
+ * Details starting in [from, to], plus, with `runningAt`, those that started earlier and end after it, so an
+ * overnight detail stays on today's list until it ends.
+ */
+export function startWindow(range: { from: Date; to: Date; runningAt?: Date }): SQL {
+  const starts = and(gte(jobs.startAt, range.from), lte(jobs.startAt, range.to))!;
+  return range.runningAt ? or(starts, and(lt(jobs.startAt, range.from), gt(jobs.endAt, range.runningAt)))! : starts;
+}
+
+/** The list conditions from the filter and the actor's role, apart from `mine`, which needs a query. */
+function filterConds(actor: Actor, tx: Tx, filter: JobFilter): SQL[] {
+  const conds: SQL[] = [startWindow(filter)];
   if (actor.role === "vendor" && actor.vendorId) conds.push(eq(jobs.vendorId, actor.vendorId));
   if (filter.status?.length) conds.push(inArray(jobs.state, filter.status));
   if (actor.role === "personnel") conds.push(notInArray(jobs.state, HIDDEN_FROM_PERSONNEL));
   if (filter.typeIds?.length) conds.push(inArray(jobs.typeId, filter.typeIds));
   if (filter.vendorIds?.length) conds.push(inArray(jobs.vendorId, filter.vendorIds));
   const q = filter.text?.trim();
-  if (q) {
-    const like = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
-    // Title, description, vendor, location, or the job number ("1234" or "#1234").
-    const number = /^#?(\d{1,9})$/.exec(q);
-    const match = or(
-      ilike(jobs.title, like),
-      ilike(jobs.description, like),
-      ilike(vendors.name, like),
-      ilike(vendorLocations.name, like),
-      ...(number ? [eq(jobs.number, Number(number[1]))] : []),
-    );
-    if (match) conds.push(match);
-  }
-  if (actor.role === "personnel" && !filter.mine) {
-    // Details of a vendor on payment hold leave the open lists; so do hidden and restricted vendors (discovery only).
-    // People already on a detail keep seeing it.
-    const heldVendors = tx.select({ id: vendors.id }).from(vendors).where(eq(vendors.paymentHold, true));
-    const hiddenByMe = tx.select({ id: hiddenVendors.vendorId }).from(hiddenVendors).where(eq(hiddenVendors.userId, actor.userId));
-    const restrictedFromMe = tx
-      .select({ id: vendorRestrictions.vendorId })
-      .from(vendorRestrictions)
-      .where(and(eq(vendorRestrictions.userId, actor.userId), isNull(vendorRestrictions.liftedAt)));
-    const mineRows = tx
-      .select({ jobId: assignments.jobId })
-      .from(assignments)
-      .where(and(eq(assignments.userId, actor.userId), notInArray(assignments.status, ["canceled", "removed"])));
-    // A held detail leaves the open lists too.
-    const visible = or(and(eq(jobs.held, false), notInArray(jobs.vendorId, heldVendors), notInArray(jobs.vendorId, hiddenByMe), notInArray(jobs.vendorId, restrictedFromMe)), inArray(jobs.id, mineRows));
-    if (visible) conds.push(visible);
-  }
+  const match = q ? textMatch(q) : undefined;
+  if (match) conds.push(match);
+  const visible = actor.role === "personnel" && !filter.mine ? openListVisibility(tx, actor.userId) : undefined;
+  if (visible) conds.push(visible);
+  return conds;
+}
+
+/**
+ * Jobs starting in [from, to], 50 per page (page is 1-based), soonest first unless `sort` says otherwise. Vendors see
+ * only their own. Personnel lists leave out vendors on payment hold, vendors the person hid and vendors they are
+ * restricted from, except for details the person is already on.
+ */
+export async function listJobs(actor: Actor, tx: Tx, filter: JobFilter, page: number): Promise<Job[]> {
+  assertCanList(actor);
+  const conds = filterConds(actor, tx, filter);
   if (filter.mine) {
     const mine = await tx
       .select({ jobId: assignments.jobId })
@@ -977,7 +1097,12 @@ export async function listJobs(actor: Actor, tx: Tx, filter: JobFilter, page: nu
   if (!filter.onlyWorkable) return (await query.limit(JOBS_PAGE_SIZE).offset((p - 1) * JOBS_PAGE_SIZE)).map((j) => jobFieldsFor(actor, j));
 
   // The schedule is a private filter: apply it to the whole (bounded) result, then page.
-  const all = await query;
+  const workable = await workableOnly(tx, actor.userId, await query);
+  return workable.slice((p - 1) * JOBS_PAGE_SIZE, p * JOBS_PAGE_SIZE).map((j) => jobFieldsFor(actor, j));
+}
+
+/** The jobs that fit the person's work schedule. */
+async function workableOnly(tx: Tx, userId: string, all: Job[]): Promise<Job[]> {
   if (all.length === 0) return [];
   let lo = Infinity;
   let hi = -Infinity;
@@ -985,12 +1110,11 @@ export async function listJobs(actor: Actor, tx: Tx, filter: JobFilter, page: nu
     lo = Math.min(lo, j.flexEarliestStartAt?.getTime() ?? j.startAt.getTime());
     hi = Math.max(hi, j.flexLatestEndAt?.getTime() ?? j.endAt.getTime());
   }
-  const duty = await loadDuty(tx, actor.userId, new Date(lo), new Date(hi));
-  const workable = all.filter((j) =>
+  const duty = await loadDuty(tx, userId, new Date(lo), new Date(hi));
+  return all.filter((j) =>
     fitsSchedule(
       { startAt: j.startAt, endAt: j.endAt, flex: j.flexEarliestStartAt && j.flexLatestEndAt ? { earliestStartAt: j.flexEarliestStartAt, latestEndAt: j.flexLatestEndAt, allowShorter: j.flexAllowShorter } : null },
       duty,
     ),
   );
-  return workable.slice((p - 1) * JOBS_PAGE_SIZE, p * JOBS_PAGE_SIZE).map((j) => jobFieldsFor(actor, j));
 }

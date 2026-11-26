@@ -24,7 +24,7 @@ import { formatMoney } from "@/lib/pdf/invoice-pdf";
 
 export type PaymentIssue = typeof paymentIssues.$inferSelect;
 export type IssueOutcome = "paid" | "resolved" | "written_off";
-export type NoteVisibility = (typeof paymentIssueNotes.$inferSelect)["visibility"];
+type NoteVisibility = (typeof paymentIssueNotes.$inferSelect)["visibility"];
 
 type ReportableInvoice = Pick<Invoice, "status" | "deputyPaidAt" | "vendorPaidAt" | "responsibleParty" | "responsibleSince"> & { hasOpenIssue: boolean };
 
@@ -68,6 +68,9 @@ function requireOpen(issue: PaymentIssue): void {
 
 const isStaff = (a: Actor) => a.role === "coordinator" || a.role === "admin";
 
+/** A note appended to an alert body, or nothing when there is no note. */
+const noteSuffix = (text: string | null) => (text ? ` Note: ${text}` : "");
+
 /** The payee reports that they were not paid. Opens the issue for coordinators. */
 export async function reportNonPayment(actor: Actor, tx: Tx, invoiceId: string, note?: string, now: Date = new Date()): Promise<PaymentIssue> {
   const inv = await lockInvoice(tx, invoiceId);
@@ -97,7 +100,7 @@ export async function reportNonPayment(actor: Actor, tx: Tx, invoiceId: string, 
       recipients: await coordinatorAudience(tx),
       type: "payment_issue.opened",
       title: "Non-payment reported",
-      body: `${payee?.name ?? "A deputy"} reports not being paid on invoice ${formatInvoiceNumber(s.invoiceNumberPrefix, inv.number)}.${text ? ` Note: ${text}` : ""}`,
+      body: `${payee?.name ?? "A deputy"} reports not being paid on invoice ${formatInvoiceNumber(s.invoiceNumberPrefix, inv.number)}.${noteSuffix(text)}`,
       link: `/invoices/${invoiceId}`,
     },
     now,
@@ -233,7 +236,7 @@ export async function setIssueWaitingOn(
         recipients,
         type: "payment_issue.waiting_on",
         title: party === "deputy" ? "Payment issue needs your reply" : "Payment issue is waiting on a coordinator",
-        body: `The payment issue on invoice ${number} is now waiting on ${party === "deputy" ? "you" : "a coordinator"}.${text ? ` Note: ${text}` : ""}`,
+        body: `The payment issue on invoice ${number} is now waiting on ${party === "deputy" ? "you" : "a coordinator"}.${noteSuffix(text)}`,
         link,
       },
       now,
@@ -274,7 +277,7 @@ export async function closeIssue(
   return updated;
 }
 
-export type IssueNoteView = { id: string; note: string; visibility: NoteVisibility; at: Date; authorUserId?: string | null };
+type IssueNoteView = { id: string; note: string; visibility: NoteVisibility; at: Date; authorUserId?: string | null };
 export type PaymentIssueView = {
   id: string;
   invoiceId: string;

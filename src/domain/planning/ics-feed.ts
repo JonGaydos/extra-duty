@@ -16,11 +16,11 @@ const hash = (token: string) => createHash("sha256").update(token).digest("hex")
 export type CalendarTokenStatus = { active: boolean; createdAt: Date | null; lastUsedAt: Date | null };
 
 async function liveToken(tx: Tx, userId: string) {
-  const [row] = await tx
+  const rows = await tx
     .select()
     .from(calendarTokens)
     .where(and(eq(calendarTokens.userId, userId), isNull(calendarTokens.revokedAt)));
-  return row ?? null;
+  return rows.at(0) ?? null;
 }
 
 /** Whether the person has a live feed link. The token itself is never readable again. */
@@ -59,7 +59,7 @@ export async function revokeCalendarToken(actor: Actor, tx: Tx, now: Date = new 
 
 /** RFC 5545 text escaping. */
 function esc(v: string): string {
-  return v.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  return v.replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replace(/\r?\n/g, "\\n");
 }
 
 /** Folds a content line at 75 octets. */
@@ -132,6 +132,9 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
     const status = r.status as (typeof FEED_STATUSES)[number];
     const label = status === "backup" && r.backupPosition ? `Backup #${r.backupPosition}` : LABEL[status];
     const where = [r.locationName, r.address].filter((v): v is string => Boolean(v?.trim())).join(", ");
+    const suffix = status === "signed_up" ? "" : ` (${label})`;
+    const summary = `${r.vendorName}: ${r.job.title}${suffix}`;
+    const description = `Job #${r.job.number}. ${label}.`;
     lines.push(
       "BEGIN:VEVENT",
       `UID:${r.job.id}@extra-duty`,
@@ -139,8 +142,8 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
       `LAST-MODIFIED:${stamp(r.job.updatedAt)}`,
       `DTSTART:${stamp(r.plannedStartAt ?? r.job.startAt)}`,
       `DTEND:${stamp(r.plannedEndAt ?? r.job.endAt)}`,
-      `SUMMARY:${esc(`${r.vendorName}: ${r.job.title}${status === "signed_up" ? "" : ` (${label})`}`)}`,
-      `DESCRIPTION:${esc(`Job #${r.job.number}. ${label}.`)}`,
+      `SUMMARY:${esc(summary)}`,
+      `DESCRIPTION:${esc(description)}`,
       ...(where ? [`LOCATION:${esc(where)}`] : []),
       `STATUS:${status === "signed_up" ? "CONFIRMED" : "TENTATIVE"}`,
       "END:VEVENT",
@@ -157,6 +160,7 @@ export async function revokeCalendarTokensFor(tx: Tx, actor: Actor | "system", u
     .set({ revokedAt: now, updatedAt: now })
     .where(and(eq(calendarTokens.userId, userId), isNull(calendarTokens.revokedAt)))
     .returning({ id: calendarTokens.id });
+  // Sequential: audit writes in this transaction.
   for (const t of ended) await recordAudit(tx, { actor, action: "calendar_token.revoke", entityType: "calendar_token", entityId: t.id, reason: "Account deactivated" });
   return ended.length;
 }

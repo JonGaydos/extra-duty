@@ -13,7 +13,7 @@ const CURRENT = "current";
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** Which dropdown entry the detail's contact copy matches: a saved contact, a name kept on this detail only, or none. */
-export function contactChoice(contacts: ContactOption[], v: SiteContactValue): string {
+function contactChoice(contacts: ContactOption[], v: SiteContactValue): string {
   if (v.newContact) return NEW;
   if (!v.contactName.trim()) return NONE;
   return contacts.find((c) => same(c.name, v.contactName))?.id ?? CURRENT;
@@ -23,7 +23,7 @@ export function contactChoice(contacts: ContactOption[], v: SiteContactValue): s
  * "Site contact" as a dropdown of the vendor's active contacts plus "Add a new contact". Choosing a contact fills
  * Contact phone, which stays editable for this detail. A new contact is saved to the vendor when the form saves.
  */
-export function SiteContactFields({ contacts, value, onChange, disabled, vendorChosen = true }: { contacts: ContactOption[]; value: SiteContactValue; onChange: (v: SiteContactValue) => void; disabled?: boolean; vendorChosen?: boolean }) {
+export function SiteContactFields({ contacts, value, onChange, disabled, vendorChosen = true }: Readonly<{ contacts: ContactOption[]; value: SiteContactValue; onChange: (v: SiteContactValue) => void; disabled?: boolean; vendorChosen?: boolean }>) {
   const choice = contactChoice(contacts, value);
   const choose = (id: string) => {
     if (id === NEW) return onChange({ contactName: "", contactPhone: "", newContact: { name: "", phone: "", email: "" } });
@@ -32,14 +32,32 @@ export function SiteContactFields({ contacts, value, onChange, disabled, vendorC
     if (c) onChange({ contactName: c.name, contactPhone: c.phone, newContact: null });
   };
   const n = value.newContact;
+  let hint: string | undefined;
+  if (!vendorChosen) hint = "Choose a vendor first.";
+  else if (contacts.length === 0 && !n) hint = "No saved contacts yet.";
   const setNew = (patch: Partial<NewContactWire>) => {
     const next = { ...n!, ...patch };
     onChange({ contactName: next.name, contactPhone: next.phone, newContact: next });
   };
+  // Beside the choice: the new contact's name, or the chosen contact's phone (a render function, so it keeps its place).
+  const secondField = () => {
+    if (n)
+      return (
+        <FormField label="Contact name">
+          <Input value={n.name} onChange={(e) => setNew({ name: e.target.value })} required maxLength={120} autoComplete="off" />
+        </FormField>
+      );
+    if (choice === NONE) return null;
+    return (
+      <FormField label="Contact phone" hint="Filled from the contact. A change here applies to this detail only.">
+        <PhoneField value={value.contactPhone} onValue={(p) => onChange({ ...value, contactPhone: p })} disabled={disabled} />
+      </FormField>
+    );
+  };
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField label="Site contact" hint={!vendorChosen ? "Choose a vendor first." : contacts.length === 0 && !n ? "No saved contacts yet." : undefined}>
+        <FormField label="Site contact" hint={hint}>
           <Select value={choice} onChange={(e) => choose(e.target.value)} disabled={disabled || !vendorChosen}>
             <option value={NONE}>No site contact</option>
             {contacts.map((c) => (
@@ -51,15 +69,7 @@ export function SiteContactFields({ contacts, value, onChange, disabled, vendorC
             <option value={NEW}>Add a new contact</option>
           </Select>
         </FormField>
-        {n ? (
-          <FormField label="Contact name">
-            <Input value={n.name} onChange={(e) => setNew({ name: e.target.value })} required maxLength={120} autoComplete="off" />
-          </FormField>
-        ) : choice !== NONE ? (
-          <FormField label="Contact phone" hint="Filled from the contact. A change here applies to this detail only.">
-            <PhoneField value={value.contactPhone} onValue={(p) => onChange({ ...value, contactPhone: p })} disabled={disabled} />
-          </FormField>
-        ) : null}
+        {secondField()}
       </div>
       {n ? (
         <div className="grid gap-3 sm:grid-cols-2">

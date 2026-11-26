@@ -2,7 +2,7 @@ import { FormField, Input } from "@/ui/components/FormField";
 import { Notice } from "@/ui/components/Notice";
 
 /** New password and its confirmation, as set by an invite or a reset. */
-export function PasswordFields({ minLength, label = "Password" }: { minLength: number; label?: string }) {
+export function PasswordFields({ minLength, label = "Password" }: Readonly<{ minLength: number; label?: string }>) {
   return (
     <>
       <FormField label={label} hint={`At least ${minLength} characters.`}>
@@ -18,10 +18,10 @@ export function PasswordFields({ minLength, label = "Password" }: { minLength: n
 /** Shown once a password is set. */
 export function PasswordSet() {
   return (
-    <div role="status">
+    <output className="block">
       <Notice tone="success" as="div">
         Your password is set. <a href="/sign-in">Sign in</a> with it and the 6-digit code we email you.
       </Notice>
-    </div>
+    </output>
   );
 }

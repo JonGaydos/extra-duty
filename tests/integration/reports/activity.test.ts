@@ -90,7 +90,7 @@ describe("personnel activity report", () => {
     // Active sworn personnel with nothing in the period still get a row.
     expect(rows["Casey Act"]).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, null]);
     expect(r.totals).toMatchObject({ details_worked: 3, earned_cents: 77000, signups: 11, late_cancels: 2, cancellations: 4 });
-    expect(r.totals.cancellation_rate).toBe(36.4);
+    expect(r.totals.cancellation_rate).toBeCloseTo(36.4, 10);
   });
 
   test("each row carries the person's id so the page can link to the deputy report", async () => {

@@ -31,7 +31,7 @@ const startOf = (a: Ymd) => agencyInstant(a.y, a.m, a.d, 0, 0);
 const weekday = (a: Ymd) => new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay();
 
 /** The vendor's details as a list (waiting, upcoming, recent) or a month calendar. */
-export default async function VendorDetailsPage({ searchParams }: Props) {
+export default async function VendorDetailsPage({ searchParams }: Readonly<Props>) {
   const actor = await vendorActor();
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -45,14 +45,10 @@ export default async function VendorDetailsPage({ searchParams }: Props) {
   const firstCell = add(focus, -((weekday(focus) - settings.weekStartsOn + 7) % 7));
   const cells = Math.ceil(Math.round((startOf(add(focus, 0, 1)).getTime() - startOf(firstCell).getTime()) / DAY_MS) / 7) * 7;
   const days = Array.from({ length: cells }, (_, i) => add(firstCell, i));
-  const range = view === "calendar" ? { from: startOf(days[0]), to: startOf(add(days[days.length - 1], 1)) } : { from: new Date(now.getTime() - PAST_DAYS * DAY_MS), to: new Date(now.getTime() + AHEAD_DAYS * DAY_MS) };
+  const range = view === "calendar" ? { from: startOf(days[0]), to: startOf(add(days.at(-1)!, 1)) } : { from: new Date(now.getTime() - PAST_DAYS * DAY_MS), to: new Date(now.getTime() + AHEAD_DAYS * DAY_MS) };
 
   const data = await withTx(async (tx) => ({ account: await vendorAccount(actor, tx), rows: await vendorDetails(actor, tx, range, now) }));
   const { account, rows } = data;
-
-  const waiting = rows.filter((r) => r.status === "requested" && r.endAt > now);
-  const upcoming = rows.filter((r) => r.status !== "requested" && r.status !== "past" && r.endAt > now);
-  const recent = rows.filter((r) => r.endAt <= now).reverse();
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -75,35 +71,7 @@ export default async function VendorDetailsPage({ searchParams }: Props) {
       />
 
       {view === "list" ? (
-        rows.length === 0 ? (
-          <Card pad={false}>
-            <EmptyState title="No details yet" action={account.onHold ? undefined : <ButtonLink href="/vendor/request">Request a detail</ButtonLink>}>
-              Details you request show here once you send them.
-            </EmptyState>
-          </Card>
-        ) : (
-          <>
-            {waiting.length ? (
-              <Section title="Waiting for approval">
-                <DetailRows rows={waiting} />
-              </Section>
-            ) : null}
-            <Section title="Upcoming">
-              {upcoming.length ? (
-                <DetailRows rows={upcoming} />
-              ) : (
-                <Card>
-                  <p className="m-0 text-sm text-muted">Nothing scheduled yet. Approved requests show here.</p>
-                </Card>
-              )}
-            </Section>
-            {recent.length ? (
-              <Section title={`Past ${PAST_DAYS} days`}>
-                <DetailRows rows={recent} />
-              </Section>
-            ) : null}
-          </>
-        )
+        <ListView rows={rows} now={now} onHold={account.onHold} />
       ) : (
         <MonthView focus={focus} days={days} rows={rows} today={agencyDayKey(now)} />
       )}
@@ -111,7 +79,51 @@ export default async function VendorDetailsPage({ searchParams }: Props) {
   );
 }
 
-function MonthView({ focus, days, rows, today }: { focus: Ymd; days: Ymd[]; rows: VendorDetailRow[]; today: string }) {
+/** Waiting for approval, upcoming and recent details, or what will show here. */
+function ListView({ rows, now, onHold }: Readonly<{ rows: VendorDetailRow[]; now: Date; onHold: boolean }>) {
+  if (rows.length === 0)
+    return (
+      <Card pad={false}>
+        <EmptyState title="No details yet" action={onHold ? undefined : <ButtonLink href="/vendor/request">Request a detail</ButtonLink>}>
+          Details you request show here once you send them.
+        </EmptyState>
+      </Card>
+    );
+  const waiting = rows.filter((r) => r.status === "requested" && r.endAt > now);
+  const upcoming = rows.filter((r) => r.status !== "requested" && r.status !== "past" && r.endAt > now);
+  const recent = rows.filter((r) => r.endAt <= now).reverse();
+  return (
+    <>
+      {waiting.length ? (
+        <Section title="Waiting for approval">
+          <DetailRows rows={waiting} />
+        </Section>
+      ) : null}
+      <Section title="Upcoming">
+        {upcoming.length ? (
+          <DetailRows rows={upcoming} />
+        ) : (
+          <Card>
+            <p className="m-0 text-sm text-muted">Nothing scheduled yet. Approved requests show here.</p>
+          </Card>
+        )}
+      </Section>
+      {recent.length ? (
+        <Section title={`Past ${PAST_DAYS} days`}>
+          <DetailRows rows={recent} />
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
+/** The day number: filled for today, muted outside the month. */
+function dayNumberClass(isToday: boolean, outside: boolean): string {
+  if (isToday) return "bg-accent font-bold text-on-accent";
+  return `font-medium ${outside ? "text-muted" : "text-ink"}`;
+}
+
+function MonthView({ focus, days, rows, today }: Readonly<{ focus: Ymd; days: Ymd[]; rows: VendorDetailRow[]; today: string }>) {
   const byDay = new Map<string, VendorDetailRow[]>();
   for (const r of rows) byDay.set(agencyDayKey(r.startAt), [...(byDay.get(agencyDayKey(r.startAt)) ?? []), r]);
   const title = monthYear(startOf(focus));
@@ -155,7 +167,7 @@ function MonthView({ focus, days, rows, today }: { focus: Ymd; days: Ymd[]; rows
                     <td key={key(day)} aria-current={isToday ? "date" : undefined} className={`relative h-14 border-l border-divider p-1 align-top first:border-l-0 md:h-32 ${isToday ? "bg-accent-soft" : ""}`}>
                       <div className="flex h-full flex-col items-center gap-0.5 md:items-stretch">
                         <span className="flex items-center justify-between gap-1">
-                          <span className={`flex size-6 items-center justify-center rounded-full text-xs ${isToday ? "bg-accent font-bold text-on-accent" : `font-medium ${outside ? "text-muted" : "text-ink"}`}`} data-numeric>
+                          <span className={`flex size-6 items-center justify-center rounded-full text-xs ${dayNumberClass(isToday, outside)}`} data-numeric>
                             <span aria-hidden>{day.d}</span>
                             <span className="sr-only">
                               {longDay(startOf(day))}

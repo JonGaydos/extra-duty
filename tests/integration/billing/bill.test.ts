@@ -269,6 +269,22 @@ describe("billing a detail", () => {
     await expect(bill(person, a.id, input(job))).rejects.toThrow(RuleViolation);
   });
 
+  test("a written-off detail and a worked detail on a canceled job are refused with their own checks", async () => {
+    const { db } = get();
+    const off = await mk();
+    await db.update(assignments).set({ writtenOffAt: AFTER }).where(eq(assignments.id, off.a.id));
+    const e1 = await bill(off.person, off.a.id, input(off.job)).catch((e) => e);
+    expect(e1).toBeInstanceOf(RuleViolation);
+    expect(e1.message).toBe("This detail was written off and cannot be billed");
+    const gone = await mk();
+    await db.update(jobs).set({ state: "canceled" }).where(eq(jobs.id, gone.job.id));
+    const e2 = await bill(gone.person, gone.a.id, input(gone.job)).catch((e) => e);
+    expect(e2).toBeInstanceOf(RuleViolation);
+    expect(e2.message).toBe("This detail was canceled and cannot be billed");
+    expect(await invoiceCount(off.a.id)).toBe(0);
+    expect(await invoiceCount(gone.a.id)).toBe(0);
+  });
+
   test("billing is audited", async () => {
     const { a, job, person } = await mk();
     const r = await bill(person, a.id, input(job));

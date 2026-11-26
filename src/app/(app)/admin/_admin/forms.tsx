@@ -9,7 +9,7 @@ import { useCoordAction } from "../../coordinate/_coordinator/status";
 import { WEEKDAYS, type Field, type GroupValues } from "./settings-groups";
 
 /** A labeled on/off switch (DESIGN: a button with role="switch" and a visible label). */
-export function Switch({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Switch({ label, hint, checked, onChange }: Readonly<{ label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }>) {
   const id = useId();
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3.5 py-1.5">
@@ -41,7 +41,7 @@ export function Switch({ label, hint, checked, onChange }: { label: string; hint
 }
 
 /** A checkbox row with its label; 44 px tall so it is easy to hit. */
-export function Check({ label, checked, onChange, hint, disabled = false }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string; disabled?: boolean }) {
+export function Check({ label, checked, onChange, hint, disabled = false }: Readonly<{ label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string; disabled?: boolean }>) {
   return (
     <label className={`flex min-h-11 items-center gap-2.5 text-body ${disabled ? "cursor-not-allowed text-muted" : "cursor-pointer"}`}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="size-4.5 shrink-0 accent-accent" />
@@ -54,7 +54,7 @@ export function Check({ label, checked, onChange, hint, disabled = false }: { la
 }
 
 /** A group of checkboxes for picking several of a list. */
-export function CheckGroup({ legend, options, value, onChange, error }: { legend: string; options: Array<{ id: string; name: string }>; value: string[]; onChange: (v: string[]) => void; error?: string }) {
+export function CheckGroup({ legend, options, value, onChange, error }: Readonly<{ legend: string; options: Array<{ id: string; name: string }>; value: string[]; onChange: (v: string[]) => void; error?: string }>) {
   const id = useId();
   return (
     <fieldset className="m-0 flex flex-col gap-1 border-0 p-0" aria-describedby={error ? `${id}-error` : undefined}>
@@ -74,6 +74,69 @@ export function CheckGroup({ legend, options, value, onChange, error }: { legend
 }
 
 const INPUT_MODE: Partial<Record<Field["kind"], React.HTMLAttributes<HTMLInputElement>["inputMode"]>> = { int: "numeric", float: "decimal", dollars: "decimal", dollarsOptional: "decimal", hours: "decimal" };
+const INPUT_TYPE: Partial<Record<Field["kind"], string>> = { time: "time", date: "date", email: "email" };
+const NUMERIC_KINDS = new Set<Field["kind"]>(["int", "float", "hours", "dollars", "dollarsOptional"]);
+const NARROW_KINDS = new Set<Field["kind"]>(["int", "hours", "dollars", "dollarsOptional"]);
+
+type Choices = Partial<Record<Field["kind"], Array<{ id: string; name: string }>>>;
+type SetValue = (k: string, v: GroupValues[string]) => void;
+
+/** The choices of a select field: position types from the database, the weekdays, or the field's own list. */
+function selectOptions(f: Field, options: Choices): React.ReactNode {
+  if (f.kind === "positionType")
+    return (options.positionType ?? []).map((o) => (
+      <option key={o.id} value={o.id}>
+        {o.name}
+      </option>
+    ));
+  return (f.kind === "weekday" ? WEEKDAYS : (f.options ?? [])).map(([val, label]) => (
+    <option key={val} value={val}>
+      {label}
+    </option>
+  ));
+}
+
+/**
+ * The control inside a field's FormField. A plain function, not a component, so FormField gets the control
+ * element itself to wire its id and descriptions.
+ */
+function fieldControl(f: Field, v: GroupValues[string], set: SetValue, options: Choices) {
+  if (f.kind === "select" || f.kind === "weekday" || f.kind === "positionType")
+    return (
+      <Select value={String(v)} onChange={(e) => set(f.key, e.target.value)}>
+        {selectOptions(f, options)}
+      </Select>
+    );
+  if (f.kind === "phone") return <PhoneField value={String(v)} onValue={(nv) => set(f.key, nv)} className="md:max-w-60" />;
+  if (f.kind === "textarea") return <TextArea value={String(v)} onChange={(e) => set(f.key, e.target.value)} maxLength={4000} />;
+  return (
+    <Input
+      type={INPUT_TYPE[f.kind] ?? "text"}
+      inputMode={INPUT_MODE[f.kind]}
+      value={String(v)}
+      onChange={(e) => set(f.key, e.target.value)}
+      data-numeric={NUMERIC_KINDS.has(f.kind) ? true : undefined}
+      className={NARROW_KINDS.has(f.kind) ? "md:max-w-48" : undefined}
+    />
+  );
+}
+
+/** One field of a settings form: a switch, the reviewer checkboxes, or a labeled control. */
+function SettingField({ f, v, err, set, options }: Readonly<{ f: Field; v: GroupValues[string]; err: string | undefined; set: SetValue; options: Choices }>) {
+  if (f.kind === "switch") return <Switch label={f.label} hint={f.hint} checked={v === true} onChange={(on) => set(f.key, on)} />;
+  if (f.kind === "reviewers")
+    return (
+      <>
+        <CheckGroup legend={f.label} options={options.reviewers ?? []} value={Array.isArray(v) ? v : []} onChange={(ids) => set(f.key, ids)} error={err} />
+        {f.hint ? <p className="m-0 text-xs text-muted">{f.hint}</p> : null}
+      </>
+    );
+  return (
+    <FormField label={f.label} hint={f.hint} error={err}>
+      {fieldControl(f, v, set, options)}
+    </FormField>
+  );
+}
 
 /**
  * One settings group as a form: every field with its hint, one Save, and the server's field errors shown under
@@ -86,15 +149,15 @@ export function SettingsForm({
   save,
   saveLabel,
   options = {},
-}: {
+}: Readonly<{
   slug: string;
   fields: readonly Field[];
   initial: GroupValues;
   save: (slug: string, values: GroupValues) => Promise<ActionResult>;
   saveLabel: string;
   /** Choices for fields filled from the database (position types, reviewers). */
-  options?: Partial<Record<Field["kind"], Array<{ id: string; name: string }>>>;
-}) {
+  options?: Choices;
+}>) {
   const [values, setValues] = useState(initial);
   const { run, busy, error } = useCoordAction();
   const errors = error && !error.ok ? (error.fields ?? {}) : {};
@@ -111,54 +174,10 @@ export function SettingsForm({
     >
       <div className="grid gap-x-5 gap-y-4 md:grid-cols-2">
         {fields.map((f) => {
-          const v = values[f.key];
-          const err = errors[f.key];
           const wide = f.kind === "textarea" || f.kind === "reviewers" || f.kind === "switch";
-          let control: React.ReactNode;
-          if (f.kind === "switch") control = <Switch label={f.label} hint={f.hint} checked={v === true} onChange={(on) => set(f.key, on)} />;
-          else if (f.kind === "reviewers")
-            control = (
-              <>
-                <CheckGroup legend={f.label} options={options.reviewers ?? []} value={Array.isArray(v) ? v : []} onChange={(ids) => set(f.key, ids)} error={err} />
-                {f.hint ? <p className="m-0 text-xs text-muted">{f.hint}</p> : null}
-              </>
-            );
-          else
-            control = (
-              <FormField label={f.label} hint={f.hint} error={err}>
-                {f.kind === "select" || f.kind === "weekday" || f.kind === "positionType" ? (
-                  <Select value={String(v)} onChange={(e) => set(f.key, e.target.value)}>
-                    {f.kind === "positionType"
-                      ? (options.positionType ?? []).map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name}
-                          </option>
-                        ))
-                      : (f.kind === "weekday" ? WEEKDAYS : (f.options ?? [])).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
-                          </option>
-                        ))}
-                  </Select>
-                ) : f.kind === "phone" ? (
-                  <PhoneField value={String(v)} onValue={(nv) => set(f.key, nv)} className="md:max-w-60" />
-                ) : f.kind === "textarea" ? (
-                  <TextArea value={String(v)} onChange={(e) => set(f.key, e.target.value)} maxLength={4000} />
-                ) : (
-                  <Input
-                    type={f.kind === "time" ? "time" : f.kind === "date" ? "date" : f.kind === "email" ? "email" : "text"}
-                    inputMode={INPUT_MODE[f.kind]}
-                    value={String(v)}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    data-numeric={f.kind === "int" || f.kind === "float" || f.kind === "hours" || f.kind === "dollars" || f.kind === "dollarsOptional" ? true : undefined}
-                    className={f.kind === "int" || f.kind === "hours" || f.kind === "dollars" || f.kind === "dollarsOptional" ? "md:max-w-48" : undefined}
-                  />
-                )}
-              </FormField>
-            );
           return (
             <div key={f.key} className={wide ? "md:col-span-2" : undefined}>
-              {control}
+              <SettingField f={f} v={values[f.key]} err={errors[f.key]} set={set} options={options} />
             </div>
           );
         })}

@@ -87,6 +87,21 @@ export async function loadUserInvoices(actor: Actor, tx: Tx, userId: string, ext
 
 const empty = (): Totals => ({ details: 0, minutes: 0, billedCents: 0, paidCents: 0 });
 
+type Periods = { here: { year: number; month: number }; thisMonth: Totals; thisYear: Totals; years: Map<number, Totals> };
+
+/** The totals a date counts in: its year, and this year and this month when it falls in them. */
+function totalsFor(p: Periods, d: { year: number; month: number }): Totals[] {
+  let byYear = p.years.get(d.year);
+  if (!byYear) {
+    byYear = empty();
+    p.years.set(d.year, byYear);
+  }
+  const targets = [byYear];
+  if (d.year === p.here.year) targets.push(p.thisYear);
+  if (d.year === p.here.year && d.month === p.here.month) targets.push(p.thisMonth);
+  return targets;
+}
+
 /**
  * Billed totals use the detail's agency date; paid totals use the paid date (`paidDate`).
  * Outstanding is everything billed and not yet paid, whatever its date.
@@ -98,24 +113,12 @@ export async function earningsDashboard(
   now: Date = new Date(),
 ): Promise<{ thisMonth: Totals; thisYear: Totals; outstandingCents: Cents; byYear: Array<{ year: number } & Totals> }> {
   const { rows } = await loadUserInvoices(actor, tx, userId);
-  const here = agencyDateParts(now);
-  const thisMonth = empty();
-  const thisYear = empty();
-  const years = new Map<number, Totals>();
+  const p: Periods = { here: agencyDateParts(now), thisMonth: empty(), thisYear: empty(), years: new Map<number, Totals>() };
   let outstandingCents = 0;
-  const year = (y: number) => {
-    let t = years.get(y);
-    if (!t) years.set(y, (t = empty()));
-    return t;
-  };
 
   for (const r of rows) {
     if (isBilled(r.status)) {
-      const d = agencyDateParts(r.jobStartAt);
-      const targets = [year(d.year)];
-      if (d.year === here.year) targets.push(thisYear);
-      if (d.year === here.year && d.month === here.month) targets.push(thisMonth);
-      for (const t of targets) {
+      for (const t of totalsFor(p, agencyDateParts(r.jobStartAt))) {
         t.details += 1;
         t.minutes += r.minutes;
         t.billedCents += r.totalCents;
@@ -123,12 +126,9 @@ export async function earningsDashboard(
       if (!r.paid) outstandingCents += r.totalCents;
     }
     if (r.paid) {
-      const p = agencyDateParts(r.paid.at);
-      year(p.year).paidCents += r.totalCents;
-      if (p.year === here.year) thisYear.paidCents += r.totalCents;
-      if (p.year === here.year && p.month === here.month) thisMonth.paidCents += r.totalCents;
+      for (const t of totalsFor(p, agencyDateParts(r.paid.at))) t.paidCents += r.totalCents;
     }
   }
-  const byYear = [...years.entries()].sort(([a], [b]) => b - a).map(([y, t]) => ({ year: y, ...t }));
-  return { thisMonth, thisYear, outstandingCents, byYear };
+  const byYear = [...p.years.entries()].sort(([a], [b]) => b - a).map(([y, t]) => ({ year: y, ...t }));
+  return { thisMonth: p.thisMonth, thisYear: p.thisYear, outstandingCents, byYear };
 }

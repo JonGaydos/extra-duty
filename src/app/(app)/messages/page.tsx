@@ -18,6 +18,11 @@ export const metadata: Metadata = { title: "Messages" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
+function emptyTitle(tab: string, filtered: boolean): string {
+  if (tab !== "inbox") return "Nothing sent yet";
+  return filtered ? "No messages match" : "No messages yet";
+}
+
 function when(d: Date, now: Date): string {
   if (agencyDayKey(d) === agencyDayKey(now)) return clock(d);
   if (agencyDayKey(d) === agencyDayKey(new Date(now.getTime() - 86_400_000))) return "Yesterday";
@@ -25,7 +30,7 @@ function when(d: Date, now: Date): string {
 }
 
 /** Message Center: Inbox and Sent, a filter, and mark read, unread or delete. */
-export default async function MessagesPage({ searchParams }: Props) {
+export default async function MessagesPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -62,8 +67,7 @@ export default async function MessagesPage({ searchParams }: Props) {
         <form role="search" className="flex flex-wrap items-center gap-3" action="/messages">
           <Input type="search" name="q" defaultValue={q} aria-label="Filter messages" placeholder="Filter messages" className="min-w-0 flex-1" />
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" name="unread" value="1" defaultChecked={unreadOnly} className="size-4.5 accent-accent" />
-            Unread only
+            <input type="checkbox" name="unread" value="1" defaultChecked={unreadOnly} className="size-4.5 accent-accent" />Unread only
           </label>
           <button type="submit" className="inline-flex h-11 items-center rounded-md border border-line bg-surface px-4 font-semibold text-ink hover:bg-subtle">
             Filter
@@ -72,7 +76,7 @@ export default async function MessagesPage({ searchParams }: Props) {
       ) : null}
       {rows.length === 0 ? (
         <Card pad={false}>
-          <EmptyState title={tab === "inbox" ? (q || unreadOnly ? "No messages match" : "No messages yet") : "Nothing sent yet"}>
+          <EmptyState title={emptyTitle(tab, Boolean(q || unreadOnly))}>
             {tab === "inbox" ? "Messages from coordinators and other deputies show here." : "Messages you send show here."}
           </EmptyState>
         </Card>

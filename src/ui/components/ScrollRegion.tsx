@@ -7,8 +7,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
  * while its content is wider than it, so keyboard users can scroll it without
  * every table adding a tab stop.
  */
-export function ScrollRegion({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
+export function ScrollRegion({ label, className, children }: Readonly<{ label: string; className?: string; children: ReactNode }>) {
+  const ref = useRef<HTMLElement>(null);
   const [scrolls, setScrolls] = useState(false);
 
   useEffect(() => {
@@ -23,14 +23,9 @@ export function ScrollRegion({ label, className, children }: { label: string; cl
   }, []);
 
   return (
-    <div
-      ref={ref}
-      className={className}
-      role={scrolls ? "region" : undefined}
-      aria-label={scrolls ? label : undefined}
-      tabIndex={scrolls ? 0 : undefined}
-    >
+    // A section is a named region only while it has a label, so it is one only while it scrolls.
+    <section ref={ref} className={className} aria-label={scrolls ? label : undefined} tabIndex={scrolls ? 0 : undefined}>
       {children}
-    </div>
+    </section>
   );
 }

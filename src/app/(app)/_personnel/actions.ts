@@ -24,7 +24,7 @@ import { act, actOutsideTx, type ActionResult } from "./result";
 /** Server actions for the personnel screens: each one checks the person, calls one service and reports back. */
 
 const isoDate = (v: unknown, label: string): Date => {
-  const d = typeof v === "string" ? new Date(v) : new Date(NaN);
+  const d = typeof v === "string" ? new Date(v) : new Date(Number.NaN);
   if (Number.isNaN(d.getTime())) throw new ValidationError(`${label} is not a valid time.`);
   return d;
 };
@@ -179,7 +179,7 @@ export async function saveGoalAction(dollars: string): Promise<ActionResult> {
 
 export async function setCalendarLinkAction(url: string | null): Promise<ActionResult> {
   return act(async (actor, tx) => {
-    await setCalendarFeed(actor, tx, url && url.trim() ? url.trim() : null);
+    await setCalendarFeed(actor, tx, url?.trim() ? url.trim() : null);
     return { ok: true, message: url ? "Calendar link saved. Choose Sync now to import it." : "Calendar link removed." };
   });
 }

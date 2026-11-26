@@ -24,7 +24,7 @@ import { useCoordAction } from "../_coordinator/status";
 
 type VendorFields = { name: string; contactName: string; phone: string; billingEmails: string; rate: string; notes: string };
 
-function VendorFieldsForm({ value, onChange }: { value: VendorFields; onChange: (v: VendorFields) => void }) {
+function VendorFieldsForm({ value, onChange }: Readonly<{ value: VendorFields; onChange: (v: VendorFields) => void }>) {
   const set = (k: keyof VendorFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange({ ...value, [k]: e.target.value });
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -85,7 +85,7 @@ export function NewVendor() {
   );
 }
 
-export function EditVendor({ vendorId, initial }: { vendorId: string; initial: VendorFields }) {
+export function EditVendor({ vendorId, initial }: Readonly<{ vendorId: string; initial: VendorFields }>) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState(initial);
   const { run, busy } = useCoordAction();
@@ -116,7 +116,7 @@ export function EditVendor({ vendorId, initial }: { vendorId: string; initial: V
   );
 }
 
-export function PaymentHold({ vendorId, onHold }: { vendorId: string; onHold: boolean }) {
+export function PaymentHold({ vendorId, onHold }: Readonly<{ vendorId: string; onHold: boolean }>) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [outcome, setOutcome] = useState<"fix_coming" | "handled">("handled");
@@ -158,7 +158,7 @@ export function PaymentHold({ vendorId, onHold }: { vendorId: string; onHold: bo
   );
 }
 
-export function AddLocation({ vendorId }: { vendorId: string }) {
+export function AddLocation({ vendorId }: Readonly<{ vendorId: string }>) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState(() => addressValue(""));
@@ -200,7 +200,7 @@ export function AddLocation({ vendorId }: { vendorId: string }) {
   );
 }
 
-export function LocationActive({ locationId, active, name }: { locationId: string; active: boolean; name: string }) {
+export function LocationActive({ locationId, active, name }: Readonly<{ locationId: string; active: boolean; name: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Button size="sm" variant="secondary" busy={busy} onClick={() => run(() => locationActiveAction({ locationId, active: !active }))} aria-label={`${active ? "Deactivate" : "Reactivate"}, ${name}`}>
@@ -220,7 +220,7 @@ async function uploadDocument(vendorId: string, form: { kind: string; label: str
   return { ok: false as const, error: err?.error?.message ?? "The upload did not go through. Check the file and try again." };
 }
 
-export function AddDocumentLink({ vendorId }: { vendorId: string }) {
+export function AddDocumentLink({ vendorId }: Readonly<{ vendorId: string }>) {
   const [open, setOpen] = useState<"link" | "file" | null>(null);
   const [f, setF] = useState({ kind: "contract" as "contract" | "other", label: "", url: "", signedOn: "", expiresOn: "" });
   const [file, setFile] = useState<File | null>(null);
@@ -283,7 +283,7 @@ export function AddDocumentLink({ vendorId }: { vendorId: string }) {
   );
 }
 
-export function NoteTools({ noteId, body, approved }: { noteId: string; body: string; approved: boolean }) {
+export function NoteTools({ noteId, body, approved }: Readonly<{ noteId: string; body: string; approved: boolean }>) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(body);
   const { run, busy } = useCoordAction();
@@ -323,7 +323,7 @@ export function NoteTools({ noteId, body, approved }: { noteId: string; body: st
   );
 }
 
-export function Restrict({ vendorId, people }: { vendorId: string; people: Array<{ id: string; name: string }> }) {
+export function Restrict({ vendorId, people }: Readonly<{ vendorId: string; people: Array<{ id: string; name: string }> }>) {
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState("");
   const [reason, setReason] = useState("");
@@ -357,8 +357,7 @@ export function Restrict({ vendorId, people }: { vendorId: string; people: Array
         <Input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={500} />
       </FormField>
       <label className="flex min-h-11 items-center gap-2">
-        <input type="checkbox" checked={remove} onChange={(e) => setRemove(e.target.checked)} className="size-4.5 accent-accent" />
-        Remove them from this vendor&apos;s future details
+        <input type="checkbox" checked={remove} onChange={(e) => setRemove(e.target.checked)} className="size-4.5 accent-accent" />Remove them from this vendor&apos;s future details
       </label>
       <div className="flex gap-2">
         <Button type="submit" size="sm" busy={busy}>
@@ -372,7 +371,7 @@ export function Restrict({ vendorId, people }: { vendorId: string; people: Array
   );
 }
 
-export function LiftRestriction({ restrictionId, name }: { restrictionId: string; name: string }) {
+export function LiftRestriction({ restrictionId, name }: Readonly<{ restrictionId: string; name: string }>) {
   const { run, busy } = useCoordAction();
   return (
     <Button size="sm" variant="secondary" busy={busy} onClick={() => run(() => liftRestrictionAction(restrictionId))} aria-label={`Lift, ${name}`}>
@@ -381,7 +380,7 @@ export function LiftRestriction({ restrictionId, name }: { restrictionId: string
   );
 }
 
-export function AddLogin({ vendorId }: { vendorId: string }) {
+export function AddLogin({ vendorId }: Readonly<{ vendorId: string }>) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

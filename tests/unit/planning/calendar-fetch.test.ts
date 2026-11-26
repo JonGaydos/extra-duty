@@ -1,15 +1,19 @@
 import { describe, expect, test } from "vitest";
 import { ValidationError } from "@/domain/errors";
+import { asAsync } from "../../setup/streams";
 import { CalendarFetchError, fetchCalendarText, isBlockedAddress, normalizeFeedUrl, type HopRequest, type HopResponse } from "@/domain/planning/calendar-fetch";
+
+// Fake resolvers, requests and bodies return promises to match the calendar fetch dependencies; they answer at once.
 
 const PUBLIC = "93.184.216.34";
 
-const body = (text: string, chunk = 1024): AsyncIterable<Uint8Array> => ({
-  async *[Symbol.asyncIterator]() {
-    const bytes = new TextEncoder().encode(text);
-    for (let i = 0; i < bytes.length; i += chunk) yield bytes.subarray(i, i + chunk);
-  },
-});
+const body = (text: string, chunk = 1024): AsyncIterable<Uint8Array> =>
+  asAsync(
+    (function* () {
+      const bytes = new TextEncoder().encode(text);
+      for (let i = 0; i < bytes.length; i += chunk) yield bytes.subarray(i, i + chunk);
+    })(),
+  );
 const ok = (text: string): HopResponse => ({ status: 200, location: null, body: body(text), close: () => {} });
 const redirect = (location: string): HopResponse => ({ status: 302, location, body: body(""), close: () => {} });
 
@@ -20,9 +24,9 @@ function rig(handler: (r: HopRequest, n: number) => HopResponse | Promise<HopRes
     seen,
     resolved,
     deps: {
-      resolve: async (host: string) => {
+      resolve: (host: string) => {
         resolved.push(host);
-        return addresses[host] ?? [PUBLIC];
+        return Promise.resolve(addresses[host] ?? [PUBLIC]);
       },
       request: async (r: HopRequest) => {
         seen.push(r);
@@ -111,10 +115,10 @@ describe("fetchCalendarText", () => {
     let n = 0;
     const seen: HopRequest[] = [];
     const deps = {
-      resolve: async () => (n++ === 0 ? [PUBLIC] : ["10.0.0.5"]),
-      request: async (r: HopRequest) => {
+      resolve: () => Promise.resolve(n++ === 0 ? [PUBLIC] : ["10.0.0.5"]),
+      request: (r: HopRequest) => {
         seen.push(r);
-        return ok("done");
+        return Promise.resolve(ok("done"));
       },
     };
     await fetchCalendarText("https://rebind.example/cal.ics", deps);
@@ -123,12 +127,13 @@ describe("fetchCalendarText", () => {
   });
 
   test("an unresolvable host is a short error", async () => {
-    const msg = await fails(fetchCalendarText("https://example.com/a.ics", { resolve: async () => [], request: async () => ok("x") }));
+    const msg = await fails(fetchCalendarText("https://example.com/a.ics", { resolve: () => Promise.resolve([]), request: () => Promise.resolve(ok("x")) }));
     expect(msg).toBe("the address could not be found");
   });
 
   test("follows up to 3 redirects and re-checks every target", async () => {
-    const r = rig((req) => (req.url.pathname === "/a" ? redirect("/b") : req.url.pathname === "/b" ? redirect("https://other.example/c") : req.url.pathname === "/c" ? redirect("/d") : ok("end")));
+    const hops: Record<string, () => HopResponse> = { "/a": () => redirect("/b"), "/b": () => redirect("https://other.example/c"), "/c": () => redirect("/d") };
+    const r = rig((req) => hops[req.url.pathname]?.() ?? ok("end"));
     expect(await fetchCalendarText("https://example.com/a", r.deps)).toBe("end");
     expect(r.resolved).toEqual(["example.com", "example.com", "other.example", "other.example"]);
 
@@ -149,16 +154,28 @@ describe("fetchCalendarText", () => {
     expect(toLiteral.seen).toHaveLength(1);
   });
 
+  test("each refused redirect and link says why", async () => {
+    const bad = rig(() => redirect("https://[::1"));
+    expect(await fails(fetchCalendarText("https://example.com/a", bad.deps))).toBe("the server sent a bad redirect");
+    const toHttp = rig(() => redirect("http://example.com/plain"));
+    expect(await fails(fetchCalendarText("https://example.com/a", toHttp.deps))).toBe("the server redirected to a link that is not allowed");
+    const toPrivate = rig(() => redirect("https://10.0.0.1/x"));
+    expect(await fails(fetchCalendarText("https://example.com/a", toPrivate.deps))).toBe("that address is not allowed");
+    const noAnswer = rig(() => ok("x"), { "example.com": [] });
+    expect(await fails(fetchCalendarText("https://example.com/a", noAnswer.deps))).toBe("the address could not be found");
+    expect(await fails(fetchCalendarText("http://example.com/a", rig(() => ok("x")).deps))).toBe("the link is not allowed");
+  });
+
   test("the size limit is enforced while streaming", async () => {
     let pulled = 0;
-    const endless: AsyncIterable<Uint8Array> = {
-      async *[Symbol.asyncIterator]() {
+    const endless = asAsync(
+      (function* () {
         for (;;) {
           pulled += 1;
           yield new Uint8Array(1024 * 1024);
         }
-      },
-    };
+      })(),
+    );
     let closed = false;
     const r = rig(() => ({ status: 200, location: null, body: endless, close: () => (closed = true) }));
     expect(await fails(fetchCalendarText("https://example.com/a", r.deps))).toBe("the calendar is larger than 5 MB");
@@ -180,9 +197,9 @@ describe("fetchCalendarText", () => {
     let connected = false;
     const hang = {
       resolve: () => new Promise<string[]>(() => {}),
-      request: async () => {
+      request: () => {
         connected = true;
-        return ok("x");
+        return Promise.resolve(ok("x"));
       },
       timeoutMs: 30,
     };

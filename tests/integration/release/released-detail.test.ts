@@ -99,6 +99,6 @@ describe("released details", () => {
     const [position] = await db.select().from(jobPositions).where(eq(jobPositions.jobId, id));
     const a = await db.transaction((tx) => signUp(deputy, tx, position.id, { warningVersion: 1 }));
     expect(a.status).toBe("signed_up");
-    expect((await db.select().from(assignments).where(eq(assignments.jobId, id))).length).toBe(1);
+    expect(await db.select().from(assignments).where(eq(assignments.jobId, id))).toHaveLength(1);
   });
 });

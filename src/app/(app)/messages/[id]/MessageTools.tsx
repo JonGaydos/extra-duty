@@ -7,7 +7,7 @@ import { hideMessagesAction, markMessagesAction } from "../../_personnel/actions
 import { ActionStatus, useAction } from "../../_personnel/use-action";
 
 /** Marks the message read when opened (recipients only), and offers Reply, Mark unread and Delete. */
-export function MessageTools({ id, recipient }: { id: string; recipient: boolean }) {
+export function MessageTools({ id, recipient }: Readonly<{ id: string; recipient: boolean }>) {
   const router = useRouter();
   const opened = useRef(false);
   const { run, busy, result } = useAction();

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Icon } from "../icons";
 
 /** The alerts bell: a link to /alerts with an unread badge that states the count in words. */
-export function AlertsBell({ unread, size = "sm" }: { unread: number; size?: "sm" | "md" }) {
+export function AlertsBell({ unread, size = "sm" }: Readonly<{ unread: number; size?: "sm" | "md" }>) {
   const label = unread > 0 ? `Alerts, ${unread} unread` : "Alerts";
   return (
     <Link

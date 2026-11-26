@@ -14,7 +14,7 @@ const JOB_STATES: readonly JobState[] = ["requested", "scheduled", "active", "ca
  */
 export function parseDate(v: unknown, label: string): Date {
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) throw new ValidationError(`${label} needs a date and time, such as 2026-03-08T17:00:00-06:00.`);
-  const d = typeof v === "string" ? new Date(v) : new Date(NaN);
+  const d = typeof v === "string" ? new Date(v) : new Date(Number.NaN);
   if (Number.isNaN(d.getTime())) throw new ValidationError(`${label} is not a valid date.`);
   return d;
 }

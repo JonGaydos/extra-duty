@@ -2,6 +2,7 @@ import { ValidationError } from "../errors";
 import { releaseAt, type ReleaseSettings } from "../release/release";
 import { agencyDateOnly, agencyDateParts, agencyDayKey, agencyInstant } from "../time/agency-time";
 import type { JobInput } from "./jobs";
+import { byText } from "@/lib/sort";
 
 export const MAX_BULK_DATES = 366;
 
@@ -9,7 +10,7 @@ export type Recurrence =
   | { kind: "daily"; every: number; end: RecurrenceEnd }
   | { kind: "weekly"; every: number; weekdays: number[]; end: RecurrenceEnd }
   | { kind: "monthly"; every: number; dayOfMonth: number; end: RecurrenceEnd };
-export type RecurrenceEnd = { count: number } | { until: Date };
+type RecurrenceEnd = { count: number } | { until: Date };
 
 /** Dates are agency `YYYY-MM-DD` keys; weekdays are 0 (Sunday) to 6 (Saturday). */
 export type DateSelection =
@@ -66,23 +67,59 @@ function assertWeekdays(w: number[]): void {
   }
 }
 
+/** How a series ends: after `limitCount` dates, or on `untilKey` (an agency date key). */
+function seriesEnd(end: RecurrenceEnd): { limitCount: number; untilKey: string | null } {
+  if ("count" in end) {
+    if (!Number.isInteger(end.count) || end.count < 1) throw new ValidationError("The number of occurrences must be at least 1.");
+    if (end.count > MAX_BULK_DATES) throw new ValidationError(`A series can hold at most ${MAX_BULK_DATES} dates.`);
+    return { limitCount: end.count, untilKey: null };
+  }
+  if (!(end.until instanceof Date) || Number.isNaN(end.until.getTime())) throw new ValidationError("An end date is required.");
+  return { limitCount: MAX_BULK_DATES, untilKey: agencyDayKey(end.until) };
+}
+
+/** Adds a date; false once the series is complete (past `until`, or the count reached). */
+type Push = (key: string) => boolean;
+
+function weeklyDates(firstDate: string, r: Extract<Recurrence, { kind: "weekly" }>, untilKey: string | null, push: Push): void {
+  assertWeekdays(r.weekdays);
+  const days = [...new Set(r.weekdays)].sort((a, b) => a - b);
+  const weekStart = addDays(firstDate, -weekdayOf(firstDate));
+  for (let w = 0; ; w++) {
+    // A week with no day left before `until` ends the loop.
+    if (untilKey !== null && addDays(weekStart, w * r.every * 7) > untilKey) return;
+    for (const wd of days) {
+      const key = addDays(weekStart, w * r.every * 7 + wd);
+      if (key < firstDate) continue;
+      if (!push(key)) return;
+    }
+  }
+}
+
+function monthlyDates(firstDate: string, r: Extract<Recurrence, { kind: "monthly" }>, untilKey: string | null, push: Push): void {
+  if (!Number.isInteger(r.dayOfMonth) || r.dayOfMonth < 1 || r.dayOfMonth > 31) throw new ValidationError("The day of the month must be from 1 to 31.");
+  const first = parseKey(firstDate);
+  for (let i = 0; ; i++) {
+    const idx = first.y * 12 + (first.m - 1) + i * r.every;
+    const y = Math.floor(idx / 12);
+    const m = (idx % 12) + 1;
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const key = toKey(y, m, Math.min(r.dayOfMonth, last));
+    if (key < firstDate) continue;
+    if (untilKey !== null && key > untilKey) return;
+    if (!push(key)) return;
+  }
+}
+
 /** Occurrence dates for a pattern, starting from `firstDate`. Monthly days past a short month's end fall on its last day. */
 function recurrenceDates(firstDate: string, r: Recurrence): string[] {
   if (!Number.isInteger(r.every) || r.every < 1) throw new ValidationError("A repeat interval must be a whole number of at least 1.");
-  const first = parseKey(firstDate);
-  let limitCount = MAX_BULK_DATES;
-  let untilKey: string | null = null;
-  if ("count" in r.end) {
-    if (!Number.isInteger(r.end.count) || r.end.count < 1) throw new ValidationError("The number of occurrences must be at least 1.");
-    if (r.end.count > MAX_BULK_DATES) throw new ValidationError(`A series can hold at most ${MAX_BULK_DATES} dates.`);
-    limitCount = r.end.count;
-  } else {
-    if (!(r.end.until instanceof Date) || Number.isNaN(r.end.until.getTime())) throw new ValidationError("An end date is required.");
-    untilKey = agencyDayKey(r.end.until);
-  }
+  // Refuses a bad first date before the end is checked.
+  parseKey(firstDate);
+  const { limitCount, untilKey } = seriesEnd(r.end);
 
   const out: string[] = [];
-  const push = (key: string): boolean => {
+  const push: Push = (key) => {
     if (untilKey !== null && key > untilKey) return false;
     out.push(key);
     if (out.length > MAX_BULK_DATES) throw new ValidationError(`A series can hold at most ${MAX_BULK_DATES} dates.`);
@@ -92,30 +129,9 @@ function recurrenceDates(firstDate: string, r: Recurrence): string[] {
   if (r.kind === "daily") {
     for (let i = 0; ; i++) if (!push(addDays(firstDate, i * r.every))) break;
   } else if (r.kind === "weekly") {
-    assertWeekdays(r.weekdays);
-    const days = [...new Set(r.weekdays)].sort((a, b) => a - b);
-    const weekStart = addDays(firstDate, -weekdayOf(firstDate));
-    outer: for (let w = 0; ; w++) {
-      // A week with no day left before `until` ends the loop.
-      if (untilKey !== null && addDays(weekStart, w * r.every * 7) > untilKey) break;
-      for (const wd of days) {
-        const key = addDays(weekStart, w * r.every * 7 + wd);
-        if (key < firstDate) continue;
-        if (!push(key)) break outer;
-      }
-    }
+    weeklyDates(firstDate, r, untilKey, push);
   } else {
-    if (!Number.isInteger(r.dayOfMonth) || r.dayOfMonth < 1 || r.dayOfMonth > 31) throw new ValidationError("The day of the month must be from 1 to 31.");
-    for (let i = 0; ; i++) {
-      const idx = first.y * 12 + (first.m - 1) + i * r.every;
-      const y = Math.floor(idx / 12);
-      const m = (idx % 12) + 1;
-      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-      const key = toKey(y, m, Math.min(r.dayOfMonth, last));
-      if (key < firstDate) continue;
-      if (untilKey !== null && key > untilKey) break;
-      if (!push(key)) break;
-    }
+    monthlyDates(firstDate, r, untilKey, push);
   }
   return out;
 }
@@ -133,7 +149,7 @@ export function expandRecurrence(first: { startAt: Date; endAt: Date }, r: Recur
 }
 
 function finish(dates: Iterable<string>): string[] {
-  const out = [...new Set(dates)].sort();
+  const out = [...new Set(dates)].sort(byText);
   if (out.length > MAX_BULK_DATES) throw new ValidationError(`At most ${MAX_BULK_DATES} dates can be created at once.`);
   return out;
 }

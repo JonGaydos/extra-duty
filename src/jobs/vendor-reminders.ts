@@ -7,6 +7,14 @@ import { coordinatorAudience } from "@/domain/notifications/audiences";
 import { emit } from "@/domain/notifications/notify";
 import { vendorEmail } from "@/domain/payment-issues/issues";
 import { getSettings } from "@/domain/settings/settings";
+import { byText } from "@/lib/sort";
+
+/** The timeline note for each outcome of the vendor reminder email. */
+const REMINDER_NOTE = {
+  sent: "Reminder emailed to the vendor",
+  off: "Reminder not sent: the agency turned this email off",
+  no_email: "Reminder not sent: the vendor has no billing email",
+} as const;
 
 /**
  * Daily tick (7:10 AM agency time). When the party responsible for an invoice passes its response time, writes
@@ -22,9 +30,10 @@ export async function responseDeadlinesTick(now: Date): Promise<number> {
       .select({ id: invoices.id, responsibleParty: invoices.responsibleParty, responsibleSince: invoices.responsibleSince })
       .from(invoices)
       .where(and(isNotNull(invoices.responsibleParty), isNotNull(invoices.responsibleSince)));
-    return rows.filter((r) => isOverdue(r, now, s)).map((r) => r.id).sort();
+    return rows.filter((r) => isOverdue(r, now, s)).map((r) => r.id).sort(byText);
   });
   let written = 0;
+  // Sequential: one locking transaction per invoice, so one failure is skipped without holding many connections.
   for (const id of due) {
     try {
       written += await withTx(async (tx) => {
@@ -49,8 +58,7 @@ export async function responseDeadlinesTick(now: Date): Promise<number> {
             "This invoice has not been marked paid and is past its response time.",
             ["If you have already paid, please mark it paid in the vendor portal."],
           );
-          note =
-            sent === "sent" ? "Reminder emailed to the vendor" : sent === "off" ? "Reminder not sent: the agency turned this email off" : "Reminder not sent: the vendor has no billing email";
+          note = REMINDER_NOTE[sent];
         }
         await tx.insert(invoiceEvents).values({ invoiceId: id, event: "overdue", party, note, vendorVisible: false, at: now });
         if (party === "coordinator") {

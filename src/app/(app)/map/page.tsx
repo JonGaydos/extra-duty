@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Map" };
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Details on a map with the same filters as the list ("Only details I can work" included). */
-export default async function MapPage({ searchParams }: Props) {
+export default async function MapPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const f = parseFilters(await searchParams);
   const now = new Date();

@@ -5,7 +5,7 @@ import { watchAction } from "../../_personnel/actions";
 import { ActionStatus, useAction } from "../../_personnel/use-action";
 
 /** "Alert me if it opens": a switch on a full or unreleased detail. */
-export function WatchSwitch({ jobId, watching }: { jobId: string; watching: boolean }) {
+export function WatchSwitch({ jobId, watching }: Readonly<{ jobId: string; watching: boolean }>) {
   const [on, setOn] = useState(watching);
   const { run, busy, result } = useAction();
   return (

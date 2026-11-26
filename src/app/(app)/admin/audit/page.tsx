@@ -26,7 +26,7 @@ function changes(before: unknown, after: unknown): string {
 }
 
 /** Every recorded change, newest first, filtered by record type, record id and dates (agency days). */
-export default async function AuditPage({ searchParams }: Props) {
+export default async function AuditPage({ searchParams }: Readonly<Props>) {
   const actor = await managementActor();
   const sp = await searchParams;
   const type = str(sp.type);
@@ -45,7 +45,7 @@ export default async function AuditPage({ searchParams }: Props) {
     if (to) q.set("to", to);
     if (p > 1) q.set("page", String(p));
     const s = q.toString();
-    return `/admin/audit${s ? `?${s}` : ""}`;
+    return s ? `/admin/audit?${s}` : "/admin/audit";
   };
   const filtered = !!(type || id || from || to);
 
@@ -84,17 +84,17 @@ export default async function AuditPage({ searchParams }: Props) {
         </form>
       </Card>
       <Table
-        caption={`Changes${page > 1 ? `, page ${page}` : ""}`}
+        caption={page > 1 ? `Changes, page ${page}` : "Changes"}
         hideCaption
         rows={view.rows}
         rowKey={(r) => r.id}
         empty={filtered ? "No changes match these filters." : "No changes recorded yet."}
         columns={[
-          { header: "When", cell: (r) => <span className="whitespace-nowrap" data-numeric>{dateTime(r.at)}</span> },
-          { header: "Who", cell: (r) => r.actorName ?? (r.actorUserId ? "Unknown" : "System") },
+          { header: "When", render: (r) => <span className="whitespace-nowrap" data-numeric>{dateTime(r.at)}</span> },
+          { header: "Who", render: (r) => r.actorName ?? (r.actorUserId ? "Unknown" : "System") },
           {
             header: "Action",
-            cell: (r) => (
+            render: (r) => (
               <span className="flex flex-col">
                 <span>{auditLabel(r.action)}</span>
                 <code className="text-xs text-muted">{r.action}</code>
@@ -103,7 +103,7 @@ export default async function AuditPage({ searchParams }: Props) {
           },
           {
             header: "Record",
-            cell: (r) => (
+            render: (r) => (
               <span className="flex flex-col">
                 <span>{r.entityType}</span>
                 {r.entityId ? (
@@ -116,7 +116,7 @@ export default async function AuditPage({ searchParams }: Props) {
           },
           {
             header: "Change",
-            cell: (r) => (
+            render: (r) => (
               <Disclosure label={r.reason ? `Reason: ${r.reason}` : "Show the change"} className="max-w-[36rem]">
                 <pre className="m-0 mt-2 max-h-80 overflow-auto rounded-sm bg-subtle p-2.5 text-xs whitespace-pre-wrap break-all">{changes(r.before, r.after)}</pre>
               </Disclosure>

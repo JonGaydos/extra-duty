@@ -9,7 +9,7 @@ import { currentTab, type ShellNav } from "./nav";
  * Phone navigation, under 768 px: up to five tabs in a full-width bar pinned flush to the bottom edge. It is the
  * app shell's last row, so it never covers content; its own surface runs under the home indicator.
  */
-export function TabBar({ nav }: { nav: ShellNav }) {
+export function TabBar({ nav }: Readonly<{ nav: ShellNav }>) {
   const items = nav.phone;
   const active = currentTab(nav, usePathname());
   return (

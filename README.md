@@ -88,6 +88,10 @@ Copy `app.env.example` to `.env.local` and fill in values, including the databas
 `scripts/preview.sh start` runs a long-lived local preview (embedded Postgres and a production build) on
 http://localhost:3210; set `PREVIEW_URL` to reach it from another machine.
 
+The preview's demo accounts and the screenshot capture's practice deputy sign in with `DEMO_PASSWORD` from your
+shell. Without it each run picks a random password and prints it once (the preview also keeps its first one in
+`.local-preview/demo-accounts.txt`). The end-to-end tests pick a new random password on every run.
+
 ## Tests
 
     npm test                  # unit and integration projects (Vitest)

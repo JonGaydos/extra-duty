@@ -20,8 +20,9 @@ export function createMemorySender(): MemorySender {
   const sent: OutgoingEmail[] = [];
   return {
     sent,
-    async send(msg) {
+    send(msg) {
       sent.push(msg);
+      return Promise.resolve();
     },
     clear() {
       sent.length = 0;

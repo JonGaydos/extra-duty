@@ -11,6 +11,7 @@ import { BUILT_IN_REPORTS, deleteSavedReport, listSavedReports, runSavedReport, 
 import { agencyInstant } from "@/domain/time/agency-time";
 import { makeUser } from "../users/helpers";
 import { at, buildFixture, NOW } from "./helpers";
+import { byText } from "@/lib/sort";
 
 const FROM = at(2026, 1, 1, 0);
 const TO = at(2027, 12, 31, 23);
@@ -272,9 +273,9 @@ describe("report engine", () => {
       const [own] = await db.select().from(savedReports).where(eq(savedReports.id, mine.id));
       expect((own.spec as { measures: string[] }).measures).not.toContain("suspension_removals");
       // Two definitions changed, so two system audit rows; a further reseed changes nothing.
-      expect((await db.select().from(auditLog).where(eq(auditLog.action, "saved_report.builtin_update"))).length).toBe(auditsBefore + 2);
+      expect(await db.select().from(auditLog).where(eq(auditLog.action, "saved_report.builtin_update"))).toHaveLength(auditsBefore + 2);
       await seed(db);
-      expect((await db.select().from(auditLog).where(eq(auditLog.action, "saved_report.builtin_update"))).length).toBe(auditsBefore + 2);
+      expect(await db.select().from(auditLog).where(eq(auditLog.action, "saved_report.builtin_update"))).toHaveLength(auditsBefore + 2);
     });
 
     test("every built-in runs against a period", async () => {
@@ -312,7 +313,7 @@ describe("report engine", () => {
       expect(row.deletedAt).not.toBeNull();
       expect((await run((tx) => listSavedReports(fx.coord, tx))).map((r) => r.id)).not.toContain(saved.id);
       await expect(run((tx) => deleteSavedReport(fx.coord, tx, saved.id))).rejects.toBeInstanceOf(NotFoundError);
-      const actions = (await db.select().from(auditLog).where(eq(auditLog.entityId, saved.id))).map((a) => a.action).sort();
+      const actions = (await db.select().from(auditLog).where(eq(auditLog.entityId, saved.id))).map((a) => a.action).sort(byText);
       expect(actions).toEqual(["saved_report.create", "saved_report.delete"]);
     });
 

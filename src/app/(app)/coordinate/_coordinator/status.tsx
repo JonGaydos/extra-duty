@@ -8,19 +8,24 @@ import type { ActionResult } from "../../_personnel/result";
 type Report = (r: ActionResult | null) => void;
 const StatusContext = createContext<Report | null>(null);
 
+/** A result's message when done, its error when not; nothing before the first result. */
+function statusText(result: ActionResult | null): string | undefined {
+  if (!result) return undefined;
+  return result.ok ? result.message : result.error;
+}
+
 /**
  * One announced status line for a whole coordinator screen. Rows on the to-do list disappear once they are
  * handled, so a result cannot live inside the row; it lives here, floating just above the tab bar, until the next
  * action or Dismiss.
  */
-export function StatusProvider({ children }: { children: React.ReactNode }) {
+export function StatusProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const [result, setResult] = useState<ActionResult | null>(null);
-  const text = result ? (result.ok ? result.message : result.error) : undefined;
+  const text = statusText(result);
   return (
     <StatusContext.Provider value={setResult}>
       {children}
-      <div
-        role="status"
+      <output
         aria-live="polite"
         className="pointer-events-none fixed inset-x-0 bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 empty:hidden md:bottom-6"
       >
@@ -40,7 +45,7 @@ export function StatusProvider({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         ) : null}
-      </div>
+      </output>
     </StatusContext.Provider>
   );
 }

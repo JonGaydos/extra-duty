@@ -18,7 +18,7 @@ export type HistoryFilter = {
   payeeUserId?: string;
 };
 
-export type HistoryRow = {
+type HistoryRow = {
   invoiceId: string;
   number: number;
   payeeUserId: string;

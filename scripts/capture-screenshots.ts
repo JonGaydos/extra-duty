@@ -42,32 +42,9 @@ async function main(): Promise<void> {
   await db?.connect();
   const query: ShotCtx["query"] = db ? async (sql, params) => (await db.query(sql, params)).rows : undefined;
   try {
-    // One role at a time: in training mode every context shares one session, which practices as one role.
+    // Sequential: one role at a time; in training mode every context shares one session, which practices as one role.
     const roles = [...new Set(shots.map((s) => s.role))];
-    for (const role of roles) {
-      const contexts = new Map<Size, BrowserContext>();
-      try {
-        for (const shot of shots.filter((s) => s.role === role)) {
-          for (const size of shot.sizes) {
-            const context = shot.fresh ? await contextFor(browser, access, role, size) : (contexts.get(size) ?? (await open(browser, access, role, size, contexts)));
-            const page = await context.newPage();
-            try {
-              records.push(await take(page, access, shot, size, role, query));
-            } catch (err) {
-              if (err instanceof Refused) throw err;
-              // One broken shot does not stop the rest; the run still fails at the end.
-              failed.push(`${shotFile(shot, size)}: ${(err as Error).message.split("\n")[0]}`);
-              console.error(`  FAILED ${failed[failed.length - 1]}`);
-            } finally {
-              await page.close();
-              if (shot.fresh) await context.close();
-            }
-          }
-        }
-      } finally {
-        for (const c of contexts.values()) await c.close();
-      }
-    }
+    for (const role of roles) await captureRole(browser, access, role, shots, query, records, failed);
   } finally {
     await browser.close();
     await db?.end();
@@ -75,6 +52,39 @@ async function main(): Promise<void> {
   if (failed.length) throw new Error(`${failed.length} screenshots failed; the manifest was not updated:\n${failed.join("\n")}`);
   writeManifest(access, records);
   console.log(`Captured ${records.length} screenshots into ${OUT}`);
+}
+
+/** One shot at one size, in its own page. A broken shot is listed in `failed`; a refusal stops the run. */
+async function captureShot(context: BrowserContext, access: Access, shot: Shot, size: Size, role: string, query: ShotCtx["query"], records: ShotRecord[], failed: string[]): Promise<void> {
+  const page = await context.newPage();
+  try {
+    records.push(await take(page, access, shot, size, role, query));
+  } catch (err) {
+    if (err instanceof Refused) throw err;
+    // One broken shot does not stop the rest; the run still fails at the end.
+    failed.push(`${shotFile(shot, size)}: ${(err as Error).message.split("\n")[0]}`);
+    console.error(`  FAILED ${failed.at(-1)}`);
+  } finally {
+    await page.close();
+    if (shot.fresh) await context.close();
+  }
+}
+
+/** Every shot for one role, at each of its sizes. A broken shot is listed in `failed`; a refusal stops the run. */
+async function captureRole(browser: Browser, access: Access, role: PracticeRole | "signed-out", shots: Shot[], query: ShotCtx["query"], records: ShotRecord[], failed: string[]): Promise<void> {
+  const contexts = new Map<Size, BrowserContext>();
+  try {
+    // Sequential: shots of one role share its browser contexts and the session, and a page settles before its picture.
+    for (const shot of shots.filter((s) => s.role === role)) {
+      for (const size of shot.sizes) {
+        const context = shot.fresh ? await contextFor(browser, access, role, size) : (contexts.get(size) ?? (await open(browser, access, role, size, contexts)));
+        await captureShot(context, access, shot, size, role, query, records, failed);
+      }
+    }
+  } finally {
+    // Sequential: each context closes in turn; there are at most two.
+    for (const c of contexts.values()) await c.close();
+  }
 }
 
 async function open(browser: Browser, access: Access, role: PracticeRole | "signed-out", size: Size, contexts: Map<Size, BrowserContext>) {

@@ -19,6 +19,12 @@ export const FAKE_NOMINATIM_PLACES = {
   },
 } as const;
 
+/** The known places a search names, or none. */
+function placesFor(q: string) {
+  if (q.includes("12615")) return [FAKE_NOMINATIM_PLACES.pineHarbor];
+  return q.includes("174 lakeview") ? [FAKE_NOMINATIM_PLACES.lakeview] : [];
+}
+
 export function startFakeNominatim(port: number): Promise<Server> {
   const server = createServer((req, res) => {
     const q = (new URL(req.url ?? "/", "http://x").searchParams.get("q") ?? "").toLowerCase();
@@ -26,7 +32,7 @@ export function startFakeNominatim(port: number): Promise<Server> {
       res.writeHead(503, { "Content-Type": "text/plain" }).end("unavailable");
       return;
     }
-    const body = q.includes("12615") ? [FAKE_NOMINATIM_PLACES.pineHarbor] : q.includes("174 lakeview") ? [FAKE_NOMINATIM_PLACES.lakeview] : [];
+    const body = placesFor(q);
     res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(body));
   });
   return new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(server)));

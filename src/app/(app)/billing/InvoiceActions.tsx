@@ -20,7 +20,7 @@ export function InvoiceActions({
   canMark,
   canReport,
   vendorSaysPaid,
-}: {
+}: Readonly<{
   invoiceId: string;
   number: string;
   methods: Method[];
@@ -28,7 +28,7 @@ export function InvoiceActions({
   canMark: boolean;
   canReport: boolean;
   vendorSaysPaid: boolean;
-}) {
+}>) {
   const [open, setOpen] = useState<"mark" | "report" | null>(null);
   const [paidDate, setPaidDate] = useState(today);
   const [methodId, setMethodId] = useState(methods[0]?.id ?? "");
@@ -51,7 +51,8 @@ export function InvoiceActions({
             </Button>
           ) : null}
         </div>
-      ) : open === "mark" ? (
+      ) : null}
+      {open === "mark" ? (
         <form
           className="flex flex-col gap-3"
           onSubmit={(e) => {
@@ -88,7 +89,8 @@ export function InvoiceActions({
             </Button>
           </div>
         </form>
-      ) : (
+      ) : null}
+      {open === "report" ? (
         <form
           className="flex flex-col gap-3"
           onSubmit={(e) => {
@@ -108,7 +110,7 @@ export function InvoiceActions({
             </Button>
           </div>
         </form>
-      )}
+      ) : null}
       <ActionStatus result={result} />
     </div>
   );

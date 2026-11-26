@@ -29,14 +29,14 @@ import { effectiveSchedule, isSendDay, nextSendDay, queuedSendText, type SendSch
  * and closed). A queued date alone never queues a paid invoice, so a closed or unsent row with a stale one is never sent.
  */
 const QUEUED = or(eq(invoices.status, "ready_to_send"), and(eq(invoices.status, "paid"), eq(invoices.paidSendQueued, true), isNull(invoices.sentAt)))!;
-export const isQueued = (i: Pick<Invoice, "status" | "sentAt" | "paidSendQueued">) => i.status === "ready_to_send" || (i.status === "paid" && i.paidSendQueued && i.sentAt === null);
+const isQueued = (i: Pick<Invoice, "status" | "sentAt" | "paidSendQueued">) => i.status === "ready_to_send" || (i.status === "paid" && i.paidSendQueued && i.sentAt === null);
 /** Members of a sent batch: the unpaid invoices it sent, and the paid ones that went out as paid versions. */
 const IN_SENT_BATCH = or(eq(invoices.status, "sent"), and(eq(invoices.status, "paid"), eq(invoices.paidSendQueued, true)))!;
 
 /** Assignment statuses that still owe a bill: the person is on the detail and has not billed. */
 const UNRESOLVED = ["signed_up", "pending_short", "late_canceled"] as const;
 
-export type BatchInvoice = {
+type BatchInvoice = {
   id: string;
   number: string;
   jobId: string;
@@ -99,7 +99,7 @@ export type SendBatchInput = {
 export type SendBatchResult = { batchId: string; sent: number; held: number };
 
 /** The date a queued invoice is scheduled to go: the schedule's next send day on or after both its queued date and today. */
-export function queuedSendDay(schedule: SendSchedule, s: AgencySettings, readyAt: Date, now: Date): string {
+function queuedSendDay(schedule: SendSchedule, s: AgencySettings, readyAt: Date, now: Date): string {
   const ready = agencyDayKey(readyAt);
   const today = agencyDayKey(now);
   // Once the scheduled day has passed unsent, name the next real send day.
@@ -144,14 +144,10 @@ export async function queuePaidSend(tx: Tx, invoiceId: string, now: Date, actor:
   await tx.insert(invoiceEvents).values({ invoiceId, actorUserId: actor.userId, event: "ready_to_send", vendorVisible: false, at: now });
 }
 
-/**
- * Every vendor's queued invoices as batches, in a fixed number of queries. A detail whose wait-for-all-deputies
- * applies (its own setting, else the agency's) holds its invoices while anyone on it has not billed.
- */
-async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: string): Promise<VendorBatch[]> {
+function queuedRows(tx: Tx, vendorId?: string) {
   const conds = [QUEUED];
   if (vendorId) conds.push(eq(invoices.vendorId, vendorId));
-  const rows = await tx
+  return tx
     .select({ inv: invoices, job: jobs, payeeName: users.name, vendorName: vendors.name, vendorSchedule: vendors.invoiceSendSchedule })
     .from(invoices)
     .innerJoin(assignments, eq(assignments.id, invoices.assignmentId))
@@ -160,76 +156,76 @@ async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: stri
     .innerJoin(vendors, eq(vendors.id, invoices.vendorId))
     .where(and(...conds))
     .orderBy(asc(vendors.name), asc(vendors.id), asc(jobs.startAt), asc(invoices.number));
-  if (rows.length === 0) return [];
+}
+type QueuedRow = Awaited<ReturnType<typeof queuedRows>>[number];
 
-  const waitJobIds = [...new Set(rows.filter((r) => r.job.waitForAllDeputies ?? s.waitForAllDeputies).map((r) => r.job.id))];
-  const open = waitJobIds.length
-    ? await tx
-        .select({ jobId: assignments.jobId, name: users.name })
-        .from(assignments)
-        .innerJoin(users, eq(users.id, assignments.userId))
-        .where(and(inArray(assignments.jobId, waitJobIds), inArray(assignments.status, [...UNRESOLVED])))
-        .orderBy(asc(users.name))
-    : [];
-  const waitingNames = new Map<string, string[]>();
-  for (const o of open) waitingNames.set(o.jobId, [...(waitingNames.get(o.jobId) ?? []), o.name]);
-  // A detail's invoices go together: one still in review holds the rest.
-  const reviewing = waitJobIds.length
-    ? await tx
-        .select({ jobId: assignments.jobId, name: users.name })
-        .from(invoices)
-        .innerJoin(assignments, eq(assignments.id, invoices.assignmentId))
-        .innerJoin(users, eq(users.id, invoices.payeeUserId))
-        .where(and(inArray(assignments.jobId, waitJobIds), eq(invoices.status, "pending_review")))
-        .orderBy(asc(users.name))
-    : [];
-  const reviewNames = new Map<string, string[]>();
-  for (const r of reviewing) reviewNames.set(r.jobId, [...(reviewNames.get(r.jobId) ?? []), r.name]);
+function namesByJob(rows: Array<{ jobId: string; name: string }>): Map<string, string[]> {
+  const byJob = new Map<string, string[]>();
+  for (const r of rows) byJob.set(r.jobId, [...(byJob.get(r.jobId) ?? []), r.name]);
+  return byJob;
+}
 
-  const payeeIds = [...new Set(rows.map((r) => r.inv.payeeUserId))];
-  const withW9 = new Set(
-    (await tx.select({ userId: w9s.userId }).from(w9s).where(and(inArray(w9s.userId, payeeIds), eq(w9s.current, true)))).map((w) => w.userId),
-  );
+/**
+ * On the details that wait for all deputies: per detail, who has not billed yet, and whose invoice is still in
+ * review (a detail's invoices go together, so one still in review holds the rest).
+ */
+async function holdingNames(tx: Tx, waitJobIds: string[]): Promise<{ waitingNames: Map<string, string[]>; reviewNames: Map<string, string[]> }> {
+  if (waitJobIds.length === 0) return { waitingNames: new Map(), reviewNames: new Map() };
+  const open = await tx
+    .select({ jobId: assignments.jobId, name: users.name })
+    .from(assignments)
+    .innerJoin(users, eq(users.id, assignments.userId))
+    .where(and(inArray(assignments.jobId, waitJobIds), inArray(assignments.status, [...UNRESOLVED])))
+    .orderBy(asc(users.name));
+  const reviewing = await tx
+    .select({ jobId: assignments.jobId, name: users.name })
+    .from(invoices)
+    .innerJoin(assignments, eq(assignments.id, invoices.assignmentId))
+    .innerJoin(users, eq(users.id, invoices.payeeUserId))
+    .where(and(inArray(assignments.jobId, waitJobIds), eq(invoices.status, "pending_review")))
+    .orderBy(asc(users.name));
+  return { waitingNames: namesByJob(open), reviewNames: namesByJob(reviewing) };
+}
 
-  const today = agencyDayKey(now);
-  const out = new Map<string, VendorBatch>();
-  for (const { inv, job, payeeName, vendorName, vendorSchedule } of rows) {
-    let b = out.get(inv.vendorId);
-    if (!b) {
-      const schedule = effectiveSchedule(vendorSchedule, s);
-      // Rows are per vendor, oldest job first; the oldest queued date decides the send day below.
-      b = { vendorId: inv.vendorId, vendorName, schedule, sendDay: "", due: false, invoices: [], waiting: [], missingW9: [], totalCents: 0, lastSendFailed: null };
-      out.set(inv.vendorId, b);
-    }
-    const names = waitingNames.get(job.id) ?? [];
-    const inReview = reviewNames.get(job.id) ?? [];
-    const waiting = names.length > 0 || inReview.length > 0;
-    b.invoices.push({
-      id: inv.id,
-      number: formatInvoiceNumber(s.invoiceNumberPrefix, inv.number),
-      jobId: job.id,
-      jobNumber: job.number,
-      jobTitle: job.title,
-      jobStartAt: job.startAt,
-      payeeUserId: inv.payeeUserId,
-      payeeName,
-      totalCents: inv.totalCents,
-      attachW9: inv.attachW9,
-      hasW9: withW9.has(inv.payeeUserId),
-      waiting,
-      paid: inv.status === "paid",
-    });
-    if (!waiting && inv.status !== "paid") b.totalCents += inv.totalCents;
-    if (waiting && !b.waiting.some((w) => w.jobId === job.id)) b.waiting.push({ jobId: job.id, jobNumber: job.number, jobTitle: job.title, names, inReview });
-    if (!withW9.has(inv.payeeUserId) && !b.missingW9.some((m) => m.userId === inv.payeeUserId)) b.missingW9.push({ userId: inv.payeeUserId, name: payeeName });
-    const readyKey = agencyDayKey(inv.readyAt ?? inv.updatedAt);
-    const day = nextSendDay(b.schedule, s, readyKey);
-    if (!b.sendDay || day < b.sendDay) b.sendDay = day;
-  }
-  for (const b of out.values()) b.due = b.sendDay <= today;
+/** Adds one queued invoice to its vendor's batch: the list, the total due, the waiting details, missing W-9s and the send day. */
+function addToBatch(
+  b: VendorBatch,
+  row: QueuedRow,
+  held: { names: string[]; inReview: string[] },
+  hasW9: boolean,
+  s: AgencySettings,
+): void {
+  const { inv, job, payeeName } = row;
+  const { names, inReview } = held;
+  const waiting = names.length > 0 || inReview.length > 0;
+  b.invoices.push({
+    id: inv.id,
+    number: formatInvoiceNumber(s.invoiceNumberPrefix, inv.number),
+    jobId: job.id,
+    jobNumber: job.number,
+    jobTitle: job.title,
+    jobStartAt: job.startAt,
+    payeeUserId: inv.payeeUserId,
+    payeeName,
+    totalCents: inv.totalCents,
+    attachW9: inv.attachW9,
+    hasW9,
+    waiting,
+    paid: inv.status === "paid",
+  });
+  if (!waiting && inv.status !== "paid") b.totalCents += inv.totalCents;
+  if (waiting && !b.waiting.some((w) => w.jobId === job.id)) b.waiting.push({ jobId: job.id, jobNumber: job.number, jobTitle: job.title, names, inReview });
+  if (!hasW9 && !b.missingW9.some((m) => m.userId === inv.payeeUserId)) b.missingW9.push({ userId: inv.payeeUserId, name: payeeName });
+  const readyKey = agencyDayKey(inv.readyAt ?? inv.updatedAt);
+  const day = nextSendDay(b.schedule, s, readyKey);
+  if (!b.sendDay || day < b.sendDay) b.sendDay = day;
+}
 
-  // A failed batch email puts its invoices back here. An invoice shows the failure while it is the newest of its
-  // queue events (written order, so a later re-queue after a re-bill clears it).
+/**
+ * A failed batch email puts its invoices back here. An invoice shows the failure while it is the newest of its
+ * queue events (written order, so a later re-queue after a re-bill clears it).
+ */
+async function markLastSendFailures(tx: Tx, rows: QueuedRow[], out: Map<string, VendorBatch>): Promise<void> {
   const queueEvents = await tx
     .select({ invoiceId: invoiceEvents.invoiceId, event: invoiceEvents.event, note: invoiceEvents.note })
     .from(invoiceEvents)
@@ -243,6 +239,41 @@ async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: stri
     const b = out.get(rows.find((x) => x.inv.id === e.invoiceId)!.inv.vendorId)!;
     b.lastSendFailed ??= e.note ?? "The last send failed.";
   }
+}
+
+/**
+ * Every vendor's queued invoices as batches, in a fixed number of queries. A detail whose wait-for-all-deputies
+ * applies (its own setting, else the agency's) holds its invoices while anyone on it has not billed.
+ */
+async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: string): Promise<VendorBatch[]> {
+  const rows = await queuedRows(tx, vendorId);
+  if (rows.length === 0) return [];
+
+  const waitJobIds = [...new Set(rows.filter((r) => r.job.waitForAllDeputies ?? s.waitForAllDeputies).map((r) => r.job.id))];
+  const { waitingNames, reviewNames } = await holdingNames(tx, waitJobIds);
+
+  const payeeIds = [...new Set(rows.map((r) => r.inv.payeeUserId))];
+  const withW9 = new Set(
+    (await tx.select({ userId: w9s.userId }).from(w9s).where(and(inArray(w9s.userId, payeeIds), eq(w9s.current, true)))).map((w) => w.userId),
+  );
+
+  const today = agencyDayKey(now);
+  const out = new Map<string, VendorBatch>();
+  for (const row of rows) {
+    const { inv, job, vendorName, vendorSchedule } = row;
+    let b = out.get(inv.vendorId);
+    if (!b) {
+      const schedule = effectiveSchedule(vendorSchedule, s);
+      // Rows are per vendor, oldest job first; the oldest queued date decides the send day below.
+      b = { vendorId: inv.vendorId, vendorName, schedule, sendDay: "", due: false, invoices: [], waiting: [], missingW9: [], totalCents: 0, lastSendFailed: null };
+      out.set(inv.vendorId, b);
+    }
+    const held = { names: waitingNames.get(job.id) ?? [], inReview: reviewNames.get(job.id) ?? [] };
+    addToBatch(b, row, held, withW9.has(inv.payeeUserId), s);
+  }
+  for (const b of out.values()) b.due = b.sendDay <= today;
+
+  await markLastSendFailures(tx, rows, out);
   return [...out.values()];
 }
 
@@ -295,6 +326,7 @@ export async function sendInvoiceBatch(actor: Actor, tx: Tx, vendorId: string, i
     .insert(invoiceBatches)
     .values({ vendorId, sentBy: actor.userId, sentAt: now, earlyReason: early ? reason : null, attachW9ForAll: input.attachW9ForAll, emailStatus: "queued" })
     .returning();
+  // Sequential: updates, events and audit rows for each invoice are written in order in this transaction.
   for (const i of included) {
     const before = current.get(i.id)!;
     // A coordinator's "attach for all" adds the W-9 only where one is on file; a missing one is sent without.
@@ -359,8 +391,8 @@ export async function setWaitForAllDeputies(actor: Actor, tx: Tx, jobId: string,
 
 const PURPOSE = "sending invoices";
 
-/** Builds the batch email at send time: cover summary, every invoice PDF and each W-9 asked for (reads audited as the sender). Exported for tests. */
-export async function buildBatchMessage(tx: Tx, batchId: string, storage?: Storage): Promise<OutgoingEmail | null> {
+/** Builds the batch email at send time: cover summary, every invoice PDF and each W-9 asked for (reads audited as the sender). */
+async function buildBatchMessage(tx: Tx, batchId: string, storage?: Storage): Promise<OutgoingEmail | null> {
   const [batch] = await tx.select().from(invoiceBatches).where(eq(invoiceBatches.id, batchId));
   if (!batch) throw new NotFoundError("Invoice batch not found.");
   const settings = await getSettings(tx);
@@ -379,6 +411,7 @@ export async function buildBatchMessage(tx: Tx, batchId: string, storage?: Stora
   const attachments: NonNullable<OutgoingEmail["attachments"]> = [];
   const rows = [];
   const w9Names: string[] = [];
+  // Sequential: the reads share one transaction, and each W-9 read writes its own audit row.
   for (const inv of members) {
     const data = await buildInvoicePdfData(tx, inv.id, storage);
     attachments.push({ filename: `${data.number}.pdf`, content: await renderInvoicePdf(data), contentType: "application/pdf" });
@@ -403,12 +436,24 @@ export async function buildBatchMessage(tx: Tx, batchId: string, storage?: Stora
   };
 }
 
+const DELIMITER = /[\s,;<>"']/;
+
+/**
+ * The first `limit` characters of a message, cut back to the last delimiter so no token or address is split (a
+ * split piece could slip past the redaction patterns). With no delimiter in reach, the whole start reads as redacted.
+ */
+function readStart(message: string, limit: number): string {
+  if (message.length <= limit || DELIMITER.test(message[limit])) return message.slice(0, limit);
+  for (let i = limit - 1; i >= 0; i--) if (DELIMITER.test(message[i])) return message.slice(0, i);
+  return "[redacted]";
+}
+
 /**
  * A provider error safe to show staff: email addresses, key or token values and long secret-looking strings are
- * replaced, and it is kept short.
+ * replaced, and it is kept short. Only the start of a very long message is read, so the patterns stay fast.
  */
 export function redactProviderError(message: string): string {
-  const out = message
+  const out = readStart(message, 2000)
     .replace(/[^\s<>"'@,;]+@[^\s<>"'@,;]+\.[^\s<>"'@,;]+/g, "[email]")
     // An Authorization value is dropped whole (scheme and credential), up to the end of its clause.
     .replace(/\b(authorization)(\s*[=:]\s*)[^\r\n,;]*/gi, "$1$2[redacted]")
@@ -442,7 +487,7 @@ async function markBatchSent(batchId: string): Promise<void> {
 async function markBatchSkipped(batchId: string): Promise<void> {
   await withTx(async (tx) => {
     const [batch] = await tx.select().from(invoiceBatches).where(eq(invoiceBatches.id, batchId));
-    if (!batch || batch.emailStatus !== "queued") return;
+    if (batch?.emailStatus !== "queued") return;
     await tx.update(invoiceBatches).set({ emailStatus: "not_queued" }).where(eq(invoiceBatches.id, batchId));
     await recordAudit(tx, {
       actor: "system",
@@ -493,6 +538,7 @@ async function markBatchFailed(batchId: string, reason: string, summary: string)
     // A paid invoice that went out as its paid version is simply queued again, still paid. (One that went out unpaid
     // and was settled during the retry window is not a member here: it stays as it is, as before.)
     const reached = members.filter((m) => m.status !== "paid" && paidIds.has(m.id));
+    // Sequential: writes in this transaction.
     for (const inv of reached) {
       await tx.update(invoices).set({ emailStatus: "failed" }).where(eq(invoices.id, inv.id));
       await tx.insert(invoiceEvents).values({
@@ -504,6 +550,7 @@ async function markBatchFailed(batchId: string, reason: string, summary: string)
       });
     }
     const requeued = members.filter((m) => !reached.includes(m));
+    // Sequential: writes in this transaction.
     for (const inv of requeued) {
       const back = inv.status === "paid" ? "paid" : "ready_to_send";
       await tx.update(invoices).set({ status: back, sentAt: null, batchId: null, emailStatus: "not_queued" }).where(eq(invoices.id, inv.id));
@@ -557,7 +604,7 @@ export async function deliverInvoiceBatchEmail(batchId: string, o: { finalAttemp
     const skip = await withTx(async (tx) => {
       const [b] = await tx.select({ s: invoiceBatches.emailStatus }).from(invoiceBatches).where(eq(invoiceBatches.id, batchId));
       // Only a queued batch is sent: a sent, failed (requeued) or skipped one is finished.
-      return !b || b.s !== "queued";
+      return b?.s !== "queued";
     });
     if (skip) return;
     const msg = await withTx((tx) => buildBatchMessage(tx, batchId, o.storage));
@@ -575,6 +622,7 @@ export async function deliverInvoiceBatchEmail(batchId: string, o: { finalAttemp
     if (o.finalAttempt) await markBatchFailed(batchId, reason, SUMMARY_DELIVERY);
     throw err;
   }
+  // Sequential: each attempt runs only after the previous one failed.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await markBatchSent(batchId);

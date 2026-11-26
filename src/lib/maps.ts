@@ -18,9 +18,10 @@ export function mapsUrls(p: Place): Record<MapsApp, string> {
   const ll = pinned ? `${p.lat},${p.lng}` : "";
   const q = encodeURIComponent(pinned ? ll : (p.address ?? ""));
   const name = encodeURIComponent(p.address?.trim() || ll);
+  const appleLl = pinned ? `&ll=${ll}` : "";
   return {
     google: `https://www.google.com/maps/search/?api=1&query=${q}`,
-    apple: `https://maps.apple.com/?q=${name}${pinned ? `&ll=${ll}` : ""}`,
+    apple: `https://maps.apple.com/?q=${name}${appleLl}`,
     osm: pinned ? `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}` : `https://www.openstreetmap.org/search?query=${q}`,
   };
 }

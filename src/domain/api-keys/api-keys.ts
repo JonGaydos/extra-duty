@@ -8,11 +8,11 @@ import { assertCan } from "../auth/policy";
 import { loadActiveActor } from "../auth/sign-in-policy";
 import { NotFoundError, UnauthenticatedError, ValidationError } from "../errors";
 
-export const API_KEY_SCOPES = ["read", "write", "w9"] as const;
+const API_KEY_SCOPES = ["read", "write", "w9"] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 /** Every key starts with this, so a key is easy to recognize (and to find if it leaks). */
-export const API_KEY_PREFIX = "ed_live_";
+const API_KEY_PREFIX = "ed_live_";
 /** Characters of the key kept in the clear to tell keys apart: the marker plus 6. */
 const SHOWN = API_KEY_PREFIX.length + 6;
 export const API_KEY_RATE_PER_MINUTE = 600;
@@ -129,7 +129,7 @@ export async function authenticateApiKey(tx: Tx, raw: string, request: { method:
     throw new UnauthenticatedError("The API key is not valid. It may have been revoked or expired.");
   }
   const actor = await loadActiveActor(tx, row.createdBy);
-  if (!actor || actor.role !== "admin") throw new UnauthenticatedError("The admin who made this API key is no longer active.");
+  if (actor?.role !== "admin") throw new UnauthenticatedError("The admin who made this API key is no longer active.");
   if (!takeApiKeyRequest(row.id, now.getTime())) throw new RateLimitedError();
   await tx.update(apiKeys).set({ lastUsedAt: now }).where(eq(apiKeys.id, row.id));
   await recordAudit(tx, {

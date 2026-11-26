@@ -16,7 +16,7 @@ export function typedCents(v: string): number | null {
  * Shown under the rate when it is outside the agency range. On a single detail a coordinator or admin can
  * approve it with a reason; a series edit or several dates cannot.
  */
-export function RateRangeNotice({ rateCents, range, reason, onReason, canApprove, approved }: { rateCents: number | null; range: RateRange; reason: string; onReason: (v: string) => void; canApprove: boolean; approved?: boolean }) {
+export function RateRangeNotice({ rateCents, range, reason, onReason, canApprove, approved }: Readonly<{ rateCents: number | null; range: RateRange; reason: string; onReason: (v: string) => void; canApprove: boolean; approved?: boolean }>) {
   if (rateCents === null || !outsideRange(rateCents, range) || approved) return null;
   return (
     <div className="flex flex-col gap-2.5 md:col-span-2">

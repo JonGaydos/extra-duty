@@ -23,7 +23,12 @@ const isWebp = (b: Buffer) => b.length >= 12 && b.subarray(0, 4).toString("latin
 const isSvg = (b: Buffer) => /<svg[\s>]/i.test(b.subarray(0, 4096).toString("utf8"));
 
 type Kind = "PNG" | "JPG" | "WebP" | "SVG";
-const kindOf = (b: Buffer): Kind | null => (isPng(b) ? "PNG" : isJpeg(b) ? "JPG" : isWebp(b) ? "WebP" : isSvg(b) ? "SVG" : null);
+function kindOf(b: Buffer): Kind | null {
+  if (isPng(b)) return "PNG";
+  if (isJpeg(b)) return "JPG";
+  if (isWebp(b)) return "WebP";
+  return isSvg(b) ? "SVG" : null;
+}
 
 /** Only same-document references (#id) and inline raster images may stay in an SVG. */
 const INSIDE = String.raw`(?!#|data:image\/(?:png|jpeg|gif|webp)[;,])`;

@@ -1023,7 +1023,7 @@ quiet hours. Alerts sent by coordinators always arrive.
 
 ### Look
 
-- Mockups: docs/mockups/project/ (row D is the chosen direction).
+- Design: DESIGN.md (built from the approved mockup direction, row D); screens as built are in the manual screenshots, docs/manuals/images/.
 - Daylight layout: light, roomy cards, blue accent, Inter type.
 - Roster as a table (name, rank, status, signed up; cancellations struck
   through).

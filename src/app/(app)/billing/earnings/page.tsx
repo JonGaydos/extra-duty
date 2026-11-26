@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Earnings" };
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** The person's own earnings and tax summary. */
-export default async function EarningsPage({ searchParams }: Props) {
+export default async function EarningsPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const sp = await searchParams;
   return (

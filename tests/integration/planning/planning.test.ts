@@ -23,6 +23,10 @@ import { calendarFeedsTick } from "@/jobs/calendar-feeds";
 import { SCHEDULE } from "@/jobs/schedule";
 import { watchReleaseTick } from "@/jobs/backup-window";
 import { decryptSecret } from "@/lib/crypto/secrets";
+import { byText } from "@/lib/sort";
+import { asAsync } from "../../setup/streams";
+
+// Fake resolvers and requests are async to match the calendar fetch dependencies; they answer at once.
 
 const NOW = agencyInstant(2026, 11, 23, 9, 0);
 const at = (m: number, d: number, h: number, min = 0) => agencyInstant(2026, m, d, h, min);
@@ -119,7 +123,7 @@ describe("personal planning", () => {
 
       // 7:00 PM to 8:00 PM Central (01:00Z to 02:00Z) on Dec 14 sits inside "Roomy".
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(icsAt("20261215T010000Z", "20261215T020000Z")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(icsAt("20261215T010000Z", "20261215T020000Z"))) });
       expect((await syncCalendarNow(me, run, NOW)).ok).toBe(true);
       expect(await run((tx) => listJobs(me, tx, { ...range, onlyWorkable: true }, 1))).toEqual([]);
     });
@@ -255,6 +259,19 @@ describe("personal planning", () => {
       expect(titles).not.toContain("Nov 25");
     });
 
+    test("a flexible detail is recommended at times that clear the deputy's duty", async () => {
+      const me = await f.person();
+      await run((tx) => setWorkSchedule(me, tx, weeklyInput({ shiftStart: "06:00", shiftEnd: "09:00", weekdays: [1], bufferMinutes: 0 })));
+      const flex = { earliestStartAt: at(11, 30, 6), latestEndAt: at(11, 30, 20), allowShorter: false };
+      await mk({ title: "Flex Monday", startAt: at(11, 30, 8), endAt: at(11, 30, 14), flex });
+      await mk({ title: "Fixed Monday", startAt: at(11, 30, 8), endAt: at(11, 30, 14) });
+      await run((tx) => setEarningsGoal(me, tx, 3_000_000));
+      const recs = await run((tx) => recommendationsFor(me, tx, NOW));
+      expect(recs.map((r) => r.title)).not.toContain("Fixed Monday");
+      const pick = recs.find((r) => r.title === "Flex Monday");
+      expect(pick?.placement).toEqual({ startAt: at(11, 30, 9), endAt: at(11, 30, 15) });
+    });
+
     test("goal validation", async () => {
       const me = await f.person();
       await expect(run((tx) => setEarningsGoal(me, tx, -5))).rejects.toBeInstanceOf(ValidationError);
@@ -297,7 +314,7 @@ describe("personal planning", () => {
       await run((tx) => hideVendor(me, tx, hiddenVendorId));
       await run((tx) => setEarningsGoal(me, tx, 123_456));
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(ICS("Dentist appointment")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(ICS("Dentist appointment"))) });
       expect((await syncCalendarNow(me, run, NOW)).ok).toBe(true);
 
       for (const viewer of [other, f.coord]) {
@@ -321,8 +338,8 @@ describe("personal planning", () => {
         expect(dump).not.toContain(secret);
       }
       const planning = rows.filter((r) => r.action.startsWith("planning."));
-      expect(planning.map((r) => r.action).sort()).toEqual(
-        ["planning.calendar_feed_set", "planning.calendar_sync", "planning.earnings_goal_set", "planning.exception_add", "planning.schedule_set", "planning.vendor_hide"].sort(),
+      expect(planning.map((r) => r.action).sort(byText)).toEqual(
+        ["planning.calendar_feed_set", "planning.calendar_sync", "planning.earnings_goal_set", "planning.exception_add", "planning.schedule_set", "planning.vendor_hide"].sort(byText),
       );
       for (const r of planning) expect(r.entityId).toBe(me.userId);
     });
@@ -351,7 +368,7 @@ describe("personal planning", () => {
   });
 
   describe("calendar feed", () => {
-    const okRequest = (text: string) => async () => okResponse(text);
+    const okRequest = (text: string) => () => Promise.resolve(okResponse(text));
 
     test("the link is stored encrypted and https only; webcal is accepted", async () => {
       const me = await f.person();
@@ -371,10 +388,10 @@ describe("personal planning", () => {
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
       let connected = false;
       setCalendarFetchDeps({
-        resolve: async () => ["10.0.0.5"],
-        request: async () => {
+        resolve: () => Promise.resolve(["10.0.0.5"]),
+        request: () => {
           connected = true;
-          return okResponse(ICS("x"));
+          return Promise.resolve(okResponse(ICS("x")));
         },
       });
       const result = await syncCalendarNow(me, run, NOW);
@@ -388,11 +405,11 @@ describe("personal planning", () => {
     test("success replaces the busy rows; a 500 keeps the previous rows and records the error; sync is limited to once per 15 minutes", async () => {
       const me = await f.person();
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: okRequest(ICS("Court")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: okRequest(ICS("Court")) });
       expect((await syncCalendarNow(me, run, NOW)).ok).toBe(true);
       expect((await run((tx) => listCalendarBusy(me, tx, me.userId))).map((b) => b.title)).toEqual(["Court"]);
 
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => ({ status: 500, location: null, body: emptyBody(), close: () => {} }) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve({ status: 500, location: null, body: emptyBody(), close: () => {} }) });
       const early = new Date(NOW.getTime() + 5 * 60_000);
       await expect(syncCalendarNow(me, run, early)).rejects.toMatchObject({
         checks: [expect.objectContaining({ ok: false, message: "You can sync again in 10 minutes" })],
@@ -406,7 +423,7 @@ describe("personal planning", () => {
       const status = await run((tx) => getCalendarFeedStatus(me, tx, me.userId));
       expect(status.lastError).toBe("Could not fetch the calendar: the server answered 500");
 
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: okRequest(ICS("Training")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: okRequest(ICS("Training")) });
       const third = new Date(later.getTime() + 20 * 60_000);
       expect((await syncCalendarNow(me, run, third)).ok).toBe(true);
       expect((await run((tx) => listCalendarBusy(me, tx, me.userId))).map((b) => b.title)).toEqual(["Training"]);
@@ -418,14 +435,14 @@ describe("personal planning", () => {
       await expect(syncCalendarNow(me, run, NOW)).rejects.toBeInstanceOf(ValidationError);
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
       setCalendarFetchDeps({
-        resolve: async () => {
-          throw new CalendarFetchError("the address could not be found");
+        resolve: () => {
+          return Promise.reject(new CalendarFetchError("the address could not be found"));
         },
         request: okRequest(""),
       });
       expect(await syncCalendarNow(me, run, NOW)).toEqual({ ok: false, lastError: "Could not fetch the calendar: the address could not be found" });
       const later = new Date(NOW.getTime() + 20 * 60_000);
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: okRequest("this is not a calendar") });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: okRequest("this is not a calendar") });
       expect(await syncCalendarNow(me, run, later)).toEqual({ ok: false, lastError: "Could not fetch the calendar: the file is not a valid calendar" });
     });
 
@@ -437,7 +454,7 @@ describe("personal planning", () => {
       await run((tx) => setCalendarFeed(a, tx, "https://a.example.com/a.ics"));
       await run((tx) => setCalendarFeed(b, tx, "https://b.example.com/b.ics"));
       setCalendarFetchDeps({
-        resolve: async (host) => (host === "b.example.com" ? ["10.1.1.1"] : [PUBLIC]),
+        resolve: (host) => Promise.resolve(host === "b.example.com" ? ["10.1.1.1"] : [PUBLIC]),
         request: okRequest(ICS("From tick")),
       });
       const out = await calendarFeedsTick(NOW, run);
@@ -456,7 +473,7 @@ describe("personal planning", () => {
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
       let fetches = 0;
       setCalendarFetchDeps({
-        resolve: async () => [PUBLIC],
+        resolve: () => Promise.resolve([PUBLIC]),
         request: async () => {
           fetches++;
           await delay(150);
@@ -475,7 +492,7 @@ describe("personal planning", () => {
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
       let locked: boolean | null = null;
       setCalendarFetchDeps({
-        resolve: async () => [PUBLIC],
+        resolve: () => Promise.resolve([PUBLIC]),
         request: async () => {
           // If the feed row were still locked, this update (on another connection) would block until the fetch ended.
           const t = Date.now();
@@ -491,7 +508,7 @@ describe("personal planning", () => {
     test("setting or removing the link does not reset the 15-minute sync limit", async () => {
       const me = await f.person();
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(ICS("Once")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(ICS("Once"))) });
       expect((await syncCalendarNow(me, run, NOW)).ok).toBe(true);
       const soon = new Date(NOW.getTime() + 60_000);
       await run((tx) => setCalendarFeed(me, tx, FEED_URL));
@@ -511,11 +528,11 @@ describe("personal planning", () => {
         "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//EN\r\n" +
         Array.from({ length: n }, (_, i) => `BEGIN:VEVENT\r\nUID:e${i}@t\r\nDTSTART:20261201T${String(Math.floor(i / 60) % 24).padStart(2, "0")}${String(i % 60).padStart(2, "0")}00Z\r\nDTEND:20261201T${String(Math.floor(i / 60) % 24).padStart(2, "0")}${String(i % 60).padStart(2, "0")}30Z\r\nSUMMARY:E${i}\r\nEND:VEVENT\r\n`).join("") +
         "END:VCALENDAR";
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(many(1200)) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(many(1200))) });
       expect((await syncCalendarNow(me, run, NOW)).ok).toBe(true);
       expect(await run((tx) => listCalendarBusy(me, tx, me.userId))).toHaveLength(1200);
 
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(many(5001)) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(many(5001))) });
       const later = new Date(NOW.getTime() + 20 * 60_000);
       expect(await syncCalendarNow(me, run, later)).toEqual({ ok: false, lastError: "Could not fetch the calendar: the calendar is too large" });
       expect(await run((tx) => listCalendarBusy(me, tx, me.userId))).toHaveLength(1200);
@@ -540,7 +557,7 @@ describe("personal planning", () => {
       const [a, b] = [await f.person(), await f.person()];
       await run((tx) => setCalendarFeed(a, tx, "https://a.example.com/a.ics"));
       await run((tx) => setCalendarFeed(b, tx, "https://b.example.com/b.ics"));
-      setCalendarFetchDeps({ resolve: async () => [PUBLIC], request: async () => okResponse(ICS("Second feed")) });
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve(okResponse(ICS("Second feed"))) });
       const log = vi.spyOn(console, "error").mockImplementation(() => {});
       let calls = 0;
       // Call 1 lists the feeds; 2 and 3 are the first feed's read and write. Fail the write.
@@ -584,7 +601,7 @@ function okResponse(text: string): HopResponse {
   return {
     status: 200,
     location: null,
-    body: { async *[Symbol.asyncIterator]() { yield new TextEncoder().encode(text); } },
+    body: asAsync([new TextEncoder().encode(text)]),
     close: () => {},
   };
 }

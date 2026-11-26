@@ -15,8 +15,8 @@ const STEP = 0.0001;
  * pressing the arrow keys moves it; every move calls `onMove`. With no point yet the map opens on the agency's
  * default center and the first tap places the pin.
  */
-export function PinPicker({ config, point, onMove, label }: { config: MapConfig; point: Point | null; onMove: (p: Point) => void; label: string }) {
-  const box = useRef<HTMLDivElement>(null);
+export function PinPicker({ config, point, onMove, label }: Readonly<{ config: MapConfig; point: Point | null; onMove: (p: Point) => void; label: string }>) {
+  const box = useRef<HTMLElement>(null);
   const map = useRef<LeafletMap | null>(null);
   const marker = useRef<Marker | null>(null);
   const move = useRef(onMove);
@@ -91,7 +91,7 @@ export function PinPicker({ config, point, onMove, label }: { config: MapConfig;
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div ref={box} role="region" aria-label={`Map: ${label}`} data-testid="pin-map" className="ed-map relative z-0 h-48 w-full overflow-hidden rounded-md border border-line" />
+      <section ref={box} aria-label={`Map: ${label}`} data-testid="pin-map" className="ed-map relative z-0 h-48 w-full overflow-hidden rounded-md border border-line" />
       <p className="m-0 text-xs text-muted">{hasPoint ? "Drag the pin, or tap the map, to put it exactly on the spot." : "Tap the map to place the pin."}</p>
     </div>
   );

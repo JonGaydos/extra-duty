@@ -25,7 +25,7 @@ export type MapJob = {
 };
 
 /** The map and the card for the chosen pin, which links to the detail. */
-export function MapView({ jobs, tileUrl, attribution, center }: { jobs: MapJob[]; tileUrl: string; attribution: string; center: { lat: number; lng: number; zoom: number } }) {
+export function MapView({ jobs, tileUrl, attribution, center }: Readonly<{ jobs: MapJob[]; tileUrl: string; attribution: string; center: { lat: number; lng: number; zoom: number } }>) {
   const [chosen, setChosen] = useState<string | null>(null);
   const pins: MapPin[] = useMemo(
     () => jobs.map((j) => ({ id: j.id, lat: j.lat, lng: j.lng, label: payRangeText(j, j.upTo), name: `${j.vendorName}, ${j.when}, ${payRangeText(j, j.upTo)}${j.held ? ", held" : ""}` })),
@@ -35,7 +35,7 @@ export function MapView({ jobs, tileUrl, attribution, center }: { jobs: MapJob[]
   return (
     <div className="flex flex-col gap-3">
       <LeafletMap tileUrl={tileUrl} attribution={attribution} pins={pins} label="Map of details" onSelect={setChosen} center={center} className="h-[55vh] min-h-80" />
-      <div role="status" aria-live="polite">
+      <output className="block" aria-live="polite">
         {job ? (
           <Card tone="accent">
             <div className="flex items-start justify-between gap-3">
@@ -58,7 +58,7 @@ export function MapView({ jobs, tileUrl, attribution, center }: { jobs: MapJob[]
         ) : (
           <p className="m-0 text-sm text-muted">Choose a pin to see the detail.</p>
         )}
-      </div>
+      </output>
     </div>
   );
 }

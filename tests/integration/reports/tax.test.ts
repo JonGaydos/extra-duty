@@ -79,7 +79,23 @@ describe("taxYearSummary", () => {
     const text = (await parser.getText()).text;
     await parser.destroy();
     expect(text).toMatch(/Jan 10,\s*2027/);
-    expect(text.replace(/-\n/g, "")).toMatch(/Closed as paid by\s*coordinator/);
+    expect(text.replaceAll("-\n", "")).toMatch(/Closed as paid by\s*coordinator/);
+  });
+
+  test("rows run paid, unpaid, written off, each by job date then invoice number", async () => {
+    const s = await run((tx) => taxYearSummary(fx.coord, tx, fx.deputy.userId, 2026));
+    expect(s.rows.map((r) => [r.section, r.jobDate])).toEqual([
+      ["paid", "2026-02-05"],
+      ["paid", "2026-03-03"],
+      ["unpaid", "2026-12-28"],
+      ["written_off", "2026-07-05"],
+    ]);
+    const person = await fx.person();
+    const late = await fx.mkInvoice({ person, start: at(2028, 3, 9, 17), minutes: 60, status: "sent" });
+    const first = await fx.mkInvoice({ person, start: at(2028, 3, 9, 8), minutes: 60, status: "sent" });
+    const early = await fx.mkInvoice({ person, start: at(2028, 3, 2, 17), minutes: 60, status: "sent" });
+    const rows = (await run((tx) => taxYearSummary(fx.coord, tx, person.userId, 2028))).rows;
+    expect(rows.map((r) => r.invoiceId)).toEqual([early.id, late.id, first.id]);
   });
 
   test("two vendors with the same name stay separate", async () => {

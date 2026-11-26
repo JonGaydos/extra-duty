@@ -35,48 +35,108 @@ function snippet(body: string): string {
 
 const isCoordinator = (a: Actor) => a.role === "coordinator" || a.role === "admin";
 
+/** Refuses "all" unless the actor may message everyone. */
+async function assertMayMessageAll(actor: Actor, tx: Tx): Promise<void> {
+  assertCan(actor, "message.sendAll");
+  if (!isCoordinator(actor) && !(await getSettings(tx)).personnelCanMessageAll) {
+    throw new ForbiddenError("Messaging all users is turned off.");
+  }
+}
+
+async function namedUsers(tx: Tx, userIds: unknown): Promise<string[]> {
+  const named = checkIds(userIds, "A recipient");
+  const found = named.length ? await tx.select({ id: users.id, role: users.role }).from(users).where(inArray(users.id, named)) : [];
+  if (found.length !== new Set(named).size || found.some((u) => u.role === "vendor")) throw new ValidationError("One or more recipients cannot be messaged.");
+  return named;
+}
+
+async function rankUsers(tx: Tx, ids: unknown): Promise<string[]> {
+  const rankIds = checkIds(ids, "A rank");
+  const rows = rankIds.length ? await tx.select({ id: users.id }).from(users).where(inArray(users.rankId, rankIds)) : [];
+  return rows.map((r) => r.id);
+}
+
+async function jobUsers(tx: Tx, jobId: unknown): Promise<Iterable<string>> {
+  if (typeof jobId !== "string" || !UUID.test(jobId)) throw new NotFoundError("Job not found.");
+  const [job] = await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId));
+  if (!job) throw new NotFoundError("Job not found.");
+  return jobAudience(tx, job);
+}
+
+/** One audience's candidate user ids, or "everyone". */
+async function audienceIds(actor: Actor, tx: Tx, a: Audience): Promise<Iterable<string> | "everyone"> {
+  switch (a.kind) {
+    case "all":
+      await assertMayMessageAll(actor, tx);
+      return "everyone";
+    case "users":
+      return namedUsers(tx, a.userIds);
+    case "rank":
+      return rankUsers(tx, a.rankIds);
+    case "job":
+      return jobUsers(tx, a.jobId);
+    case "coordinators":
+      return coordinatorAudience(tx);
+    default:
+      throw new ValidationError("Unknown audience.");
+  }
+}
+
 /** Resolves the audiences to candidate user ids. Validates everything it is given before any write. */
 async function resolve(actor: Actor, tx: Tx, audiences: Audience[]): Promise<{ ids: string[]; everyone: boolean }> {
   const ids = new Set<string>();
   let everyone = false;
+  // Sequential: each audience is checked in order in this transaction, so the first refusal is the one reported.
   for (const a of audiences) {
-    switch (a.kind) {
-      case "all": {
-        assertCan(actor, "message.sendAll");
-        if (!isCoordinator(actor) && !(await getSettings(tx)).personnelCanMessageAll) {
-          throw new ForbiddenError("Messaging all users is turned off.");
-        }
-        everyone = true;
-        break;
-      }
-      case "users": {
-        const named = checkIds(a.userIds, "A recipient");
-        const found = named.length ? await tx.select({ id: users.id, role: users.role }).from(users).where(inArray(users.id, named)) : [];
-        if (found.length !== new Set(named).size || found.some((u) => u.role === "vendor")) throw new ValidationError("One or more recipients cannot be messaged.");
-        for (const id of named) ids.add(id);
-        break;
-      }
-      case "rank": {
-        const rankIds = checkIds(a.rankIds, "A rank");
-        const rows = rankIds.length ? await tx.select({ id: users.id }).from(users).where(inArray(users.rankId, rankIds)) : [];
-        for (const r of rows) ids.add(r.id);
-        break;
-      }
-      case "job": {
-        if (typeof a.jobId !== "string" || !UUID.test(a.jobId)) throw new NotFoundError("Job not found.");
-        const [job] = await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, a.jobId));
-        if (!job) throw new NotFoundError("Job not found.");
-        for (const id of await jobAudience(tx, job)) ids.add(id);
-        break;
-      }
-      case "coordinators":
-        for (const id of await coordinatorAudience(tx)) ids.add(id);
-        break;
-      default:
-        throw new ValidationError("Unknown audience.");
-    }
+    const found = await audienceIds(actor, tx, a);
+    if (found === "everyone") everyone = true;
+    else for (const id of found) ids.add(id);
   }
   return { ids: [...ids], everyone };
+}
+
+/** The trimmed subject and body, after the length and audience checks. */
+function checkSendInput(input: SendInput): { subject: string; body: string } {
+  const subject = typeof input.subject === "string" ? input.subject.trim() : "";
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (subject.length < 1 || subject.length > 200) throw new ValidationError("The subject must be 1 to 200 characters.");
+  if (body.length < 1 || body.length > 10_000) throw new ValidationError("The message must be 1 to 10,000 characters.");
+  const audiences = input.audiences;
+  if (!Array.isArray(audiences) || audiences.some((a) => typeof a !== "object" || !a)) throw new ValidationError("Choose who to send this to.");
+  if (audiences.length === 0 && input.replyToMessageId === undefined) throw new ValidationError("Choose who to send this to.");
+  return { subject, body };
+}
+
+async function assertJobExists(tx: Tx, jobId: unknown): Promise<void> {
+  if (typeof jobId !== "string" || !UUID.test(jobId) || !(await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId)))[0]) {
+    throw new NotFoundError("Job not found.");
+  }
+}
+
+/** Who a reply also goes to: the original recipients when the sender replies, else the original sender. */
+async function replyRecipients(actor: Actor, tx: Tx, replyToMessageId: unknown): Promise<string[]> {
+  if (typeof replyToMessageId !== "string" || !UUID.test(replyToMessageId)) throw new NotFoundError("Message not found.");
+  const [orig] = await tx.select().from(messages).where(eq(messages.id, replyToMessageId));
+  if (!orig) throw new NotFoundError("Message not found.");
+  const [mine] = await tx
+    .select({ id: messageRecipients.id })
+    .from(messageRecipients)
+    .where(and(eq(messageRecipients.messageId, orig.id), eq(messageRecipients.userId, actor.userId)));
+  if (orig.senderUserId !== actor.userId && !mine) throw new ForbiddenError("Only the sender or a recipient can reply.");
+  if (orig.senderUserId === actor.userId) {
+    const all = await tx.select({ userId: messageRecipients.userId }).from(messageRecipients).where(eq(messageRecipients.messageId, orig.id));
+    return all.map((r) => r.userId);
+  }
+  return orig.senderUserId ? [orig.senderUserId] : [];
+}
+
+/** The active, non-vendor users among the candidates (everyone when `everyone`), never the sender. */
+async function liveRecipients(actor: Actor, tx: Tx, ids: string[], everyone: boolean): Promise<string[]> {
+  const live = and(eq(users.active, true), ne(users.role, "vendor"), ne(users.id, actor.userId));
+  let rows: Array<{ id: string }> = [];
+  if (everyone) rows = await tx.select({ id: users.id }).from(users).where(live);
+  else if (ids.length) rows = await tx.select({ id: users.id }).from(users).where(and(live, inArray(users.id, ids)));
+  return [...new Set(rows.map((r) => r.id))];
 }
 
 /**
@@ -86,43 +146,16 @@ async function resolve(actor: Actor, tx: Tx, audiences: Audience[]): Promise<{ i
  */
 export async function sendMessage(actor: Actor, tx: Tx, input: SendInput): Promise<Message> {
   assertCan(actor, "message.send");
-  const subject = typeof input.subject === "string" ? input.subject.trim() : "";
-  const body = typeof input.body === "string" ? input.body.trim() : "";
-  if (subject.length < 1 || subject.length > 200) throw new ValidationError("The subject must be 1 to 200 characters.");
-  if (body.length < 1 || body.length > 10_000) throw new ValidationError("The message must be 1 to 10,000 characters.");
+  const { subject, body } = checkSendInput(input);
   const audiences = input.audiences;
-  if (!Array.isArray(audiences) || audiences.some((a) => typeof a !== "object" || a === null)) throw new ValidationError("Choose who to send this to.");
-  if (audiences.length === 0 && input.replyToMessageId === undefined) throw new ValidationError("Choose who to send this to.");
-
-  if (input.jobId !== undefined) {
-    if (typeof input.jobId !== "string" || !UUID.test(input.jobId) || !(await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, input.jobId)))[0]) {
-      throw new NotFoundError("Job not found.");
-    }
-  }
+  if (input.jobId !== undefined) await assertJobExists(tx, input.jobId);
 
   const { ids, everyone } = await resolve(actor, tx, audiences);
   if (input.replyToMessageId !== undefined) {
-    if (typeof input.replyToMessageId !== "string" || !UUID.test(input.replyToMessageId)) throw new NotFoundError("Message not found.");
-    const [orig] = await tx.select().from(messages).where(eq(messages.id, input.replyToMessageId));
-    if (!orig) throw new NotFoundError("Message not found.");
-    const [mine] = await tx
-      .select({ id: messageRecipients.id })
-      .from(messageRecipients)
-      .where(and(eq(messageRecipients.messageId, orig.id), eq(messageRecipients.userId, actor.userId)));
-    if (orig.senderUserId !== actor.userId && !mine) throw new ForbiddenError("Only the sender or a recipient can reply.");
-    if (orig.senderUserId === actor.userId) {
-      const all = await tx.select({ userId: messageRecipients.userId }).from(messageRecipients).where(eq(messageRecipients.messageId, orig.id));
-      for (const r of all) ids.push(r.userId);
-    } else if (orig.senderUserId) ids.push(orig.senderUserId);
+    for (const id of await replyRecipients(actor, tx, input.replyToMessageId)) ids.push(id);
   }
 
-  const live = and(eq(users.active, true), ne(users.role, "vendor"), ne(users.id, actor.userId));
-  const rows = everyone
-    ? await tx.select({ id: users.id }).from(users).where(live)
-    : ids.length
-      ? await tx.select({ id: users.id }).from(users).where(and(live, inArray(users.id, ids)))
-      : [];
-  const recipientIds = [...new Set(rows.map((r) => r.id))];
+  const recipientIds = await liveRecipients(actor, tx, ids, everyone);
   if (recipientIds.length === 0) throw new ValidationError("There is no one to send this message to.");
 
   const [message] = await tx
@@ -260,6 +293,7 @@ export async function hideMessages(actor: Actor, tx: Tx, ids: string[]): Promise
     .set({ hiddenAt: new Date() })
     .where(and(eq(messageRecipients.userId, actor.userId), inArray(messageRecipients.messageId, list), isNull(messageRecipients.hiddenAt)))
     .returning({ messageId: messageRecipients.messageId });
+  // Sequential: audit writes in this transaction.
   for (const h of hidden) {
     await recordAudit(tx, { actor, action: "message.hide", entityType: "message", entityId: h.messageId });
   }

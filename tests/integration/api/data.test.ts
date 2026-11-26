@@ -12,6 +12,7 @@ import { createApiKey } from "@/domain/api-keys/api-keys";
 import { EXCLUDED_TABLES, EXPORT_TABLES, exportCoverage } from "@/domain/export/export";
 import { GET as dataGet } from "@/app/api/v1/data/[entity]/route";
 import { GET as exportGet } from "@/app/api/v1/export/route";
+import { byText } from "@/lib/sort";
 
 /** Reads a zip's entries (stored or deflated) into name -> text. */
 function unzip(buf: Buffer): Map<string, string> {
@@ -98,20 +99,20 @@ describe("full data access", () => {
     expect(exportCoverage(tables)).toEqual({ unlisted: [], unknown: [] });
     // A table added to the schema without a decision is reported.
     expect(exportCoverage([...tables, "new_secret_table"]).unlisted).toEqual(["new_secret_table"]);
-    expect([...EXCLUDED_TABLES].sort()).toEqual(["accounts", "auth_throttle", "invites", "sessions", "training_outbox", "two_factors", "verifications"]);
+    expect([...EXCLUDED_TABLES].sort(byText)).toEqual(["accounts", "auth_throttle", "invites", "sessions", "training_outbox", "two_factors", "verifications"]);
     expect(EXPORT_TABLES.filter((t) => EXCLUDED_TABLES.includes(t))).toEqual([]);
   });
 
   test("the export is a zip with one file per table and no password hashes or tokens", async () => {
     const tables = (Object.values(schema) as unknown[]).filter((t): t is PgTable => is(t, PgTable)).map((t) => getTableName(t));
     const secret = new Set(["sessions", "accounts", "verifications", "two_factors", "invites", "auth_throttle", "training_outbox"]);
-    expect([...EXPORT_TABLES].sort()).toEqual(tables.filter((t) => !secret.has(t)).sort());
+    expect([...EXPORT_TABLES].sort(byText)).toEqual(tables.filter((t) => !secret.has(t)).sort(byText));
     for (const format of ["json", "csv"] as const) {
       const res = await call(exportGet, `/api/v1/export?format=${format}`, { headers: bearer(readKey) });
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toBe("application/zip");
       const zip = unzip(Buffer.from(await res.arrayBuffer()));
-      expect([...zip.keys()].filter((n) => n !== "files.txt").sort()).toEqual(EXPORT_TABLES.map((t) => `${t}.${format}`).sort());
+      expect([...zip.keys()].filter((n) => n !== "files.txt").sort(byText)).toEqual(EXPORT_TABLES.map((t) => `${t}.${format}`).sort(byText));
       const all = [...zip.values()].join("\n");
       expect(all).toContain("Paged Vendor 0");
       expect(all).not.toContain("very-secret-password-hash");

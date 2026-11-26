@@ -34,6 +34,14 @@ export type StatusInvoice = { assignmentId: string; status: (typeof invoiceStatu
 /** People who held a spot and worked (or were due to work) the detail. */
 const WORKED = new Set<StatusAssignment["status"]>(["signed_up", "billed", "paid"]);
 
+/** After the detail ends: ready to bill until everyone who worked has an invoice, then billed, then closed once all are settled. */
+function billingStatus(staff: StatusAssignment[], invoices: StatusInvoice[]): JobDisplayStatus {
+  const byAssignment = new Map(invoices.map((i) => [i.assignmentId, i.status]));
+  const statuses = staff.map((a) => byAssignment.get(a.id));
+  if (statuses.some((s) => s === undefined)) return "ready_to_bill";
+  return statuses.every((s) => s === "paid" || s === "written_off") ? "closed" : "billed";
+}
+
 export function deriveJobStatus(
   job: StatusJob,
   assignments: StatusAssignment[],
@@ -52,12 +60,7 @@ export function deriveJobStatus(
   const staff = assignments.filter((a) => WORKED.has(a.status));
   const free = job.spots - assignments.filter((a) => a.status === "signed_up").length > 0;
 
-  if (t >= job.endAt.getTime() && staff.length > 0) {
-    const byAssignment = new Map(invoices.map((i) => [i.assignmentId, i.status]));
-    const statuses = staff.map((a) => byAssignment.get(a.id));
-    if (statuses.some((s) => s === undefined)) return "ready_to_bill";
-    return statuses.every((s) => s === "paid" || s === "written_off") ? "closed" : "billed";
-  }
+  if (t >= job.endAt.getTime() && staff.length > 0) return billingStatus(staff, invoices);
   if (started && free) return "expired";
   return free ? "open" : "filled";
 }

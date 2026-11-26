@@ -10,8 +10,14 @@ export type SmtpConfig = { host: string; port: number; secure: boolean; user: st
 
 /** Splits `Name <addr@host>` or a bare address. */
 export function parseAddress(from: string): { name: string; email: string } {
-  const m = from.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
-  if (m) return { name: m[1].replace(/^"|"$/g, ""), email: m[2].trim() };
+  const t = from.trimEnd();
+  const lt = t.lastIndexOf("<");
+  const inner = t.slice(lt + 1, -1);
+  const name = t.slice(0, Math.max(lt, 0)).trim();
+  // Scanned with indexOf and plain checks, not one regex, so a long input cannot make it slow.
+  if (t.endsWith(">") && lt !== -1 && inner !== "" && !inner.includes(">") && !/[\n\r\u2028\u2029]/.test(name)) {
+    return { name: name.replace(/^"|"$/g, ""), email: inner.trim() };
+  }
   return { name: "", email: from.trim() };
 }
 
@@ -112,9 +118,10 @@ export function mailgunSender(from: string, apiKey: string, region: string, fetc
       for (const a of msg.attachments ?? []) {
         form.append("attachment", new Blob([new Uint8Array(a.content)], { type: a.contentType }), a.filename);
       }
+      const basic = Buffer.from(`api:${apiKey}`).toString("base64");
       await postJson(fetchImpl, "Mailgun", `https://${host}/v3/${encodeURIComponent(domain)}/messages`, {
         method: "POST",
-        headers: { Authorization: `Basic ${Buffer.from(`api:${apiKey}`).toString("base64")}` },
+        headers: { Authorization: `Basic ${basic}` },
         body: form,
       });
     },

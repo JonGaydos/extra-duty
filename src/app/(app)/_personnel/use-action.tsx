@@ -29,16 +29,28 @@ export function useAction() {
   return { run, busy, result, clear: () => setResult(null) };
 }
 
+/** An upload's own outcome ({ ok, text }) in the shape the status line reads. */
+export function uploadResult(msg: { ok: boolean; text: string } | null): ActionResult | null {
+  if (!msg) return null;
+  return msg.ok ? { ok: true, message: msg.text } : { ok: false, error: msg.text };
+}
+
+/** The message to show for a result: its own message (or `success`) when done, the error when not. */
+function resultText(result: ActionResult | null, success: string | undefined): string | undefined {
+  if (!result) return undefined;
+  return result.ok ? (result.message ?? success) : result.error;
+}
+
 /** An always-present live region, so each new result is announced. */
-export function ActionStatus({ result, success }: { result: ActionResult | null; success?: string }) {
-  const text = result ? (result.ok ? (result.message ?? success) : result.error) : undefined;
+export function ActionStatus({ result, success }: Readonly<{ result: ActionResult | null; success?: string }>) {
+  const text = resultText(result, success);
   return (
-    <div role="status" aria-live="polite" className="empty:hidden">
+    <output aria-live="polite" className="block empty:hidden">
       {text ? (
         <Notice tone={result?.ok ? "success" : "danger"} as="div">
           {text}
         </Notice>
       ) : null}
-    </div>
+    </output>
   );
 }

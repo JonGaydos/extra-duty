@@ -19,7 +19,7 @@ export function parseTrustedProxies(value: string | undefined): BlockList | null
   if (!entries.length) return null;
   const list = new BlockList();
   for (const entry of entries) {
-    const [address, prefix] = entry.split("/");
+    const [address, prefix] = entry.split("/") as [string, string | undefined];
     const family = isIP(address);
     if (!family || (prefix !== undefined && !/^\d{1,3}$/.test(prefix))) {
       throw new Error(`TRUSTED_PROXY has an entry that is not an address or CIDR range: "${entry}".`);

@@ -18,10 +18,18 @@ export type SavedInfo = { id: string; name: string; builtIn: boolean; spec: { da
 type Result = { columns: string[]; rows: Array<Array<string | number | null>>; totals: Record<string, number> };
 
 const isMoney = (c: string) => c.endsWith("_cents");
-const fmt = (c: string, v: unknown) => (v === null || v === undefined ? "" : isMoney(c) && typeof v === "number" ? dollars(v) : typeof v === "number" ? v.toLocaleString("en-US") : String(v));
+/** A cell as text: money columns in dollars, other numbers with separators, nothing for no value. */
+function fmt(c: string, v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v !== "number") return String(v);
+  return isMoney(c) ? dollars(v) : v.toLocaleString("en-US");
+}
+
+/** A column's total, or nothing for a column that has none. */
+const totalOf = (totals: Record<string, number>, c: string) => (c in totals ? totals[c] : null);
 
 /** A toggle chip: a real button with aria-pressed. */
-function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+function Toggle({ on, onClick, children }: Readonly<{ on: boolean; onClick: () => void; children: React.ReactNode }>) {
   return (
     <button
       type="button"
@@ -46,7 +54,7 @@ export function ReportBuilder({
   vendors,
   defaultFrom,
   defaultTo,
-}: {
+}: Readonly<{
   datasets: DatasetInfo[];
   saved: SavedInfo[];
   labels: Record<string, string>;
@@ -54,7 +62,7 @@ export function ReportBuilder({
   vendors: Array<{ id: string; name: string }>;
   defaultFrom: string;
   defaultTo: string;
-}) {
+}>) {
   const router = useRouter();
   const [spec, setSpec] = useState<ReportWire>({ dataset: "invoices" as ReportWire["dataset"], from: defaultFrom, to: defaultTo, filters: {}, groupBy: ["month"] as ReportWire["groupBy"], measures: ["billed_count", "billed_cents"] as ReportWire["measures"] });
   const [title, setTitle] = useState("New report");
@@ -83,7 +91,7 @@ export function ReportBuilder({
       dataset: r.spec.dataset as ReportWire["dataset"],
       groupBy: r.spec.groupBy as ReportWire["groupBy"],
       measures: r.spec.measures as ReportWire["measures"],
-      filters: Object.fromEntries(Object.entries(r.spec.filters).filter(([, v]) => v && v.length)) as ReportWire["filters"],
+      filters: Object.fromEntries(Object.entries(r.spec.filters).filter(([, v]) => v?.length)) as ReportWire["filters"],
       from: savedDayRange(r.spec)?.from ?? spec.from,
       to: savedDayRange(r.spec)?.to ?? spec.to,
     });
@@ -240,7 +248,7 @@ export function ReportBuilder({
                 </FormField>
               ) : null}
             </div>
-            <div role="group" aria-label="Group by" className="flex flex-col gap-1.5">
+            <fieldset aria-label="Group by" className="min-w-0 flex flex-col gap-1.5">
               <span className="text-sm font-medium text-muted" aria-hidden>
                 Group by
               </span>
@@ -251,8 +259,8 @@ export function ReportBuilder({
                   </Toggle>
                 ))}
               </div>
-            </div>
-            <div role="group" aria-label="Show" className="flex flex-col gap-1.5">
+            </fieldset>
+            <fieldset aria-label="Show" className="min-w-0 flex flex-col gap-1.5">
               <span className="text-sm font-medium text-muted" aria-hidden>
                 Show
               </span>
@@ -263,7 +271,7 @@ export function ReportBuilder({
                   </Toggle>
                 ))}
               </div>
-            </div>
+            </fieldset>
             <div className="flex flex-wrap items-end gap-2">
               <Button type="submit" busy={busy}>
                 Run report
@@ -285,13 +293,13 @@ export function ReportBuilder({
             caption={`${title}, ${spec.from} to ${spec.to}`}
             rows={[
               ...result.rows.map((r, i) => ({ key: String(i), cells: r, total: false })),
-              ...(spec.groupBy.length && result.rows.length ? [{ key: "total", cells: result.columns.map((c, i) => (i === 0 ? "Total" : c in result.totals ? result.totals[c] : null)), total: true }] : []),
+              ...(spec.groupBy.length && result.rows.length ? [{ key: "total", cells: result.columns.map((c, i) => (i === 0 ? "Total" : totalOf(result.totals, c))), total: true }] : []),
             ]}
             rowKey={(r) => r.key}
             columns={result.columns.map((c, i) => ({
               header: label(c),
               align: i >= spec.groupBy.length ? ("end" as const) : ("start" as const),
-              cell: (r: { cells: Array<string | number | null>; total: boolean }) => <span className={r.total ? "font-semibold" : undefined}>{fmt(c, r.cells[i])}</span>,
+              render: (r: { cells: Array<string | number | null>; total: boolean }) => <span className={r.total ? "font-semibold" : undefined}>{fmt(c, r.cells[i])}</span>,
             }))}
             empty="No rows for this period."
           />

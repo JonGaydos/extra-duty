@@ -48,6 +48,12 @@ describe("settings", () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  test("an unknown key is refused, and a coordinator cannot change admin-only keys", async () => {
+    const save = (a: Actor, patch: Record<string, unknown>) => get().db.transaction((tx) => updateSettings(a, tx, patch as never));
+    await expect(save(admin, { nope: 1, alsoNope: 2, minimumBillableMinutes: undefined })).rejects.toThrow("Unknown setting: nope, alsoNope.");
+    await expect(save(coordinator, { security: { twoFactorRequired: false } })).rejects.toThrow(new ForbiddenError("Only admins can change: security."));
+  });
+
   test("coordinator updates a normal key; it persists with one audit row", async () => {
     const { db } = get();
     const out = await db.transaction((tx) => updateSettings(coordinator, tx, { minimumBillableMinutes: 180 }));

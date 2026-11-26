@@ -124,6 +124,50 @@ describe("billing lock, overrides and reminders", () => {
     expect(await lockedAt(end + 25 * HOUR)).toBe(true);
   });
 
+  test("the coordinators' locked list gives each person the same answer as their own lock", async () => {
+    const { db } = get();
+    const unbilled = await person();
+    await put(unbilled.userId);
+    const canceled = await person();
+    const c = await put(canceled.userId);
+    await db.update(jobs).set({ state: "canceled", canceledAt: new Date("2035-01-01") }).where(eq(jobs.id, c.job.id));
+    const held = await person();
+    const [heldVendor] = await db.insert(vendors).values({ name: "Locked List Vendor", defaultRateCents: 7000 }).returning();
+    await put(held.userId, "signed_up", { vendor: heldVendor.id });
+    await db.insert(vendorHolds).values({ vendorId: heldVendor.id, placedAt: new Date("2000-01-01") });
+    const owed = await person();
+    const { a: owedA } = await put(owed.userId, "billed");
+    const inv = await tx((t) => createInvoice(t, { assignmentId: owedA.id, minutes: 360, rateCents: 7000, status: "sent" }));
+    const since = new Date(AFTER.getTime() - 31 * DAY);
+    await db.update(invoices).set({ sentAt: since, vendorPaidAt: since }).where(eq(invoices.id, inv.id));
+    await tx((t) => applyResponsibility(t, inv.id, since));
+    const both = await person();
+    await put(both.userId);
+    await put(both.userId, "late_canceled");
+    const lifted = await person();
+    await put(lifted.userId);
+    await db.insert(billingLockOverrides).values({ userId: lifted.userId, until: new Date(AFTER.getTime() + DAY), reason: "Paper invoice", createdBy: fx.coord.userId });
+
+    const ids = [unbilled, canceled, held, owed, both, lifted].map((p) => p.userId);
+    const compare = async () => {
+      const listed = new Map((await tx((t) => lockedPeople(t, AFTER))).map((r) => [r.userId, r]));
+      for (const id of ids) {
+        const own = await lock(id);
+        const row = listed.get(id);
+        if (own.locked) expect(row && { locked: row.locked, unbilledCount: row.unbilledCount, unacknowledgedCount: row.unacknowledgedCount }).toEqual(own);
+        else expect(row).toBeUndefined();
+      }
+      return ids.filter((id) => listed.has(id));
+    };
+    expect(await compare()).toEqual([unbilled.userId, owed.userId, both.userId]);
+    await tx((t) => updateSettings(admin, t, { billingLockEnabled: false }));
+    expect(await compare()).toEqual([owed.userId]);
+    await tx((t) => updateSettings(admin, t, { billingLockEnabled: true, paymentAckLockMode: "off" }));
+    expect(await compare()).toEqual([unbilled.userId, both.userId]);
+    await tx((t) => updateSettings(admin, t, { billingLockEnabled: false }));
+    expect(await tx((t) => lockedPeople(t, AFTER))).toEqual([]);
+  });
+
   test("a returned invoice counts as unbilled again", async () => {
     const p = await person();
     const { a, job } = await put(p.userId);

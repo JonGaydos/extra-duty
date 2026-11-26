@@ -5,4 +5,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/e2e-env.sh
-exec npx playwright test --ui --ui-host=0.0.0.0 --ui-port=3211 "$@"
+pw="$PWD/node_modules/.bin/playwright"
+[[ -x "$pw" ]] || { echo "playwright is not installed; run npm install first." >&2; exit 1; }
+exec "$pw" test --ui --ui-host=0.0.0.0 --ui-port=3211 "$@"

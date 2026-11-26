@@ -27,7 +27,7 @@ import { backToLiveAction, switchToTrainingAction } from "@/ui/shell/training-ac
  * the header and tab bar as static rows and only main scrolling, so the
  * document never scrolls and mobile browser toolbars stay put.
  */
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const shell = await loadShell();
   if (!shell) redirect("/sign-in");
   const { actor, profile, mode, practiceRole, userRole } = shell;

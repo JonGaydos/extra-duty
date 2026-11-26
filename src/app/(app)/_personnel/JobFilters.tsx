@@ -43,13 +43,13 @@ const chip = (pressed: boolean) =>
   }`;
 
 /** Filter chips, job types, "Only details I can work" and sort. Rendered inline on desktop and in a sheet on phones. */
-function Controls({ types, scheduleNote, showSort = true }: Props) {
+function Controls({ types, scheduleNote, showSort = true }: Readonly<Props>) {
   const { params, set, on } = useFilterParams();
   const id = useId();
   const type = params.get("type") ?? "";
   return (
     <div className="flex flex-col gap-3">
-      <div role="group" aria-label="Filters" className="flex flex-wrap gap-2">
+      <fieldset aria-label="Filters" className="min-w-0 flex flex-wrap gap-2">
         {TOGGLES.map((t) => (
           <button key={t.key} type="button" aria-pressed={on(t.key)} className={chip(on(t.key))} onClick={() => set(t.key, on(t.key) ? null : "1")}>
             {t.label}
@@ -60,7 +60,7 @@ function Controls({ types, scheduleNote, showSort = true }: Props) {
             {t.name}
           </button>
         ))}
-      </div>
+      </fieldset>
       <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3.5 py-1.5">
         <span className="flex flex-col">
           <span id={`${id}-workable`} className="font-medium">
@@ -101,7 +101,7 @@ function Controls({ types, scheduleNote, showSort = true }: Props) {
  * Search plus the filters. On a phone the filters fold into a "Filters" sheet (the button says how many are
  * on) so results start near the top; from 768 px they sit inline beside the list.
  */
-export function JobFilters(props: Props) {
+export function JobFilters(props: Readonly<Props>) {
   const { params, set } = useFilterParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const sheet = useRef<HTMLDialogElement>(null);

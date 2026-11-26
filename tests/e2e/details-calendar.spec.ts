@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { Client } from "pg";
-import { agencyDateParts } from "@/domain/time/agency-time";
+import { agencyDateParts, agencyInstant } from "@/domain/time/agency-time";
 import { COORD } from "./coordinator-fixtures";
 import { E2E } from "./env";
 import { signInAs } from "./session";
@@ -259,7 +259,7 @@ test("on a phone, tapping a day opens that day's list", async ({ page, context }
   // The month on screen may not hold the day yet (end of month): step forward once if needed.
   const day = page.locator(`td a[href*="date=${key}"]`).filter({ visible: true }).first();
   if ((await day.count()) === 0) await page.getByRole("link", { name: "Next" }).click();
-  await expect(day).toHaveAccessibleName(/1 detail|\d+ details/);
+  await expect(day).toHaveAccessibleName(/\b(?:1 detail|\d+ details)/);
   await day.click();
   await expect(page).toHaveURL(new RegExp(`view=day&date=${key}`));
   await expect(page.getByRole("main")).toContainText("Calendar day tap check");
@@ -295,7 +295,12 @@ test("My details only and remembered filters belong to the person, and Reset cle
 
 test("quick edit is closed on a detail that has started, and bulk edit flags it", async ({ page, context }) => {
   const id = await makeJob("Started quick edit check", 0);
-  await rows("update jobs set start_at = now() - interval '1 hour', end_at = now() + interval '3 hours' where id = $1", [id]);
+  // Started an hour ago, but never before agency midnight: the calendar list starts there, so an earlier start
+  // would hide the detail in the first hour of the agency day.
+  const now = Date.now();
+  const today = agencyDateParts(new Date(now));
+  const start = Math.max(now - 3_600_000, agencyInstant(today.year, today.month, today.day, 0, 0).getTime());
+  await rows("update jobs set start_at = $2, end_at = $3 where id = $1", [id, new Date(start), new Date(now + 3 * 3_600_000)]);
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
   await page.goto(`/coordinate/details/${id}`);

@@ -9,7 +9,7 @@ import { sessions } from "@/db/schema";
 import { and, eq, gt } from "drizzle-orm";
 import type { RouteDef } from "./registry";
 
-export type { DataMode, TxRunner } from "@/db/client";
+export type { TxRunner } from "@/db/client";
 
 export type Principal =
   | { kind: "session"; actor: Actor; mode: DataMode; context: RequestContext }
@@ -34,7 +34,7 @@ const KEY_MARKER = "ed_live_";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** True for an id in a route path that cannot be a record id (so the answer is 404 without a query). */
-export function isMalformedId(value: string): boolean {
+function isMalformedId(value: string): boolean {
   return !UUID.test(value);
 }
 
@@ -42,7 +42,7 @@ export function isMalformedId(value: string): boolean {
  * Who is calling: an API key (`Authorization: Bearer ed_live_...`), a session token sent as a bearer token (the
  * native app), or the session cookie. Null when there is none. A key that is not valid is an error, not anonymous.
  */
-export async function authenticate(req: Request, path: string): Promise<Principal | null> {
+async function authenticate(req: Request, path: string): Promise<Principal | null> {
   const header = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(\S+)$/i.exec(header.trim());
   if (m) {
@@ -129,7 +129,8 @@ export function errorResponse(e: unknown, opts: { hideForbidden?: boolean } = {}
 
 function issueMessage(error: z.ZodError): string {
   const i = error.issues[0];
-  return `${i.path.length > 0 ? `${i.path.join(".")}: ` : ""}${i.message}`;
+  const where = i.path.length > 0 ? `${i.path.join(".")}: ` : "";
+  return `${where}${i.message}`;
 }
 
 function parse<T>(schema: z.ZodType<T> | undefined, raw: unknown): T {
@@ -162,7 +163,7 @@ function requiredScopes(def: RouteDef): ApiKeyScope[] {
 }
 
 /** A key without the scope a route needs. Always 403, even where other refusals read as not found. */
-export class KeyScopeError extends ForbiddenError {}
+class KeyScopeError extends ForbiddenError {}
 
 function checkScopes(def: RouteDef, p: Principal): void {
   if (p.kind !== "apiKey") return;
@@ -170,6 +171,23 @@ function checkScopes(def: RouteDef, p: Principal): void {
   if (!has.has("read") && !has.has("write")) throw new KeyScopeError("This API key has no read scope.");
   const missing = requiredScopes(def).filter((s) => !has.has(s));
   if (missing.length) throw new KeyScopeError(`This API key does not have the ${missing.join(" and ")} scope.`);
+}
+
+/** A malformed id in the path is answered as not found, before any read. */
+function assertWellFormedIds(params: Record<string, string>): void {
+  for (const [name, value] of Object.entries(params)) {
+    if ((name === "id" || name.endsWith("Id")) && isMalformedId(value)) throw new NotFoundError();
+  }
+}
+
+/** The request body as JSON; an empty body is undefined. */
+async function readJson(req: Request): Promise<unknown> {
+  const text = await req.text();
+  try {
+    return text === "" ? undefined : JSON.parse(text);
+  } catch {
+    throw new ValidationError("Send the details as JSON.");
+  }
 }
 
 /**
@@ -186,21 +204,9 @@ export function apiHandler<D extends RouteDef>(def: D, fn: (ctx: HandlerContext<
       const principal = def.public ? null : await authenticate(req, new URL(req.url).pathname);
       if (!principal && !def.public) throw new UnauthenticatedError();
       if (principal) checkScopes(def, principal);
-      for (const [name, value] of Object.entries(params)) {
-        if ((name === "id" || name.endsWith("Id")) && isMalformedId(value)) throw new NotFoundError();
-      }
+      assertWellFormedIds(params);
       const query = parse(def.query, Object.fromEntries(new URL(req.url).searchParams));
-      let body: unknown;
-      if (def.body) {
-        const text = await req.text();
-        let raw: unknown;
-        try {
-          raw = text === "" ? undefined : JSON.parse(text);
-        } catch {
-          throw new ValidationError("Send the details as JSON.");
-        }
-        body = parse(def.body, raw);
-      }
+      const body = def.body ? parse(def.body, await readJson(req)) : undefined;
       const ctx = { req, params, body, query, actor: principal?.actor ?? null, principal, run: getTx(principal) } as HandlerContext<D>;
       // The whole handler runs in the request's mode, so storage, PDFs and email outside `run` follow it too.
       const mode: DataMode = principal?.kind === "session" ? principal.mode : "live";

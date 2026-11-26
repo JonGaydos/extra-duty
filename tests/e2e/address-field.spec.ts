@@ -131,8 +131,7 @@ test("a safety address pin can be dragged, and the stored point overrides the lo
   const [saved] = await rows<{ lat: number; lng: number; description: string }>("select lat, lng, description from job_safety_addresses where job_id = $1 and address = $2", [job.id, PINE_HARBOR]);
   // The description typed while the address was being looked up is kept.
   expect(saved.description).toBe("Loose dog in the yard");
-  expect(saved.lat).not.toBe(29.4987);
-  expect(saved.lng).not.toBe(-82.1361);
+  // Strictly below and above the looked-up point, so the pin moved.
   expect(saved.lat).toBeLessThan(29.4987);
   expect(saved.lng).toBeGreaterThan(-82.1361);
 });

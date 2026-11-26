@@ -42,6 +42,7 @@ export async function opsPlanRemindersTick(now: Date): Promise<number> {
       .orderBy(asc(jobs.id)),
   );
   let sent = 0;
+  // Sequential: one transaction per job, so one failure is skipped without holding many connections.
   for (const { id } of needing) {
     sent += await guarded(`ops plan due alerts for job ${id}`, () => withTx((tx) => dueAlerts(tx, id, now)));
   }
@@ -53,10 +54,22 @@ export async function opsPlanRemindersTick(now: Date): Promise<number> {
       .where(and(eq(opsPlans.status, "submitted"), inArray(jobs.state, ["requested", "scheduled", "active"])))
       .orderBy(asc(opsPlans.id)),
   );
+  // Sequential: one transaction per plan, for the same reason.
   for (const { id } of waiting) {
     sent += await guarded(`ops plan review reminder for plan ${id}`, () => withTx((tx) => reviewAlerts(tx, id, now)));
   }
   return sent;
+}
+
+const DUE_ALERT = {
+  overdue: { type: "ops_plan.overdue", title: "Ops plan overdue", state: "overdue" },
+  due_soon: { type: "ops_plan.due_soon", title: "Ops plan due soon", state: "due soon" },
+} as const;
+
+/** Overdue once the due time has passed, due soon within DUE_SOON_MS of it, else no alert yet. */
+function dueAlertKind(now: Date, dueAt: Date): keyof typeof DUE_ALERT | null {
+  if (now.getTime() >= dueAt.getTime()) return "overdue";
+  return now.getTime() >= dueAt.getTime() - DUE_SOON_MS ? "due_soon" : null;
 }
 
 async function dueAlerts(tx: Tx, jobId: string, now: Date): Promise<number> {
@@ -67,21 +80,19 @@ async function dueAlerts(tx: Tx, jobId: string, now: Date): Promise<number> {
   const ic = await currentIcInfo(tx, jobId);
   const dueAt = ic ? opsPlanDueAt(job, ic.assignedAt) : job.opsPlanDueAt;
   if (!dueAt) return 0;
-  const overdue = now.getTime() >= dueAt.getTime();
-  const soon = !overdue && now.getTime() >= dueAt.getTime() - DUE_SOON_MS;
-  if (!overdue && !soon) return 0;
-  const kind = overdue ? "overdue" : "due_soon";
+  const kind = dueAlertKind(now, dueAt);
+  if (!kind) return 0;
   if (!(await claim(tx, jobId, kind, dueAt.toISOString(), now))) return 0;
   const recipients = [...new Set([...(ic ? [ic.userId] : []), ...(await coordinatorAudience(tx))])];
+  const alert = DUE_ALERT[kind];
+  const noIc = ic ? "" : " and the detail has no Incident Commander";
   await emit(
     tx,
     {
       recipients,
-      type: overdue ? "ops_plan.overdue" : "ops_plan.due_soon",
-      title: overdue ? `Ops plan overdue: job #${job.number}` : `Ops plan due soon: job #${job.number}`,
-      body: overdue
-        ? `${job.title}: the ops plan is overdue${ic ? "" : " and the detail has no Incident Commander"}.`
-        : `${job.title}: the ops plan is due soon${ic ? "" : " and the detail has no Incident Commander"}.`,
+      type: alert.type,
+      title: `${alert.title}: job #${job.number}`,
+      body: `${job.title}: the ops plan is ${alert.state}${noIc}.`,
       link: `/jobs/${jobId}`,
     },
     now,
@@ -100,7 +111,7 @@ async function reviewAlerts(tx: Tx, planId: string, now: Date): Promise<number> 
     .where(eq(opsPlanVersions.opsPlanId, planId))
     .orderBy(desc(opsPlanVersions.submittedAt), desc(opsPlanVersions.id))
     .limit(1);
-  if (!version || version.decision !== "pending") return 0;
+  if (version?.decision !== "pending") return 0;
   if (!(await claim(tx, plan.jobId, "review_waiting", `${version.id}:${agencyDayKey(now)}`, now))) return 0;
   const reviewers = await eligibleReviewers(tx, plan.jobId, version.submittedBy);
   if (reviewers.length === 0) return 0;

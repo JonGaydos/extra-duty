@@ -6,9 +6,7 @@ import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
 import { NotFoundError, ValidationError } from "../errors";
 
-export type JobType = typeof jobTypes.$inferSelect;
-export type VendorType = typeof vendorTypes.$inferSelect;
-export type PaymentMethod = typeof paymentMethods.$inferSelect;
+type JobType = typeof jobTypes.$inferSelect;
 export type PositionType = typeof positionTypes.$inferSelect;
 export type NotePreset = typeof notePresets.$inferSelect;
 export type NotePresetContext = NotePreset["context"];
@@ -27,10 +25,9 @@ export const NOTE_PRESET_CONTEXTS: readonly NotePresetContext[] = [
  * The three tables have identical columns, so they are typed through `jobTypes`.
  */
 type NamedTable = typeof jobTypes;
-type Named = JobType;
 
 function namedCatalog(table: NamedTable, entity: string, label: string) {
-  async function get(tx: Tx, id: string): Promise<Named> {
+  async function get(tx: Tx, id: string): Promise<JobType> {
     const [row] = await tx.select().from(table).where(eq(table.id, id));
     if (!row) throw new NotFoundError(`${label} not found.`);
     return row;
@@ -42,11 +39,11 @@ function namedCatalog(table: NamedTable, entity: string, label: string) {
     }
   }
   return {
-    list: (actor: Actor, tx: Tx): Promise<Named[]> => {
+    list: (actor: Actor, tx: Tx): Promise<JobType[]> => {
       assertCan(actor, "settings.update.rules");
       return tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.name));
     },
-    create: async (actor: Actor, tx: Tx, input: { name: string; sortOrder?: number }): Promise<Named> => {
+    create: async (actor: Actor, tx: Tx, input: { name: string; sortOrder?: number }): Promise<JobType> => {
       assertCan(actor, "settings.update.rules");
       const name = input.name.trim();
       if (!name) throw new ValidationError(`${label} name is required.`);
@@ -58,7 +55,7 @@ function namedCatalog(table: NamedTable, entity: string, label: string) {
       await recordAudit(tx, { actor, action: `${entity}.create`, entityType: entity, entityId: row.id, before: null, after: row });
       return row;
     },
-    update: async (actor: Actor, tx: Tx, id: string, input: { name?: string; sortOrder?: number }): Promise<Named> => {
+    update: async (actor: Actor, tx: Tx, id: string, input: { name?: string; sortOrder?: number }): Promise<JobType> => {
       assertCan(actor, "settings.update.rules");
       const before = await get(tx, id);
       const patch: { name?: string; sortOrder?: number } = {};
@@ -75,7 +72,7 @@ function namedCatalog(table: NamedTable, entity: string, label: string) {
       return after;
     },
     /** Rows are referenced by jobs, vendors and invoices, so they are turned off, never deleted. */
-    setActive: async (actor: Actor, tx: Tx, id: string, active: boolean): Promise<Named> => {
+    setActive: async (actor: Actor, tx: Tx, id: string, active: boolean): Promise<JobType> => {
       assertCan(actor, "settings.update.rules");
       const before = await get(tx, id);
       if (before.active === active) return before;
@@ -125,7 +122,7 @@ export type PositionTypeInput = {
 };
 
 /** The most a position may add to a detail's rate: $500.00 an hour. */
-export const MAX_RATE_DIFFERENTIAL_CENTS = 50_000;
+const MAX_RATE_DIFFERENTIAL_CENTS = 50_000;
 
 function differential(cents: number): number {
   if (!Number.isInteger(cents) || cents < 0 || cents > MAX_RATE_DIFFERENTIAL_CENTS) {

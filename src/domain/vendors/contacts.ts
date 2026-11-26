@@ -8,17 +8,17 @@ import { normalizeEmail } from "../auth/sign-in-policy";
 import { cleanChangedContactName, cleanContactName } from "../contact-name";
 import { NotFoundError, ValidationError } from "../errors";
 import { cleanChangedPhone, cleanPhone } from "../phone";
+import { isEmail } from "@/lib/is-email";
 
 export type VendorContact = typeof vendorContacts.$inferSelect;
 export type VendorContactInput = { name: string; phone: string; email?: string | null; notes?: string | null };
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
 function cleanEmail(v: string | null | undefined): string | null {
   if (!v?.trim()) return null;
   const e = normalizeEmail(v);
-  if (!e || !EMAIL.test(e)) throw new ValidationError(`"${v.trim()}" is not a valid email address.`);
+  if (!e || !isEmail(e)) throw new ValidationError(`"${v.trim()}" is not a valid email address.`);
   return e;
 }
 

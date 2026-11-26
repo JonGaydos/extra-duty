@@ -22,7 +22,7 @@ async function uploadLogo(data: FormData): Promise<ActionResult> {
  * margins trimmed on the server), or remove it. The preview shows the slot it gets: square, or wide for logos
  * about 1.3:1 and wider.
  */
-export function LogoUpload({ logo, initials }: { logo: AgencyLogoData | null; initials: string }) {
+export function LogoUpload({ logo, initials }: Readonly<{ logo: AgencyLogoData | null; initials: string }>) {
   const fileId = logo?.fileId ?? null;
   const form = useRef<HTMLFormElement>(null);
   const [chosen, setChosen] = useState(false);
@@ -31,18 +31,17 @@ export function LogoUpload({ logo, initials }: { logo: AgencyLogoData | null; in
     <div className="flex flex-col gap-4 md:flex-row md:items-start">
       {logo ? (
         <figure className="m-0 flex shrink-0 flex-col items-start gap-1.5">
-          <span role="img" aria-label="Agency logo">
-            <AgencyLogo logo={logo} place="signIn" />
-          </span>
+          <AgencyLogo logo={logo} place="signIn" alt="Agency logo" />
           <figcaption className="text-xs text-muted" data-numeric>
             {logoShape(logo.width, logo.height) === "wide" ? "Wide logo: it gets the wider slot." : "Square slot."} {logo.width} by {logo.height} px after trimming.
           </figcaption>
         </figure>
       ) : (
         <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-subtle">
-          <span role="img" className="text-xl font-bold text-muted" aria-label="No logo yet">
+          <span aria-hidden className="text-xl font-bold text-muted">
             {initials}
           </span>
+          <span className="sr-only">No logo yet</span>
         </div>
       )}
       <form

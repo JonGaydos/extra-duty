@@ -12,7 +12,6 @@ import { isRestricted } from "./restrictions";
 import { FULL_CHECK, buildContext, endOpenWatches, failing, insertAssignment, loadLocked, lockUser, settlePending, signedUpCount, type Assignment } from "./signup";
 import { emit } from "../notifications/notify";
 
-export { isRestricted };
 
 export type VendorRestriction = typeof vendorRestrictions.$inferSelect;
 
@@ -74,6 +73,7 @@ export async function assignPerson(
     .where(and(eq(spotOffers.jobPositionId, position.id), eq(spotOffers.status, "open")))
     .orderBy(asc(spotOffers.createdAt), asc(spotOffers.id));
   const surplus = open.length - Math.max(free - 1, 0);
+  // Sequential: expiries and alerts written in this transaction.
   for (const o of open.slice(open.length - Math.max(surplus, 0))) {
     await expireOffer(tx, o, "expired");
     const who = o.offeredToAssignmentId
@@ -163,6 +163,7 @@ export async function restrictFromVendor(
         ),
       )
       .orderBy(asc(assignments.jobId), asc(assignments.id));
+    // Sequential: each sign-up is ended in this transaction, in order.
     for (const a of future) {
       await leaveAssignment(actor, tx, a.id, {
         status: "removed",

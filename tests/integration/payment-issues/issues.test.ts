@@ -271,7 +271,7 @@ describe("payment issues", () => {
     expect(rb.status).toBe("open");
     expect(rb.closedAt).toBeNull();
     expect(rows.indexOf(rb)).toBeLessThan(rows.indexOf(ra));
-    expect((await tx((t) => vendorIssueHistory(admin, t, fx.vendorId))).length).toBe(rows.length);
+    expect(await tx((t) => vendorIssueHistory(admin, t, fx.vendorId))).toHaveLength(rows.length);
     await expect(tx((t) => vendorIssueHistory(a.person, t, fx.vendorId))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(tx((t) => vendorIssueHistory(vendor, t, fx.vendorId))).rejects.toBeInstanceOf(ForbiddenError);
   });

@@ -11,9 +11,9 @@ import { ValidationError } from "../errors";
  * logging of the URL. Failures carry only a short, generic reason.
  */
 
-export const MAX_BYTES = 5 * 1024 * 1024;
-export const TIMEOUT_MS = 10_000;
-export const MAX_REDIRECTS = 3;
+const MAX_BYTES = 5 * 1024 * 1024;
+const TIMEOUT_MS = 10_000;
+const MAX_REDIRECTS = 3;
 const MAX_URL_LENGTH = 2000;
 
 /** A short, safe reason shown to the deputy. Never put the URL, host or a raw error message in it. */
@@ -54,16 +54,21 @@ export function normalizeFeedUrl(raw: string): string {
 function parseV4(ip: string): number[] | null {
   const parts = ip.split(".");
   if (parts.length !== 4) return null;
-  const out = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : NaN));
+  const out = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : Number.NaN));
   return out.every((n) => n >= 0 && n <= 255) ? out : null;
 }
 
-function blockedV4([a, b, c]: number[]): boolean {
+/** This host, private, loopback, CGNAT and link-local ranges. */
+function privateV4(a: number, b: number): boolean {
   if (a === 0 || a === 10 || a === 127) return true;
   if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
   if (a === 169 && b === 254) return true; // link-local
   if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
+  return a === 192 && b === 168;
+}
+
+function blockedV4([a, b, c]: number[]): boolean {
+  if (privateV4(a, b)) return true;
   if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // IETF protocol, documentation
   if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
   if (a === 198 && b === 51 && c === 100) return true;
@@ -76,12 +81,12 @@ function parseV6(ip: string): number[] | null {
   if (ip.includes("%")) return null;
   let text = ip;
   const tail: number[] = [];
-  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
-  if (dotted) {
-    const v4 = parseV4(dotted[1]);
+  const last = text.slice(text.lastIndexOf(":") + 1);
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(last)) {
+    const v4 = parseV4(last);
     if (!v4) return null;
     tail.push((v4[0] << 8) | v4[1], (v4[2] << 8) | v4[3]);
-    text = text.slice(0, -dotted[1].length) + "0:0";
+    text = text.slice(0, -last.length) + "0:0";
   }
   const halves = text.split("::");
   if (halves.length > 2) return null;
@@ -90,8 +95,8 @@ function parseV6(ip: string): number[] | null {
   const rest = halves.length === 2 ? groups(halves[1]) : [];
   const missing = 8 - head.length - rest.length;
   if (halves.length === 1 ? head.length !== 8 : missing < 1) return null;
-  const all = halves.length === 1 ? head : [...head, ...Array<string>(missing).fill("0"), ...rest];
-  const words = all.map((g) => (/^[0-9a-f]{1,4}$/i.test(g) ? parseInt(g, 16) : NaN));
+  const all = halves.length === 1 ? head : [...head, ...new Array<string>(missing).fill("0"), ...rest];
+  const words = all.map((g) => (/^[0-9a-f]{1,4}$/i.test(g) ? Number.parseInt(g, 16) : Number.NaN));
   if (words.some(Number.isNaN)) return null;
   if (tail.length) {
     words[6] = tail[0];
@@ -195,6 +200,7 @@ async function readLimited(res: HopResponse, maxBytes: number, signal: AbortSign
   });
   aborted.catch(() => {});
   try {
+    // Sequential: a stream is read one chunk at a time.
     for (;;) {
       const next = await Promise.race([iterator.next(), aborted]);
       if (next.done) break;
@@ -207,6 +213,36 @@ async function readLimited(res: HopResponse, maxBytes: number, signal: AbortSign
     void iterator.return?.()?.catch?.(() => {});
   }
   return Buffer.concat(chunks).toString("utf8");
+}
+
+/** The checked address to connect to for this hop: every address the name resolves to must be public. */
+async function checkedAddress(url: URL, deps: FetchDeps, signal: AbortSignal): Promise<string> {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  const addresses = isIP(host) ? [host] : await abortable(deps.resolve(host), signal);
+  if (addresses.length === 0) throw new CalendarFetchError("the address could not be found");
+  if (addresses.some(isBlockedAddress)) throw new CalendarFetchError("that address is not allowed");
+  return addresses[0];
+}
+
+/** Where a redirect points, when it is an https link with no credentials. */
+function redirectTarget(location: string, url: URL): URL {
+  let next: URL;
+  try {
+    next = new URL(location, url);
+  } catch {
+    throw new CalendarFetchError("the server sent a bad redirect");
+  }
+  if (next.protocol !== "https:" || next.username || next.password) throw new CalendarFetchError("the server redirected to a link that is not allowed");
+  return next;
+}
+
+/** The error the deputy sees for a failed fetch: never the raw message or the URL. */
+function shownFetchError(err: unknown, timedOut: boolean): CalendarFetchError {
+  if (err instanceof CalendarFetchError) {
+    return timedOut && err.message === "the request failed" ? new CalendarFetchError("the server took too long") : err;
+  }
+  if (err instanceof ValidationError) return new CalendarFetchError("the link is not allowed");
+  return new CalendarFetchError(timedOut ? "the server took too long" : "the request failed");
 }
 
 /** The calendar text, or a CalendarFetchError whose message is safe to show the deputy. */
@@ -222,27 +258,16 @@ export async function fetchCalendarText(rawUrl: string, given: Partial<FetchDeps
   };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deps.timeoutMs);
-  const timedOut = () => controller.signal.aborted;
   try {
     let url = new URL(normalizeFeedUrl(rawUrl));
+    // Sequential: each hop follows the previous answer's redirect.
     for (let hop = 0; ; hop++) {
-      const host = url.hostname.replace(/^\[|\]$/g, "");
-      const addresses = isIP(host) ? [host] : await abortable(deps.resolve(host), controller.signal);
-      if (addresses.length === 0) throw new CalendarFetchError("the address could not be found");
-      if (addresses.some(isBlockedAddress)) throw new CalendarFetchError("that address is not allowed");
-      const address = addresses[0];
+      const address = await checkedAddress(url, deps, controller.signal);
       const res = await deps.request({ url, address, family: isIP(address) === 6 ? 6 : 4, signal: controller.signal });
       if (res.status >= 300 && res.status < 400 && res.location) {
         res.close();
         if (hop >= deps.maxRedirects) throw new CalendarFetchError("too many redirects");
-        let next: URL;
-        try {
-          next = new URL(res.location, url);
-        } catch {
-          throw new CalendarFetchError("the server sent a bad redirect");
-        }
-        if (next.protocol !== "https:" || next.username || next.password) throw new CalendarFetchError("the server redirected to a link that is not allowed");
-        url = next;
+        url = redirectTarget(res.location, url);
         continue;
       }
       if (res.status !== 200) {
@@ -252,11 +277,7 @@ export async function fetchCalendarText(rawUrl: string, given: Partial<FetchDeps
       return await readLimited(res, deps.maxBytes, controller.signal);
     }
   } catch (err) {
-    if (err instanceof CalendarFetchError) {
-      throw timedOut() && err.message === "the request failed" ? new CalendarFetchError("the server took too long") : err;
-    }
-    if (err instanceof ValidationError) throw new CalendarFetchError("the link is not allowed");
-    throw new CalendarFetchError(timedOut() ? "the server took too long" : "the request failed");
+    throw shownFetchError(err, controller.signal.aborted);
   } finally {
     clearTimeout(timer);
   }

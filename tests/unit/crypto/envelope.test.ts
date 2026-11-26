@@ -66,3 +66,11 @@ test("rewrapping moves a file to a new master key without touching its contents"
   }
   expect(() => rewrapFile(encryptFile(plain, oldKey), randomBytes(32), newKey)).toThrow(/old master key/);
 });
+
+test("an unknown version or a short file is refused before any key is tried", () => {
+  const key = randomBytes(32);
+  const good = encryptFile(Buffer.from("hello"), key);
+  expect(() => decryptFile(Buffer.concat([Buffer.from([9]), good.subarray(1)]), key)).toThrow("Unsupported encrypted file version.");
+  expect(() => decryptFile(Buffer.from([2, 1, 2, 3]), key)).toThrow("Encrypted file is malformed.");
+  expect(() => decryptFile(Buffer.from([1, 1, 2, 3]), key)).toThrow("Encrypted file is malformed.");
+});

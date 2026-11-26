@@ -14,10 +14,8 @@ test("a local put replaces a file atomically", async () => {
   await store.put("w9/one", before, "application/octet-stream");
   let done = false;
   const write = store.put("w9/one", after, "application/octet-stream").then(() => (done = true));
-  const seen = new Set<number>();
   while (!done) {
     const got = await store.get("w9/one");
-    seen.add(got.length);
     expect(got.length === before.length || got.length === after.length).toBe(true);
   }
   await write;

@@ -10,6 +10,7 @@ import { agencyDayKey } from "../time/agency-time";
 import { createJobInSeries, type CreateOptions, type Job, type JobInput } from "./jobs";
 import { expandDates, MAX_BULK_DATES, previewBulk, type DateSelection, type Recurrence, type TimeOverrides } from "./recurrence";
 import { loadSafety, resolveSafetyPins } from "./safety";
+import { byText } from "@/lib/sort";
 
 export type BulkOptions = {
   /** Copy this job's attachments (contract included) onto every new job. */
@@ -45,7 +46,7 @@ async function createOne(actor: Actor, tx: Tx, date: string, input: JobInput, se
  */
 export async function createJobsOnDates(actor: Actor, tx: Tx, input: JobInput, dates: string[], overrides?: TimeOverrides, opts: BulkOptions = {}): Promise<Job[]> {
   if (!opts.create?.authorized) assertCan(actor, "job.create");
-  const unique = [...new Set(dates)].sort();
+  const unique = [...new Set(dates)].sort(byText);
   if (unique.length === 0) throw new ValidationError("Choose at least one date.");
   if (unique.length > MAX_BULK_DATES) throw new ValidationError(`At most ${MAX_BULK_DATES} dates can be created at once.`);
   const settings = await getSettings(tx);
@@ -62,6 +63,7 @@ export async function createJobsOnDates(actor: Actor, tx: Tx, input: JobInput, d
   const startMs = input.startAt.getTime();
   const endMs = input.endAt.getTime();
   const out: Job[] = [];
+  // Sequential: jobs are created one by one, in date order, in this transaction.
   for (const p of plan) {
     const shift = (d: Date | null | undefined, from: number, to: Date) => (d ? new Date(to.getTime() + (d.getTime() - from)) : d);
     const job = await createOne(
@@ -163,7 +165,7 @@ export async function copyJob(actor: Actor, tx: Tx, sourceId: string, selection:
 /** A copy (single, to many dates, or a Repeat) is never made on a date before today's agency date. */
 function refusePastDates(dates: string[], now: Date): void {
   const today = agencyDayKey(now);
-  const past = [...dates].sort().find((d) => d < today);
+  const past = [...dates].sort(byText).find((d) => d < today);
   if (past) throw new ValidationError(`${past}: A copy cannot be made on a past date. Choose today or a later date.`);
 }
 
@@ -174,11 +176,13 @@ function refusePastDates(dates: string[], now: Date): void {
 async function keepDifferentials(tx: Tx, sourceId: string, copies: Job[]): Promise<void> {
   const ordered = (jobId: string) => tx.select().from(jobPositions).where(eq(jobPositions.jobId, jobId)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id));
   const source = await ordered(sourceId);
+  // Sequential: writes in this transaction.
   for (const c of copies) {
     const mine = await ordered(c.id);
+    // Sequential: writes in this transaction.
     for (const [i, p] of mine.entries()) {
       const want = source[i];
-      if (want && want.positionTypeId === p.positionTypeId && want.rateDifferentialCents !== p.rateDifferentialCents) {
+      if (want?.positionTypeId === p.positionTypeId && want.rateDifferentialCents !== p.rateDifferentialCents) {
         await tx.update(jobPositions).set({ rateDifferentialCents: want.rateDifferentialCents }).where(eq(jobPositions.id, p.id));
       }
     }

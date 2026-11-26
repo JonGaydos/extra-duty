@@ -21,7 +21,7 @@ export function TopNav({
   unreadAlerts,
   switchMode,
   logo = null,
-}: {
+}: Readonly<{
   home: string;
   items: NavItem[];
   name: string;
@@ -35,7 +35,7 @@ export function TopNav({
   switchMode?: (role: TrainingRole) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** The agency logo, shown before the brand in its square or wide slot. */
   logo?: AgencyLogoData | null;
-}) {
+}>) {
   const pathname = usePathname();
   const active = activeHref(items, pathname);
   const helpOpen = pathname === "/help" || pathname.startsWith("/help/");

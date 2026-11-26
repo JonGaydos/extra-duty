@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { Client } from "pg";
 import { laterLocalInput } from "./clock";
-import { E2E } from "./env";
+import { E2E, E2E_EXTRA_USERS } from "./env";
 import { FIXTURE, WARNING_TEXT } from "./personnel-fixtures";
 import { signInAs } from "./session";
 
@@ -43,21 +43,23 @@ async function blockTiles(page: Page) {
 
 type Screen = { name: string; path: () => Promise<string>; heading: string | RegExp };
 
+// Every path is a promise, since some screens look up a record id first; `at` gives a fixed path in that shape.
+const at = (path: string) => () => Promise.resolve(path);
 const SCREENS: Screen[] = [
-  { name: "home", path: async () => "/home", heading: /^Hi, Sam/ },
-  { name: "jobs", path: async () => "/jobs", heading: "Details" },
+  { name: "home", path: at("/home"), heading: /^Hi, Sam/ },
+  { name: "jobs", path: at("/jobs"), heading: "Details" },
   { name: "job", path: async () => `/jobs/${await jobId(FIXTURE.flexJob)}`, heading: FIXTURE.flexJob },
-  { name: "calendar", path: async () => "/calendar", heading: "Calendar" },
-  { name: "map", path: async () => "/map", heading: "Map" },
-  { name: "billing", path: async () => "/billing", heading: "Billing" },
-  { name: "billing-history", path: async () => "/billing?tab=history", heading: "Billing" },
+  { name: "calendar", path: at("/calendar"), heading: "Calendar" },
+  { name: "map", path: at("/map"), heading: "Map" },
+  { name: "billing", path: at("/billing"), heading: "Billing" },
+  { name: "billing-history", path: at("/billing?tab=history"), heading: "Billing" },
   { name: "bill", path: async () => `/billing/bill/${await assignmentId(FIXTURE.pastJob)}`, heading: "Bill this detail" },
-  { name: "earnings", path: async () => "/billing/earnings", heading: "Earnings" },
+  { name: "earnings", path: at("/billing/earnings"), heading: "Earnings" },
   { name: "invoice", path: async () => `/invoices/${await invoiceId(FIXTURE.invoicedJob)}`, heading: /^Invoice / },
-  { name: "messages", path: async () => "/messages", heading: "Messages" },
-  { name: "message-new", path: async () => "/messages/new", heading: "New message" },
-  { name: "profile", path: async () => "/profile", heading: "Profile" },
-  { name: "alerts", path: async () => "/alerts", heading: "Alerts" },
+  { name: "messages", path: at("/messages"), heading: "Messages" },
+  { name: "message-new", path: at("/messages/new"), heading: "New message" },
+  { name: "profile", path: at("/profile"), heading: "Profile" },
+  { name: "alerts", path: at("/alerts"), heading: "Alerts" },
 ];
 
 for (const theme of THEMES) {
@@ -305,5 +307,48 @@ test("a sign-up a suspension removed reads as a plain Canceled on Home and in My
     await expect(listed.getByText("Canceled", { exact: true })).toBeVisible();
     await expect(listed.getByText("Your sign-up was canceled.")).toBeVisible();
     await expect(page.locator("body")).not.toContainText(/suspen/i);
+  }
+});
+
+test("Enter on a schedule chip picks it and never saves the half-edited schedule", async ({ page, context }) => {
+  await signInAs(context, "capped");
+  await page.setViewportSize(DESKTOP);
+  await page.goto("/profile");
+  const actions: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) actions.push(r.url());
+  });
+
+  const rotation = page.getByRole("radio", { name: "Rotation" });
+  await rotation.focus();
+  await page.keyboard.press("Enter");
+  await expect(rotation).toBeChecked();
+  await expect(page.getByLabel("First work day")).toBeVisible();
+
+  const buffer = page.getByRole("radio", { name: "30 min" });
+  await buffer.focus();
+  await page.keyboard.press("Enter");
+  await expect(buffer).toBeChecked();
+
+  // Arrow keys still move the choice within the group.
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "45 min" })).toBeChecked();
+
+  await expect(page.getByRole("status").filter({ hasText: "Schedule saved." })).toHaveCount(0);
+  expect(actions).toEqual([]);
+
+  try {
+    // The Save button still submits, and the listener sees that one request.
+    await page.getByRole("button", { name: "Save schedule" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Schedule saved." })).toBeVisible();
+    expect(actions).toHaveLength(1);
+
+    // Other tests sign up as this deputy with no schedule in force: turn it off again.
+    await page.reload();
+    await page.getByRole("button", { name: "Turn off schedule" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Schedule turned off." })).toBeVisible();
+  } finally {
+    // Even after a failure above, leave no schedule in force (what "Turn off schedule" stores).
+    await query("update work_schedules set active = false where user_id = (select id from users where email = $1)", [E2E_EXTRA_USERS.capped.email]);
   }
 });

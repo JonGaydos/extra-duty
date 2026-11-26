@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Deputy earnings" };
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Any deputy's earnings dashboard and tax summary, for coordinators and admins. */
-export default async function DeputyEarningsPage({ params, searchParams }: Props) {
+export default async function DeputyEarningsPage({ params, searchParams }: Readonly<Props>) {
   const actor = await coordinatorActor();
   const { id } = await params;
   const sp = await searchParams;

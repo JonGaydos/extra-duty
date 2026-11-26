@@ -83,9 +83,9 @@ export type Measure =
   | "cancellations"
   | "cancellation_rate";
 
-export type FilterName = "userIds" | "vendorIds" | "typeIds" | "locationIds" | "statuses" | "rankIds" | "qualificationIds";
+type FilterName = "userIds" | "vendorIds" | "typeIds" | "locationIds" | "statuses" | "rankIds" | "qualificationIds";
 
-export type ReportFilters = { [K in FilterName]?: string[] };
+type ReportFilters = { [K in FilterName]?: string[] };
 
 export type ReportSpec = {
   dataset: DatasetName;
@@ -182,6 +182,9 @@ const ALL_FILTERS: FilterName[] = ["userIds", "vendorIds", "typeIds", "locationI
 const DAY_MS = 86_400_000;
 
 const list = (col: Parameters<typeof inArray>[0], values: string[] | undefined): SQL | undefined => (values && values.length > 0 ? inArray(col, values) : undefined);
+const COMMA = sql`, `;
+/** The values as a comma-separated list of bound parameters, for an `in (...)` inside raw SQL. */
+const params = (values: readonly string[]): SQL => sql.join(values.map((v) => sql.param(v)), COMMA);
 
 function ageBucket(days: number): string {
   if (days <= 30) return "0-30";
@@ -197,9 +200,15 @@ function jobFilters(spec: ReportSpec): (SQL | undefined)[] {
   return [list(jobs.vendorId, spec.filters.vendorIds), list(jobs.typeId, spec.filters.typeIds), list(jobs.locationId, spec.filters.locationIds)];
 }
 
+/** The statuses to read: the dataset's own (narrowed to the requested ones when any are), or just the requested ones. */
+function wantedStatuses(statuses: readonly string[] | undefined, requested: string[]): readonly string[] {
+  if (!statuses) return requested;
+  return requested.length > 0 ? statuses.filter((s) => requested.includes(s)) : [...statuses];
+}
+
 const assignmentRows = (statuses: readonly string[] | undefined) => async (tx: Tx, spec: ReportSpec): Promise<Fact[]> => {
   const requested = spec.filters.statuses ?? [];
-  const wanted = statuses ? (requested.length > 0 ? statuses.filter((s) => requested.includes(s)) : [...statuses]) : requested;
+  const wanted = wantedStatuses(statuses, requested);
   if (statuses && wanted.length === 0) return [];
   const allSeasons = await tx.select().from(seasons);
   const rows = await tx
@@ -325,7 +334,7 @@ export const DATASETS: Record<DatasetName, Dataset> = {
             gte(jobs.startAt, spec.from),
             lte(jobs.startAt, spec.to),
             ...jobFilters(spec),
-            wanted.length > 0 ? sql`${status} in (${sql.join(wanted.map((w) => sql`${w}`), sql`, `)})` : undefined,
+            wanted.length > 0 ? sql`${status} in (${params(wanted)})` : undefined,
           ),
         )
         .orderBy(asc(jobs.startAt), asc(jobs.id))
@@ -634,7 +643,7 @@ async function activityFacts(tx: Tx, spec: ReportSpec): Promise<Fact[]> {
     list(users.id, spec.filters.userIds),
     list(users.rankId, ranks),
     quals.length > 0
-      ? sql`exists (select 1 from ${userQualifications} uq where uq.user_id = ${users.id} and uq.revoked_at is null and uq.qualification_id in (${sql.join(quals.map((q) => sql`${q}`), sql`, `)}))`
+      ? sql`exists (select 1 from ${userQualifications} uq where uq.user_id = ${users.id} and uq.revoked_at is null and uq.qualification_id in (${params(quals)}))`
       : undefined,
   );
   const kind = sql<ActivityKind>`case

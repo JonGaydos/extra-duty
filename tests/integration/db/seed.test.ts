@@ -3,6 +3,7 @@ import { startTestDb, type TestDb } from "../../setup/db";
 import { closeDb, createDb } from "@/db/client";
 import { seed } from "@/db/seed";
 import { positionTypes, ranks, seasons, users } from "@/db/schema";
+import { byText } from "@/lib/sort";
 
 let testDb: TestDb;
 const db = () => createDb(testDb.url);
@@ -21,7 +22,7 @@ test("seed is idempotent and creates the defaults", async () => {
     await seed(d, { adminEmail: "Admin@Example.com" });
     await seed(d, { adminEmail: "admin@example.com" });
     const rankRows = await d.select().from(ranks);
-    expect(rankRows.map((r) => r.name).sort()).toEqual(["CSO", "Deputy Sheriff", "Dispatcher", "Posse"]);
+    expect(rankRows.map((r) => r.name).sort(byText)).toEqual(["CSO", "Deputy Sheriff", "Dispatcher", "Posse"]);
     expect(rankRows.find((r) => r.name === "Dispatcher")?.inLadder).toBe(false);
     expect(await d.select().from(positionTypes)).toHaveLength(6);
     const season = await d.select().from(seasons);

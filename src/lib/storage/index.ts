@@ -57,7 +57,8 @@ const shared: Partial<Record<DataMode, Storage>> = {};
 
 /** The storage for `mode`, created on first use. */
 export function storageFor(mode: DataMode): Storage {
-  return (shared[mode] ??= mode === "live" ? createStorage() : createStorage(trainingLocation()));
+  shared[mode] ??= mode === "live" ? createStorage() : createStorage(trainingLocation());
+  return shared[mode];
 }
 
 /** The storage of the current mode (see runInMode), used by domain services. */

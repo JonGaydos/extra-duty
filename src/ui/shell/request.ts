@@ -7,7 +7,9 @@ import type { RequestContext } from "@/domain/training/mode";
 
 // Kept on globalThis so every Next bundle in the process shares it (see db/client.ts).
 const KEY = Symbol.for("extra-duty.action-context");
-const actionContext = ((globalThis as Record<symbol, unknown>)[KEY] ??= new AsyncLocalStorage<RequestContext | null>()) as AsyncLocalStorage<RequestContext | null>;
+const globals = globalThis as Record<symbol, unknown>;
+globals[KEY] ??= new AsyncLocalStorage<RequestContext | null>();
+const actionContext = globals[KEY] as AsyncLocalStorage<RequestContext | null>;
 
 /** Settled once per page render: the layout and the page share it. */
 const resolveOnce = cache(async (): Promise<RequestContext | null> => getRequestContext(await headers()));

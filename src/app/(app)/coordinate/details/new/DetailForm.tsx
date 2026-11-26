@@ -18,18 +18,98 @@ import { AddPositionRow } from "../../_coordinator/EditPanel";
 import { RateRangeNotice } from "../../_coordinator/RateRangeNotice";
 import { SiteContactFields } from "../../_coordinator/SiteContactFields";
 import { addPosition, changePositionType, detailSummary, spanMinutes } from "../../_coordinator/detail-summary";
+import { useRowKeys } from "@/ui/use-row-keys";
 
 const minutesOf = (t: string) => (/^\d{2}:\d{2}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : null);
 const DATE_ERROR = /^(\d{4}-\d{2}-\d{2}): (.*)$/;
 const RELEASE = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
+type Summary = ReturnType<typeof detailSummary>;
+
+/** Typed dollars as cents; anything unreadable falls back to the vendor's or the agency's default rate. */
+function typedRate(rate: string, fallback: number): number {
+  const t = rate.replace(/[$,\s]/g, "");
+  if (/^\d{1,5}(\.\d{1,2})?$/.test(t)) {
+    const [w, c = ""] = t.split(".");
+    return Number(w) * 100 + Number(c.padEnd(2, "0"));
+  }
+  return fallback;
+}
+
+/** When the first date opens for sign-up. */
+function releaseLine(held: boolean, release: string | undefined): string {
+  if (held) return "Held until you release it";
+  if (!release) return "Choose a date";
+  const at = RELEASE.format(new Date(release));
+  return new Date(release).getTime() <= Date.now() ? `Opens now (released ${at})` : `Opens ${at}`;
+}
+
+/** One deputy's pay, or the range when it differs between dates or positions. */
+function EachEarns({ low, high }: Readonly<{ low: Summary["low"]; high: Summary["high"] }>) {
+  if (!low || !high) return <>Set the times</>;
+  if (low.totalCents === high.totalCents && low.rateCents === high.rateCents) return <PayLabel variant="plain" totalCents={low.totalCents} rateCents={low.rateCents} />;
+  return (
+    <>
+      <PayLabel variant="plain" totalCents={low.totalCents} rateCents={low.rateCents} />
+      <span className="text-sm text-muted">to</span>
+      <PayLabel variant="plain" totalCents={high.totalCents} rateCents={high.rateCents} />
+    </>
+  );
+}
+
+/** The summary beside the form: release, pay, dates with their own times, the vendor total, and Create. */
+function SummaryCard({ releaseText, summary, n, overrides, chosen, busy }: Readonly<{ releaseText: string; summary: Summary; n: number; overrides: Record<string, Override>; chosen: string[]; busy: boolean }>) {
+  return (
+    <Card tone="accent" className="md:sticky md:top-6">
+      <CardTitle>Summary</CardTitle>
+      <dl className="m-0 flex flex-col gap-2 text-body">
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted">Release</dt>
+          <dd className="m-0 text-right">{releaseText}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted">Each deputy earns</dt>
+          <dd className="m-0 flex flex-col items-end text-right" data-testid="summary-each">
+            <EachEarns low={summary.low} high={summary.high} />
+          </dd>
+        </div>
+        {n > 1 && Object.keys(overrides).some((k) => chosen.includes(k)) ? (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted">Dates with their own times</dt>
+            {summary.perDate
+              .filter((x) => x.date && overrides[x.date])
+              .map((x) => (
+                <dd key={x.date} className="m-0 flex justify-between gap-3 text-sm">
+                  <span>{keyLabel(x.date!)}</span>
+                  {x.low && x.high ? <PayLabel variant="plain" totalCents={x.low.totalCents} rateCents={x.low.rateCents} upTo={x.high} /> : <span>Set the times</span>}
+                </dd>
+              ))}
+          </div>
+        ) : null}
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted">Vendor total{n > 1 ? `, ${n} dates` : ""}</dt>
+          <dd className="m-0 text-right font-semibold" data-numeric data-testid="summary-total">
+            {summary.vendorTotalCents !== null ? dollars(summary.vendorTotalCents) : "Set the times"}
+          </dd>
+        </div>
+      </dl>
+      <p className="m-0 text-sm text-muted">No alert goes out when it posts. Deputies find it in the app once it opens.</p>
+      <Button type="submit" size="lg" full busy={busy} disabled={n === 0}>
+        {n <= 1 ? "Create detail" : `Create ${n} details`}
+      </Button>
+      {n === 0 ? <p className="m-0 text-xs text-muted">Choose at least one date.</p> : null}
+    </Card>
+  );
+}
+
 /**
  * New detail: vendor and place, when (times plus the Dates step and a preview of every date), positions, pay,
  * officer safety, ops plan and release. One save creates every date as a single series, or nothing.
  */
-export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { options: DetailFormOptions; initial: DetailWire; today: string; fromJobId?: string; fromTitle?: string }) {
+export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Readonly<{ options: DetailFormOptions; initial: DetailWire; today: string; fromJobId?: string; fromTitle?: string }>) {
   const router = useRouter();
   const [d, setD] = useState<DetailWire>(initial);
+  const positionKeys = useRowKeys(d.positions);
   const [safety, setSafety] = useState(() => safetyRows(initial.safetyAddresses));
   const [dates, setDates] = useState<string[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -61,14 +141,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
     };
   }, [d.opsPlanRequired, d.vendorId, d.title, chosen]);
 
-  const rateCents = (() => {
-    const t = d.rate.replace(/[$,\s]/g, "");
-    if (/^\d{1,5}(\.\d{1,2})?$/.test(t)) {
-      const [w, c = ""] = t.split(".");
-      return Number(w) * 100 + Number(c.padEnd(2, "0"));
-    }
-    return vendor?.defaultRateCents ?? options.agencyDefaultRateCents;
-  })();
+  const rateCents = typedRate(d.rate, vendor?.defaultRateCents ?? options.agencyDefaultRateCents);
   const minutes = spanMinutes(d.startTime, d.endTime);
   const differential = (id: string) => options.positionTypes.find((t) => t.id === id)?.rateDifferentialCents ?? 0;
   const summary = detailSummary({
@@ -83,16 +156,10 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
   const defaultType = options.defaultPositionTypeId ?? options.positionTypes[0]?.id ?? "";
   const people = d.positions.reduce((n, p) => n + (Number(p.count) || 0), 0);
   const release = chosen[0] ? options.releaseByMonth[chosen[0].slice(0, 7)] : undefined;
-  const releaseText = d.held
-    ? "Held until you release it"
-    : !release
-      ? "Choose a date"
-      : new Date(release).getTime() <= Date.now()
-        ? `Opens now (released ${RELEASE.format(new Date(release))})`
-        : `Opens ${RELEASE.format(new Date(release))}`;
+  const releaseText = releaseLine(d.held, release);
   const n = chosen.length;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = (e: React.SubmitEvent) => {
     e.preventDefault();
     setDateErrors({});
     run(
@@ -220,8 +287,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
             </div>
           ) : null}
           <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={!!d.flex} onChange={(e) => set("flex", e.target.checked ? { earliest: d.startTime, latest: d.endTime, allowShorter: false } : null)} className="size-4.5 accent-accent" />
-            Flexible times
+            <input type="checkbox" checked={!!d.flex} onChange={(e) => set("flex", e.target.checked ? { earliest: d.startTime, latest: d.endTime, allowShorter: false } : null)} className="size-4.5 accent-accent" />Flexible times
           </label>
           {d.flex ? <FlexFields flex={d.flex} onFlex={(f) => set("flex", f)} /> : null}
         </Card>
@@ -235,7 +301,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
           </div>
           <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {d.positions.map((p, i) => (
-              <li key={i} className="grid grid-cols-[minmax(0,1fr)_5.5rem_auto] items-end gap-2">
+              <li key={positionKeys[i]} className="grid grid-cols-[minmax(0,1fr)_5.5rem_auto] items-end gap-2">
                 <FormField label={`Position ${i + 1}`}>
                   <Select value={p.positionTypeId} onChange={(e) => set("positions", changePositionType(d.positions, i, e.target.value))}>
                     {options.positionTypes.map((t) => (
@@ -277,8 +343,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
         <Card>
           <CardTitle>Ops plan and release</CardTitle>
           <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className="size-4.5 accent-accent" />
-            Ops plan required (the Incident Commander submits it before the start)
+            <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className="size-4.5 accent-accent" />Ops plan required (the Incident Commander submits it before the start)
           </label>
           {plan ? (
             <Notice tone="info">
@@ -290,13 +355,11 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
             </Notice>
           ) : null}
           <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={d.held} onChange={(e) => set("held", e.target.checked)} className="size-4.5 accent-accent" />
-            Hold: do not release until I release it
+            <input type="checkbox" checked={d.held} onChange={(e) => set("held", e.target.checked)} className="size-4.5 accent-accent" />Hold: do not release until I release it
           </label>
           {fromJobId ? (
             <label className="flex min-h-11 items-center gap-2">
-              <input type="checkbox" checked={copyAttachments} onChange={(e) => setCopyAttachments(e.target.checked)} className="size-4.5 accent-accent" />
-              Copy attachments, contract included
+              <input type="checkbox" checked={copyAttachments} onChange={(e) => setCopyAttachments(e.target.checked)} className="size-4.5 accent-accent" />Copy attachments, contract included
             </label>
           ) : null}
           <FormField label="Notes for deputies" hint="Optional">
@@ -305,57 +368,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: { 
         </Card>
       </div>
 
-      <Card tone="accent" className="md:sticky md:top-6">
-        <CardTitle>Summary</CardTitle>
-        <dl className="m-0 flex flex-col gap-2 text-body">
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Release</dt>
-            <dd className="m-0 text-right">{releaseText}</dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Each deputy earns</dt>
-            <dd className="m-0 flex flex-col items-end text-right" data-testid="summary-each">
-              {summary.low && summary.high ? (
-                summary.low.totalCents === summary.high.totalCents && summary.low.rateCents === summary.high.rateCents ? (
-                  <PayLabel variant="plain" totalCents={summary.low.totalCents} rateCents={summary.low.rateCents} />
-                ) : (
-                  <>
-                    <PayLabel variant="plain" totalCents={summary.low.totalCents} rateCents={summary.low.rateCents} />
-                    <span className="text-sm text-muted">to</span>
-                    <PayLabel variant="plain" totalCents={summary.high.totalCents} rateCents={summary.high.rateCents} />
-                  </>
-                )
-              ) : (
-                "Set the times"
-              )}
-            </dd>
-          </div>
-          {n > 1 && Object.keys(overrides).some((k) => chosen.includes(k)) ? (
-            <div className="flex flex-col gap-1">
-              <dt className="text-muted">Dates with their own times</dt>
-              {summary.perDate
-                .filter((x) => x.date && overrides[x.date])
-                .map((x) => (
-                  <dd key={x.date} className="m-0 flex justify-between gap-3 text-sm">
-                    <span>{keyLabel(x.date!)}</span>
-                    {x.low && x.high ? <PayLabel variant="plain" totalCents={x.low.totalCents} rateCents={x.low.rateCents} upTo={x.high} /> : <span>Set the times</span>}
-                  </dd>
-                ))}
-            </div>
-          ) : null}
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">Vendor total{n > 1 ? `, ${n} dates` : ""}</dt>
-            <dd className="m-0 text-right font-semibold" data-numeric data-testid="summary-total">
-              {summary.vendorTotalCents !== null ? dollars(summary.vendorTotalCents) : "Set the times"}
-            </dd>
-          </div>
-        </dl>
-        <p className="m-0 text-sm text-muted">No alert goes out when it posts. Deputies find it in the app once it opens.</p>
-        <Button type="submit" size="lg" full busy={busy} disabled={n === 0}>
-          {n <= 1 ? "Create detail" : `Create ${n} details`}
-        </Button>
-        {n === 0 ? <p className="m-0 text-xs text-muted">Choose at least one date.</p> : null}
-      </Card>
+      <SummaryCard releaseText={releaseText} summary={summary} n={n} overrides={overrides} chosen={chosen} busy={busy} />
     </form>
   );
 }

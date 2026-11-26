@@ -1,6 +1,7 @@
 import { Document, Image, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Block, Inline } from "@/domain/manuals/markdown";
 import { AgencyHeader, type AgencyHeaderData } from "./invoice-pdf";
+import { keyedByContent } from "@/lib/list-keys";
 
 /** A screenshot ready for the PDF: JPEG bytes and its pixel size, and whether it is a phone shot. */
 export type PdfImage = { data: Buffer; width: number; height: number; phone: boolean };
@@ -43,31 +44,36 @@ const s = StyleSheet.create({
 /** Letter page width less the margins, in points. */
 const COLUMN = 612 - 96;
 
-function Inlines({ inline }: { inline: Inline[] }) {
-  return (
-    <>
-      {inline.map((p, i) =>
-        p.t === "strong" ? (
-          <Text key={i} style={s.bold}>
-            {p.v}
-          </Text>
-        ) : p.t === "code" ? (
-          <Text key={i} style={s.key}>
-            {p.v}
-          </Text>
-        ) : p.t === "link" && /^https?:/.test(p.href) ? (
-          <Link key={i} src={p.href}>
-            {p.v}
-          </Link>
-        ) : (
-          <Text key={i}>{p.v}</Text>
-        ),
-      )}
-    </>
-  );
+function inlineNode(key: string, p: Inline) {
+  if (p.t === "strong") {
+    return (
+      <Text key={key} style={s.bold}>
+        {p.v}
+      </Text>
+    );
+  }
+  if (p.t === "code") {
+    return (
+      <Text key={key} style={s.key}>
+        {p.v}
+      </Text>
+    );
+  }
+  if (p.t === "link" && /^https?:/.test(p.href)) {
+    return (
+      <Link key={key} src={p.href}>
+        {p.v}
+      </Link>
+    );
+  }
+  return <Text key={key}>{p.v}</Text>;
 }
 
-function Shot({ img, indent }: { img: PdfImage; indent: number }) {
+function Inlines({ inline }: Readonly<{ inline: Inline[] }>) {
+  return <>{keyedByContent(inline).map(({ key, item: p }) => inlineNode(key, p))}</>;
+}
+
+function Shot({ img, indent }: Readonly<{ img: PdfImage; indent: number }>) {
   // Phone shots are shown at about phone size; desktop shots use the column.
   const max = img.phone ? 190 : COLUMN - indent;
   // Never taller than the page's usable height (Letter less margins), so a tall picture shrinks instead of failing.
@@ -77,26 +83,26 @@ function Shot({ img, indent }: { img: PdfImage; indent: number }) {
   return <Image src={{ data: img.data, format: "jpg" }} style={[s.shot, { width, height }]} />;
 }
 
-function Blocks({ blocks, images, indent = 0 }: { blocks: Block[]; images: Map<string, PdfImage>; indent?: number }) {
+function Blocks({ blocks, images, indent = 0 }: Readonly<{ blocks: Block[]; images: Map<string, PdfImage>; indent?: number }>) {
   return (
     <>
-      {blocks.map((b, i) => {
+      {keyedByContent(blocks).map(({ key, item: b }) => {
         switch (b.type) {
           case "heading":
             return b.level === 1 ? null : (
-              <Text key={i} style={b.level === 2 ? s.h2 : s.h3} minPresenceAhead={40}>
+              <Text key={key} style={b.level === 2 ? s.h2 : s.h3} minPresenceAhead={40}>
                 {b.text}
               </Text>
             );
           case "paragraph":
             return (
-              <Text key={i} style={s.p}>
+              <Text key={key} style={s.p}>
                 <Inlines inline={b.inline} />
               </Text>
             );
           case "note":
             return (
-              <View key={i} style={s.note} wrap={false}>
+              <View key={key} style={s.note} wrap={false}>
                 <Text>
                   <Inlines inline={b.inline} />
                 </Text>
@@ -104,13 +110,13 @@ function Blocks({ blocks, images, indent = 0 }: { blocks: Block[]; images: Map<s
             );
           case "image": {
             const img = images.get(b.src);
-            return img ? <Shot key={i} img={img} indent={indent} /> : null;
+            return img ? <Shot key={key} img={img} indent={indent} /> : null;
           }
           case "list":
             return (
-              <View key={i} style={{ marginBottom: 4 }}>
-                {b.items.map((item, j) => (
-                  <View key={j} style={b.ordered ? s.step : s.bullet}>
+              <View key={key} style={{ marginBottom: 4 }}>
+                {keyedByContent(b.items).map(({ key: inner, item, index: j }) => (
+                  <View key={inner} style={b.ordered ? s.step : s.bullet}>
                     <Text style={b.ordered ? s.stepNum : s.bulletMark}>{b.ordered ? `${j + 1}.` : "-"}</Text>
                     <View style={s.stepBody}>
                       <Blocks blocks={item} images={images} indent={indent + 22} />
@@ -125,7 +131,7 @@ function Blocks({ blocks, images, indent = 0 }: { blocks: Block[]; images: Map<s
   );
 }
 
-function Footer({ title }: { title: string }) {
+function Footer({ title }: Readonly<{ title: string }>) {
   return (
     <View style={s.footer} fixed>
       <Text>{title}</Text>

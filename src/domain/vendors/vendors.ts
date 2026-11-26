@@ -19,14 +19,12 @@ import type { SendSchedule } from "../invoices/send-schedule";
 import { getSettings } from "../settings/settings";
 import { cleanChangedContactName, cleanContactName } from "../contact-name";
 import { cleanChangedPhone, cleanPhone } from "../phone";
+import { isEmail } from "@/lib/is-email";
 
-export { geocodeAddress } from "./geocode";
 
 export type Vendor = typeof vendors.$inferSelect;
 export type VendorLocation = typeof vendorLocations.$inferSelect;
 export type VendorDocument = typeof vendorDocuments.$inferSelect;
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type VendorInput = {
   name: string;
@@ -53,7 +51,7 @@ function cleanEmails(list: string[]): string[] {
   const out: string[] = [];
   for (const raw of list) {
     const e = normalizeEmail(raw);
-    if (!e || !EMAIL.test(e)) throw new ValidationError(`"${String(raw).trim()}" is not a valid email address.`);
+    if (!e || !isEmail(e)) throw new ValidationError(`"${String(raw).trim()}" is not a valid email address.`);
     if (!out.includes(e)) out.push(e);
   }
   return out;
@@ -121,15 +119,29 @@ export async function createVendor(actor: Actor, tx: Tx, input: VendorInput): Pr
   return row;
 }
 
+function requiredName(raw: string): string {
+  const name = raw.trim();
+  if (!name) throw new ValidationError("Vendor name is required.");
+  return name;
+}
+
+/** Adds the invoice send schedule and the approved-invoice email choice to the patch, when given and valid. */
+function setInvoiceOptions(patch: Partial<typeof vendors.$inferInsert>, input: Partial<VendorInput>): void {
+  if (input.invoiceSendSchedule !== undefined) {
+    if (input.invoiceSendSchedule !== null && !SCHEDULES.includes(input.invoiceSendSchedule)) throw new ValidationError("Choose when invoices are sent.");
+    patch.invoiceSendSchedule = input.invoiceSendSchedule;
+  }
+  if (input.emailApprovedInvoices !== undefined) {
+    if (typeof input.emailApprovedInvoices !== "boolean") throw new ValidationError("Choose whether approved invoices are emailed to this vendor.");
+    patch.emailApprovedInvoices = input.emailApprovedInvoices;
+  }
+}
+
 export async function updateVendor(actor: Actor, tx: Tx, id: string, input: Partial<VendorInput>): Promise<Vendor> {
   assertCan(actor, "vendor.manage");
   const before = await getVendorRow(tx, id);
   const patch: Partial<typeof vendors.$inferInsert> = {};
-  if (input.name !== undefined) {
-    const name = input.name.trim();
-    if (!name) throw new ValidationError("Vendor name is required.");
-    patch.name = name;
-  }
+  if (input.name !== undefined) patch.name = requiredName(input.name);
   if (input.typeId !== undefined) {
     await assertType(tx, input.typeId);
     patch.typeId = input.typeId;
@@ -142,14 +154,7 @@ export async function updateVendor(actor: Actor, tx: Tx, id: string, input: Part
     if (patch.defaultRateCents !== before.defaultRateCents) await assertDefaultRateInRange(tx, patch.defaultRateCents);
   }
   if (input.notes !== undefined) patch.notes = cleanText(input.notes);
-  if (input.invoiceSendSchedule !== undefined) {
-    if (input.invoiceSendSchedule !== null && !SCHEDULES.includes(input.invoiceSendSchedule)) throw new ValidationError("Choose when invoices are sent.");
-    patch.invoiceSendSchedule = input.invoiceSendSchedule;
-  }
-  if (input.emailApprovedInvoices !== undefined) {
-    if (typeof input.emailApprovedInvoices !== "boolean") throw new ValidationError("Choose whether approved invoices are emailed to this vendor.");
-    patch.emailApprovedInvoices = input.emailApprovedInvoices;
-  }
+  setInvoiceOptions(patch, input);
   if (Object.keys(patch).length === 0) return before;
   const [after] = await tx.update(vendors).set(patch).where(eq(vendors.id, id)).returning();
   await recordAudit(tx, { actor, action: "vendor.update", entityType: "vendor", entityId: id, before, after });
@@ -191,6 +196,7 @@ export async function listVendors(actor: Actor, tx: Tx, filter: VendorFilter = {
 
 /** One alert per current job of the vendor to the people signed up or in line for it (spec 12.7a, 14). */
 async function alertLockChange(tx: Tx, vendor: Vendor, type: "job.locked" | "job.unlocked", title: string, body: string, startAfter: Date = new Date()): Promise<void> {
+  // Sequential: alert writes in this transaction.
   for (const job of await currentJobsOf(tx, vendor.id, startAfter, new Date())) {
     await emit(tx, { recipients: await jobAudience(tx, job), type, title: `${title}: ${job.title}`, body, link: `/jobs/${job.id}` });
   }
@@ -239,7 +245,7 @@ export async function resolvePaymentHold(
     .set({ resolvedBy: actor.userId, resolvedAt: new Date(), outcome: input.outcome, note })
     .where(and(eq(vendorHolds.vendorId, vendorId), isNull(vendorHolds.resolvedAt)))
     .returning();
-  const open = resolved.sort((a, b) => a.placedAt.getTime() - b.placedAt.getTime())[0];
+  const open = resolved.toSorted((a, b) => a.placedAt.getTime() - b.placedAt.getTime())[0];
   const [after] = await tx
     .update(vendors)
     .set({ paymentHold: false, paymentHoldReason: null })
@@ -487,6 +493,7 @@ export async function contractExpiryTick(tx: Tx, now: Date): Promise<ContractRem
     .orderBy(asc(vendorDocuments.expiresOn), asc(vendorDocuments.id))
     .for("update", { of: vendorDocuments });
   const out: ContractReminder[] = [];
+  // Sequential: updates and audits on the locked rows, in this transaction.
   for (const { doc, vendorName } of rows) {
     const days = daysUntil(today, doc.expiresOn!);
     let due: 60 | 30 | null = null;
@@ -529,7 +536,7 @@ export async function createVendorLogin(
   const vendor = await getVendorRow(tx, vendorId);
   if (!vendor.active) throw new ValidationError("This vendor is deactivated.");
   const email = normalizeEmail(input.email);
-  if (!email || !EMAIL.test(email)) throw new ValidationError("A valid email address is required.");
+  if (!email || !isEmail(email)) throw new ValidationError("A valid email address is required.");
   const name = input.name.trim();
   if (!name) throw new ValidationError("Name is required.");
   const [dup] = await tx.select({ id: users.id }).from(users).where(eq(users.email, email));
