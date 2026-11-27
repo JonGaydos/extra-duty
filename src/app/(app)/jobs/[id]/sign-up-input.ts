@@ -24,6 +24,8 @@ function passLabel(c: CheckResult, windowHours: number): string {
       return "Your account is active";
     case "billing_lock":
       return "Billing is up to date";
+    case "w9":
+      return "Your W-9 is approved";
     case "overlap":
       return "No overlap with your other details";
     case "cap_rolling":

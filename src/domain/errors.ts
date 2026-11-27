@@ -7,6 +7,7 @@ export type CheckName =
   | "active"
   | "suspended"
   | "billing_lock"
+  | "w9"
   | "overlap"
   | "cap_rolling"
   | "cap_week"

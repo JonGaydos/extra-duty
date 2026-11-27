@@ -1,6 +1,6 @@
-import { and, count, desc, eq, ilike, inArray, isNull, ne, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gt, ilike, inArray, isNull, ne, notInArray, or, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { jobs, messageRecipients, messages, users } from "@/db/schema";
+import { assignments, jobs, messageRecipients, messages, spotOffers, users, vendors } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
@@ -113,6 +113,44 @@ async function assertJobExists(tx: Tx, jobId: unknown): Promise<void> {
   }
 }
 
+export type LinkableDetail = { id: string; number: number; vendorName: string; startAt: Date };
+
+/**
+ * The details a message may be "About" (owner decision 2026-11-27). Never one that has ended. Staff may link any other
+ * (not canceled or declined). A deputy only one they are signed up for, waiting on a shorter shift for, or offered a
+ * spot on as a backup; so a detail they cannot see (confidential to its people) is never offered to them.
+ */
+export async function linkableDetails(actor: Actor, tx: Tx, now: Date = new Date(), onlyJobId?: string): Promise<LinkableDetail[]> {
+  assertCan(actor, "message.send");
+  const live = and(gt(jobs.endAt, now), notInArray(jobs.state, ["canceled", "declined"]), onlyJobId ? eq(jobs.id, onlyJobId) : undefined);
+  const cols = { id: jobs.id, number: jobs.number, vendorName: vendors.name, startAt: jobs.startAt };
+  if (isCoordinator(actor)) {
+    return tx.select(cols).from(jobs).innerJoin(vendors, eq(vendors.id, jobs.vendorId)).where(live).orderBy(asc(jobs.startAt), asc(jobs.number));
+  }
+  const offered = exists(
+    tx
+      .select({ x: spotOffers.id })
+      .from(spotOffers)
+      .where(and(eq(spotOffers.status, "open"), or(eq(spotOffers.offeredToAssignmentId, assignments.id), and(eq(spotOffers.mode, "all_backups"), eq(spotOffers.jobPositionId, assignments.jobPositionId))))),
+  );
+  const mine = or(inArray(assignments.status, ["signed_up", "pending_short"]), and(eq(assignments.status, "backup"), offered));
+  return tx
+    .selectDistinct(cols)
+    .from(assignments)
+    .innerJoin(jobs, eq(jobs.id, assignments.jobId))
+    .innerJoin(vendors, eq(vendors.id, jobs.vendorId))
+    .where(and(eq(assignments.userId, actor.userId), mine, live))
+    .orderBy(asc(jobs.startAt), asc(jobs.number));
+}
+
+/** Refuses an "About a detail" link the actor may not make: an unknown detail, an ended one, or (for a deputy) not theirs. */
+async function assertMayLink(actor: Actor, tx: Tx, jobId: unknown, now: Date): Promise<void> {
+  await assertJobExists(tx, jobId);
+  if ((await linkableDetails(actor, tx, now, jobId as string)).length === 0) {
+    throw new ForbiddenError("You can link only a detail that has not ended and that you are signed up for, pending on or offered.");
+  }
+}
+
 /** Who a reply also goes to: the original recipients when the sender replies, else the original sender. */
 async function replyRecipients(actor: Actor, tx: Tx, replyToMessageId: unknown): Promise<string[]> {
   if (typeof replyToMessageId !== "string" || !UUID.test(replyToMessageId)) throw new NotFoundError("Message not found.");
@@ -144,11 +182,17 @@ async function liveRecipients(actor: Actor, tx: Tx, ids: string[], everyone: boo
  * never inactive or vendor users. A reply also goes to the original sender. Coordinator and admin messages
  * are mandatory alerts (they ignore alert choices).
  */
-export async function sendMessage(actor: Actor, tx: Tx, input: SendInput): Promise<Message> {
+export async function sendMessage(actor: Actor, tx: Tx, input: SendInput, now: Date = new Date()): Promise<Message> {
   assertCan(actor, "message.send");
+  checkSendInput(input);
+  if (input.jobId !== undefined) await assertMayLink(actor, tx, input.jobId, now);
+  return deliver(actor, tx, input);
+}
+
+/** Sends after the caller has checked the detail link. */
+async function deliver(actor: Actor, tx: Tx, input: SendInput): Promise<Message> {
   const { subject, body } = checkSendInput(input);
   const audiences = input.audiences;
-  if (input.jobId !== undefined) await assertJobExists(tx, input.jobId);
 
   const { ids, everyone } = await resolve(actor, tx, audiences);
   if (input.replyToMessageId !== undefined) {
@@ -197,7 +241,8 @@ export async function messageCoordinators(actor: Actor, tx: Tx, input: { jobId: 
       : [];
   if (!job) throw new NotFoundError("Job not found.");
   const prefix = `Question about Detail #${job.number}: `;
-  return sendMessage(actor, tx, {
+  // A question from the detail's own page: any detail the person can open, so the link is not the compose page's rule.
+  return deliver(actor, tx, {
     audiences: [{ kind: "coordinators" }],
     subject: Array.from(`${prefix}${job.title}`).slice(0, 200).join(""),
     body: input.body,

@@ -20,6 +20,7 @@ function ctx(over: Partial<EligibilityContext> = {}): EligibilityContext {
     person: { active: true, suspendedUntil: null, rankId: "deputy", qualificationIds: [] },
     personAssignments: [],
     billingLock: { locked: false, unbilledCount: 0, unacknowledgedCount: 0 },
+    w9Lock: { locked: false, message: "" },
     caps: [],
     restrictedFromVendor: false,
     rollingWindowHours: 24,
@@ -52,12 +53,22 @@ describe("evaluateSignup: started detail", () => {
   });
 });
 
+describe("evaluateSignup: W-9 lock", () => {
+  it("fails only the w9 check with the lock's own message, after the billing lock", () => {
+    const r = evaluateSignup(ctx({ w9Lock: { locked: true, message: "A new W-9 was due Jan 31" } }));
+    expect(r.canSignUp).toBe(false);
+    expect(r.checks.filter((c) => !c.ok)).toEqual([{ check: "w9", ok: false, message: "A new W-9 was due Jan 31" }]);
+    const names = r.checks.map((c) => c.check);
+    expect(names.indexOf("w9")).toBe(names.indexOf("billing_lock") + 1);
+  });
+});
+
 describe("evaluateSignup", () => {
   it("passes everything for an eligible person", () => {
     const r = evaluateSignup(ctx());
     expect(r.canSignUp).toBe(true);
     expect(r.canBackup).toBe(false);
-    expect(r.checks).toHaveLength(13);
+    expect(r.checks).toHaveLength(14);
     expect(r.checks.every((c) => c.ok && c.message === "")).toBe(true);
   });
 

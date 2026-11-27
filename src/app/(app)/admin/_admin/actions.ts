@@ -46,6 +46,9 @@ import { decideAccessReviewItem, startAccessReview, type ReviewDecision } from "
 import { liftSuspension, suspendUser } from "@/domain/users/suspension";
 import { writeOffDetail, type DepartureChecklist } from "@/domain/users/departure";
 import { createUser, deactivateUser, departureChecklist, getUserOrThrow, reactivateUser, updateUser } from "@/domain/users/users";
+import { reviewW9 } from "@/domain/w9/w9";
+import { createW9Request } from "@/domain/w9/requests";
+import type { W9RequestAudience } from "@/db/schema";
 import { parseDollars } from "../../coordinate/_coordinator/detail-input";
 import { plural } from "../../_personnel/format";
 import { act, type ActionResult } from "../../_personnel/result";
@@ -94,6 +97,31 @@ export async function suspendUserAction(input: { id: string; reason: string; unt
     }
     await suspendUser(actor, tx, input.id, { reason: input.reason, until, removeFutureAssignments: input.removeFutureAssignments });
     return { ok: true, message: "Suspended. They were told why." };
+  });
+}
+
+/** Approve a pending W-9 with its signature date and form revision, or reject it with a reason. */
+export async function reviewW9Action(input: { w9Id: string; decision: "approve" | "reject"; signedOn?: string; formRevision?: string; reason?: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const review = input.decision === "approve" ? { decision: "approve" as const, signedOn: input.signedOn ?? "", formRevision: input.formRevision ?? "" } : { decision: "reject" as const, reason: input.reason ?? "" };
+    const row = await reviewW9(actor, tx, input.w9Id, review);
+    return { ok: true, message: row.status === "approved" ? "W-9 approved. They were told." : "W-9 not approved. They were told why and asked for a new one." };
+  });
+}
+
+/** Ask everyone, a rank, a special flag or one person for a new W-9 by a due date. */
+export async function createW9RequestAction(input: { kind: "everyone" | "rank" | "flag" | "person"; id: string; dueOn: string; note: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const audiences: Record<typeof input.kind, () => W9RequestAudience> = {
+      everyone: () => ({ kind: "everyone" }),
+      rank: () => ({ kind: "rank", rankId: input.id }),
+      flag: () => ({ kind: "flag", qualificationId: input.id }),
+      person: () => ({ kind: "users", userIds: [input.id] }),
+    };
+    const make = audiences[input.kind];
+    if (!make) throw new ValidationError("Choose who to ask.");
+    const row = await createW9Request(actor, tx, { audience: make(), dueOn: input.dueOn, note: input.note });
+    return { ok: true, message: `Request sent: ${row.audienceLabel}. They were told the due date.` };
   });
 }
 

@@ -34,6 +34,9 @@ const RULES = {
   "paymentIssue.manage": { min: "coordinator" },
   "w9.read": { min: "personnel", ownerScoped: true },
   "w9.uploadOwn": { min: "personnel", ownerScoped: true },
+  /** Staff upload a W-9 for a person, and approve or reject W-9s. */
+  "w9.uploadFor": { min: "coordinator" },
+  "w9.review": { min: "coordinator" },
   "user.manage": { min: "coordinator" },
   "user.suspend": { min: "coordinator" },
   "rank.manage": { min: "coordinator" },

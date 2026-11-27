@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
 import { withTx, type Tx } from "@/db/client";
-import { assignments, invoiceBatches, invoiceEvents, invoices, jobs, users, vendors, w9s } from "@/db/schema";
+import { assignments, invoiceBatches, invoiceEvents, invoices, jobs, users, vendors } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
 import { recordAudit } from "@/domain/audit/audit";
 import { assertCan } from "@/domain/auth/policy";
@@ -10,7 +10,7 @@ import { coordinatorAudience } from "@/domain/notifications/audiences";
 import { emit } from "@/domain/notifications/notify";
 import { getSettings, type AgencySettings } from "@/domain/settings/settings";
 import { agencyDayKey } from "@/domain/time/agency-time";
-import { currentW9, readW9ForInvoiceEmail } from "@/domain/w9/w9";
+import { approvedW9s, attachableFrom, readW9ForInvoiceEmail } from "@/domain/w9/w9";
 import { queueInvoiceBatchJob } from "@/jobs/boss";
 import { settingsProblemMessage } from "@/lib/email/provider";
 import { getEmailSender } from "@/lib/email/sender";
@@ -77,7 +77,7 @@ export type VendorBatch = {
   due: boolean;
   invoices: BatchInvoice[];
   waiting: WaitingDetail[];
-  /** Payees without a current W-9 (each could have one attached in this batch). */
+  /** Payees with no W-9 that can go: none approved, or not signed this year for a vendor that needs it. */
   missingW9: Array<{ userId: string; name: string }>;
   /** Total due of the invoices that would go now (not waiting, not already paid). */
   totalCents: Cents;
@@ -159,7 +159,7 @@ function queuedRows(tx: Tx, vendorId?: string) {
   const conds = [QUEUED];
   if (vendorId) conds.push(eq(invoices.vendorId, vendorId));
   return tx
-    .select({ inv: invoices, job: jobs, payeeName: users.name, vendorName: vendors.name, vendorSchedule: vendors.invoiceSendSchedule })
+    .select({ inv: invoices, job: jobs, payeeName: users.name, vendorName: vendors.name, vendorSchedule: vendors.invoiceSendSchedule, vendorNeedsThisYear: vendors.requiresCurrentYearW9 })
     .from(invoices)
     .innerJoin(assignments, eq(assignments.id, invoices.assignmentId))
     .innerJoin(jobs, eq(jobs.id, assignments.jobId))
@@ -264,9 +264,7 @@ async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: stri
   const { waitingNames, reviewNames } = await holdingNames(tx, waitJobIds);
 
   const payeeIds = [...new Set(rows.map((r) => r.inv.payeeUserId))];
-  const withW9 = new Set(
-    (await tx.select({ userId: w9s.userId }).from(w9s).where(and(inArray(w9s.userId, payeeIds), eq(w9s.current, true)))).map((w) => w.userId),
-  );
+  const approved = await approvedW9s(tx, payeeIds);
 
   const today = agencyDayKey(now);
   const out = new Map<string, VendorBatch>();
@@ -280,7 +278,8 @@ async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: stri
       out.set(inv.vendorId, b);
     }
     const held = { names: waitingNames.get(job.id) ?? [], inReview: reviewNames.get(job.id) ?? [] };
-    addToBatch(b, row, held, withW9.has(inv.payeeUserId), s);
+    // A W-9 can go only when approved and, for a vendor that needs it, signed this calendar year.
+    addToBatch(b, row, held, attachableFrom(approved.get(inv.payeeUserId) ?? null, row.vendorNeedsThisYear, now).w9 !== null, s);
   }
   for (const b of out.values()) b.due = b.sendDay <= today;
 
@@ -440,8 +439,8 @@ async function buildBatchMessage(tx: Tx, batchId: string, storage?: Storage): Pr
     const data = await buildInvoicePdfData(tx, inv.id, storage);
     attachments.push({ filename: `${data.number}.pdf`, content: await renderInvoicePdf(data), contentType: "application/pdf" });
     rows.push({ number: data.number, jobNumber: data.job.number, jobTitle: data.job.title, jobStartAt: data.job.startAt, payeeName: data.payee.name, totalCents: data.totalCents, paid: inv.status === "paid" });
-    if (inv.attachW9 && (await currentW9(tx, inv.payeeUserId))) {
-      const w9 = await readW9ForInvoiceEmail(tx, inv.id, storage, inv.w9RequestedBy ?? batch.sentBy);
+    const w9 = inv.attachW9 ? await readW9ForInvoiceEmail(tx, inv.id, storage, inv.w9RequestedBy ?? batch.sentBy) : null;
+    if (w9) {
       attachments.push({ filename: `W-9 ${data.payee.name}.pdf`, content: w9.body, contentType: "application/pdf" });
       w9Names.push(data.payee.name);
     }

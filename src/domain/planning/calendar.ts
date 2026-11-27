@@ -131,3 +131,25 @@ export async function syncFeedById(run: TxRunner, feedId: string, now: Date): Pr
 export async function feedIdsWithLinks(tx: Tx): Promise<string[]> {
   return (await tx.select({ id: calendarFeeds.id }).from(calendarFeeds).where(and(isNotNull(calendarFeeds.urlEnc))).orderBy(asc(calendarFeeds.id))).map((r) => r.id);
 }
+
+export type LinkSaveResult = { connected: boolean; lastFetchedAt: Date | null; lastError: string | null; waitMessage: string | null };
+
+/**
+ * Saves (or removes) the calendar link, then imports it at once through the same path as "Sync now", so the person does
+ * not wait for the nightly run. The sync limit still applies: within it the link is saved and `waitMessage` says when
+ * Sync now works again (the nightly run imports it otherwise). Returns the new status; the link itself never.
+ */
+export async function saveCalendarLink(actor: Actor, run: TxRunner, url: string | null, now: Date = new Date()): Promise<LinkSaveResult> {
+  await run((tx) => setCalendarFeed(actor, tx, url));
+  let waitMessage: string | null = null;
+  if (url !== null) {
+    try {
+      await syncCalendarNow(actor, run, now);
+    } catch (e) {
+      if (!(e instanceof RuleViolation) || !e.checks.some((c) => c.check === "planning.sync_limit")) throw e;
+      waitMessage = e.checks.find((c) => c.check === "planning.sync_limit")!.message;
+    }
+  }
+  const status = await run((tx) => getCalendarFeedStatus(actor, tx, actor.userId));
+  return { ...status, waitMessage };
+}

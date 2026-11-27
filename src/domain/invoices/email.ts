@@ -108,7 +108,11 @@ export async function assertInvoiceEmailReady(tx: Tx, row: { vendorName: string;
   }
 }
 
-/** Builds the message at send time: renders the PDF and, when asked, reads the payee's current W-9 (audited). Exported for tests. */
+/**
+ * Builds the message at send time: renders the PDF and, when asked, reads the W-9 the invoice may carry (audited). With
+ * none to attach (not approved, or not signed this year for a vendor that needs it) the invoice goes without one.
+ * Exported for tests.
+ */
 export async function buildInvoiceMessage(tx: Tx, invoiceId: string, storage?: Storage, opts: { noW9?: boolean; w9ReadBy?: string } = {}): Promise<OutgoingEmail> {
   const [inv] = await tx.select().from(invoices).where(eq(invoices.id, invoiceId));
   if (!inv) throw new NotFoundError("Invoice not found.");
@@ -122,11 +126,9 @@ export async function buildInvoiceMessage(tx: Tx, invoiceId: string, storage?: S
   const attachments: NonNullable<OutgoingEmail["attachments"]> = [
     { filename: `${data.number}.pdf`, content: pdf, contentType: "application/pdf" },
   ];
-  const withW9 = inv.attachW9 && !opts.noW9;
-  if (withW9) {
-    const w9 = await readW9ForInvoiceEmail(tx, invoiceId, storage, opts.w9ReadBy ?? inv.w9RequestedBy ?? undefined);
-    attachments.push({ filename: `W-9 ${data.payee.name}.pdf`, content: w9.body, contentType: "application/pdf" });
-  }
+  const w9 = inv.attachW9 && !opts.noW9 ? await readW9ForInvoiceEmail(tx, invoiceId, storage, opts.w9ReadBy ?? inv.w9RequestedBy ?? undefined) : null;
+  if (w9) attachments.push({ filename: `W-9 ${data.payee.name}.pdf`, content: w9.body, contentType: "application/pdf" });
+  const withW9 = w9 !== null;
   return {
     ...invoiceEmail({
       to: data.vendor.billingEmails,

@@ -477,7 +477,7 @@ test("the vendor record lists contact details one per line with links", async ({
     await page.setViewportSize(viewport);
     await page.goto(`/coordinate/vendors/${v.id}`);
     const list = page.locator("dl").first();
-    await expect(list.locator("dt")).toHaveText(["Contact", "Phone", "Billing emails", "Default rate", "Invoices go", "Email approved invoices"]);
+    await expect(list.locator("dt")).toHaveText(["Contact", "Phone", "Billing emails", "Default rate", "Invoices go", "Email approved invoices", "W-9"]);
     await expect(list.getByRole("link", { name: "850-555-0148" })).toHaveAttribute("href", "tel:+18505550148");
     await expect(list.getByRole("link", { name: "office@market.example" })).toHaveAttribute("href", "mailto:office@market.example");
     await expect(list.getByRole("link", { name: "books@market.example" })).toBeVisible();

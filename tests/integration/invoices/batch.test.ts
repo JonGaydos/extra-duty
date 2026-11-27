@@ -20,6 +20,7 @@ import { updateSettings } from "@/domain/settings/settings";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { updateVendor } from "@/domain/vendors/vendors";
 import { uploadW9 } from "@/domain/w9/w9";
+import { approveCurrentW9 } from "../w9/helpers";
 import { invoiceTimeline, vendorMarkPaid } from "@/domain/billing/payments";
 import { deliverInvoiceBatchEmail, redactProviderError } from "@/domain/invoices/batch";
 import { setEmailSender } from "@/lib/email/sender";
@@ -82,7 +83,7 @@ describe("batched invoice sending", () => {
 
   async function person(name: string) {
     const { db } = get();
-    const p = await fx.person();
+    const p = await fx.person("Deputy Sheriff", { w9: false });
     await db.update(users).set({ name, mailingAddress: "1 Main St, Town, TX 75001" }).where(eq(users.id, p.userId));
     return p;
   }
@@ -320,6 +321,7 @@ describe("batched invoice sending", () => {
     const withW9 = await person("Kai Has W9");
     const without = await person("Lee No W9");
     await db.transaction((tx) => uploadW9(withW9, tx, W9_PDF, "w9.pdf"));
+    await approveCurrentW9(db, withW9.userId);
     const d1 = await detail([withW9]);
     const d2 = await detail([without]);
     const i1 = await bill(withW9, d1.rows[0].id, d1.job);
@@ -354,6 +356,7 @@ describe("batched invoice sending", () => {
     await db.transaction((tx) => updateSettings(admin, tx, { invoiceReviewMode: "all", invoiceSendSchedule: "immediate" }));
     const p = await person("Morgan Approve");
     await db.transaction((tx) => uploadW9(p, tx, W9_PDF, "w9.pdf"));
+    await approveCurrentW9(db, p.userId);
     const d = await detail([p]);
     const inv = await bill(p, d.rows[0].id, d.job);
     const approved = await db.transaction((tx) => approveInvoice(fx.coord, tx, inv.id, BILL, { attachW9: true }));
@@ -606,6 +609,7 @@ describe("batched invoice sending", () => {
     const { db } = get();
     const p = await person("Bea Chose W9");
     await db.transaction((tx) => uploadW9(p, tx, W9_PDF, "w9.pdf"));
+    await approveCurrentW9(db, p.userId);
     const d = await detail([p]);
     const inv = await bill(p, d.rows[0].id, d.job, true);
     await db.transaction((tx) => sendInvoiceBatch(fx.coord, tx, fx.vendorId, SEND, FRIDAY));

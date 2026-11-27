@@ -8,7 +8,9 @@ import { dutyIntervals, getWorkSchedule, listScheduleExceptions } from "@/domain
 import { agencyDateOnly, agencyDateParts, agencyDayKey, agencyInstant } from "@/domain/time/agency-time";
 import { getOwnContact } from "@/domain/users/contact";
 import { getSettings } from "@/domain/settings/settings";
-import { currentW9 } from "@/domain/w9/w9";
+import { approvedW9, currentW9, dayText, type W9Row } from "@/domain/w9/w9";
+import { openW9RequestsFor, readW9Lock, type W9Lock, type W9Request } from "@/domain/w9/requests";
+import { signedText, W9StatusChip } from "../_shared/w9";
 import { ActionLink } from "@/ui/components/Button";
 import { Card, CardTitle } from "@/ui/components/Card";
 import { Notice } from "@/ui/components/Notice";
@@ -162,23 +164,39 @@ function OutlookCard({ calendar }: Readonly<{ calendar: Awaited<ReturnType<typeo
   );
 }
 
-/** The W-9 on file, with download and upload. */
-function W9Card({ w9 }: Readonly<{ w9: Awaited<ReturnType<typeof currentW9>> }>) {
+/** The W-9 on file and its review, with download and upload. A newer upload waiting for review does not replace an approved one. */
+function W9Card({ w9 }: Readonly<{ w9: { latest: W9Row | null; approved: W9Row | null; requests: W9Request[]; lock: W9Lock } }>) {
+  const { latest, approved, requests, lock } = w9;
   return (
-    <Card>
-      <CardTitle>W-9</CardTitle>
-      {w9 ? (
-        <p className="m-0 flex flex-wrap items-center gap-x-3 text-sm">
-          Uploaded {dateLabel(w9.uploadedAt)}.
-          <a href="/api/v1/me/w9" className="inline-flex min-h-11 items-center gap-1 font-semibold" download>
-            <Icon name="download" size={16} />
-            Download
-          </a>
-        </p>
+    <Card id="w9" className="scroll-mt-24">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>W-9</CardTitle>
+        {latest ? <W9StatusChip status={latest.status} /> : null}
+      </div>
+      {latest ? (
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="m-0 flex flex-wrap items-center gap-x-3">
+            Uploaded {dateLabel(latest.uploadedAt)}.
+            <a href="/api/v1/me/w9" className="inline-flex min-h-11 items-center gap-1 font-semibold" download>
+              <Icon name="download" size={16} />
+              Download
+            </a>
+          </p>
+          {latest.status === "approved" ? <p className="m-0 text-muted">{signedText(latest)}.</p> : null}
+          {latest.status === "pending" ? <p className="m-0 text-muted">The extra duty office reviews it before it can go with an invoice.</p> : null}
+          {latest.status === "rejected" ? <Notice tone="danger">Not approved: {latest.rejectReason}. Upload a corrected W-9 below.</Notice> : null}
+          {latest.status !== "approved" && approved ? <p className="m-0 text-muted">Until then your approved W-9 from {dateLabel(approved.uploadedAt)} is used. {signedText(approved)}.</p> : null}
+        </div>
       ) : (
-        <p className="m-0 text-sm text-muted">No W-9 on file. Vendors often need one with your first invoice.</p>
+        <p className="m-0 text-sm text-muted">No W-9 on file. You need an approved W-9 to sign up for details, and vendors often need one with your first invoice.</p>
       )}
-      <W9Upload hasW9={w9 !== null} />
+      {requests.map((r) => (
+        <Notice key={r.id} tone="warning">
+          A new W-9 is due {dayText(r.dueOn)}.{r.note ? ` ${r.note}.` : ""} Upload it below; it has to be approved before then or sign-ups lock.
+        </Notice>
+      ))}
+      {lock.locked ? <Notice tone="danger">{lock.message}.</Notice> : null}
+      <W9Upload hasW9={latest !== null} />
     </Card>
   );
 }
@@ -205,7 +223,12 @@ export default async function ProfilePage() {
         const duty = schedule ? dutyIntervals([{ ...schedule, bufferMinutes: 0 }], exceptions, weeksFrom, weeksTo) : dutyIntervals([], exceptions, weeksFrom, weeksTo);
         return {
           contact: await getOwnContact(actor, tx),
-          w9: await currentW9(tx, actor.userId),
+          w9: {
+            latest: await currentW9(tx, actor.userId),
+            approved: await approvedW9(tx, actor.userId),
+            requests: await openW9RequestsFor(tx, actor.userId, now),
+            lock: await readW9Lock(tx, actor.userId, now),
+          },
           schedule,
           exceptions,
           dutyDays: new Set(duty.map((d) => agencyDayKey(d.startAt))),

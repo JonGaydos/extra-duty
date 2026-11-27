@@ -11,6 +11,8 @@ import { PageTitle } from "../_personnel/TabLinks";
 import { hhmmText, hoursText, plural } from "../_personnel/format";
 import { CountSection, Row, Rows } from "../coordinate/_coordinator/ui";
 import { managementActor } from "./_admin/session";
+import { listW9Requests } from "@/domain/w9/requests";
+import { pendingW9Reviews } from "@/domain/w9/w9";
 import { PROVIDER_LABEL } from "./system/labels";
 
 export const metadata: Metadata = { title: "Management" };
@@ -54,6 +56,7 @@ export default async function ManagementPage() {
     flags: await flagOverview(actor, tx),
     review: await accessReviewOverview(actor, tx),
     ranks: await listRanks(tx),
+    w9: { pending: (await pendingW9Reviews(tx)).length, open: (await listW9Requests(actor, tx)).filter((r) => !r.overdue && r.counts.done < r.total).length },
     seasons: await listSeasons(actor, tx),
     counts: {
       positions: (await listPositionTypes(actor, tx)).filter((r) => r.active).length,
@@ -63,7 +66,7 @@ export default async function ManagementPage() {
       presets: (await listNotePresets(actor, tx)).filter((r) => r.active).length,
     },
   }));
-  const { settings: s, users, flags, review, ranks, seasons, counts } = data;
+  const { settings: s, users, flags, review, ranks, seasons, counts, w9 } = data;
   const active = users.filter((u) => u.active);
   const suspended = active.filter((u) => u.suspended).length;
   const ladder = ladderHighestFirst(ranks).filter((r) => r.active).map((r) => r.name);
@@ -90,6 +93,12 @@ export default async function ManagementPage() {
                 href: "/admin/flags",
                 meta: plural(flags.flags.filter((f) => f.active).length, "flag"),
                 flag: flags.requests.length ? <Chip tone="attention">{plural(flags.requests.length, "request")} waiting</Chip> : undefined,
+              },
+              {
+                title: "W-9s",
+                href: "/admin/w9",
+                meta: w9.open ? `${plural(w9.open, "open request")}. Ask for new W-9s` : "Review W-9s and ask for new ones",
+                flag: w9.pending ? <Chip tone="attention">{w9.pending} to review</Chip> : undefined,
               },
               {
                 title: "Access review",

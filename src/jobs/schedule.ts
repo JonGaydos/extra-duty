@@ -7,6 +7,7 @@ import { invoiceBatchesDueTick } from "@/domain/invoices/batch";
 import { accessReviewReminderRecipients, accessReviewTick } from "@/domain/users/access-review";
 import { inactivityLockTick, liftExpiredSuspensions } from "@/domain/users/suspension";
 import { contractExpiryTick } from "@/domain/vendors/vendors";
+import { w9RenewalRemindersTick } from "@/domain/w9/requests";
 import { AGENCY_TZ } from "@/domain/time/agency-time";
 import { opsPlanRemindersTick } from "./ops-plan-reminders";
 import { billingReadyTick, unbilledRemindersTick } from "./unbilled-reminders";
@@ -46,6 +47,8 @@ const DAILY_7_20 = "20 7 * * *";
 const DAILY_7_40 = "40 7 * * *";
 /** 8:10 AM every day, agency time. */
 const DAILY_8_10 = "10 8 * * *";
+/** 8:20 AM every day, agency time. */
+const DAILY_8_20 = "20 8 * * *";
 
 async function accessReviewDaily(now: Date): Promise<void> {
   await withTx(async (tx) => {
@@ -72,6 +75,7 @@ export const SCHEDULE: readonly ScheduledTick[] = [
   { name: "invoice-batches-due", cron: DAILY_7_20, tz: AGENCY_TZ, run: (now) => invoiceBatchesDueTick(now) },
   { name: "ops-plan-reminders", cron: DAILY_7_40, tz: AGENCY_TZ, run: (now) => opsPlanRemindersTick(now) },
   { name: "unbilled-reminders", cron: DAILY_8_10, tz: AGENCY_TZ, run: (now) => unbilledRemindersTick(now) },
+  { name: "w9-renewal-reminders", cron: DAILY_8_20, tz: AGENCY_TZ, run: (now) => withTx((tx) => w9RenewalRemindersTick(tx, now)) },
   { name: "lift-expired-suspensions", cron: DAILY_2_10, tz: AGENCY_TZ, run: (now) => withTx((tx) => liftExpiredSuspensions(tx, now)) },
   { name: "inactivity-lock", cron: DAILY_2_10, tz: AGENCY_TZ, run: (now) => withTx((tx) => inactivityLockTick(tx, now)) },
   { name: "contract-expiry", cron: DAILY_2_10, tz: AGENCY_TZ, run: (now) => withTx((tx) => contractExpiryTick(tx, now)) },

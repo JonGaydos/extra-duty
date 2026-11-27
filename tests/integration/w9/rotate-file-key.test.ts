@@ -27,7 +27,7 @@ describe("FILE_MASTER_KEY rotation", () => {
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), "extra-duty-rotate-"));
     storage = createLocalStorage(dir);
-    owner = (await makeUser(get().db, "personnel", "rotate@example.test")).actor;
+    owner = (await makeUser(get().db, "personnel", "rotate@example.test", {}, { w9: false })).actor;
   });
 
   test("an interrupted rotation, then a rerun, moves every readable file, reports the unreadable one, and leaves no truncated file", async () => {

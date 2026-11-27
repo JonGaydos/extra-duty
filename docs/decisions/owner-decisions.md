@@ -87,6 +87,25 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - Staff can download any invoice as a PDF.
 - **Data export (2026-11-24).** The admin data export and the API include every table except passwords and security tokens.
 
+## W-9s
+
+- **W-9 review (2026-11-27).** Every new W-9, uploaded by the person in Profile or by staff on the person's page (Management, Users), starts as Pending review and shows on To-do as "W-9 to review".
+  - Staff approve it with the signature date and the IRS form revision, or reject it with a reason (such as "Line 2 missing" or "Not signed"). The person is told in the app and by email or push per the notification settings; a rejection includes the reason and a link to upload again. W-9 alerts never go to vendors.
+  - Every view, approval and rejection is audited. Staff uploads use the same encrypted storage.
+  - A newer upload waiting for review does not replace the approved W-9 until it is approved.
+- **W-9 sign-up lock (2026-11-27).** Without an approved W-9, a person cannot sign up, in the style of the billing lock: they can still sign in, see details, bill finished work and be paid. The detail's rules say "Your W-9 needs to be approved before you can sign up". Coordinators can still assign them with the usual override reason.
+- **Invoices and W-9s (2026-11-27).** An invoice never attaches a W-9 that is pending or rejected, and never a superseded one when a newer approved one exists. When none can go, the invoice is sent without a W-9.
+- **Renewal requests (2026-11-27).** Staff ask one person, a rank, a special flag or everyone for a new W-9 by a due date, with an optional note. People get reminders a week before and the day before. After the due date, anyone asked without a W-9 uploaded after the request and approved is sign-up locked ("A new W-9 was due Jan 31"). The old W-9 stays in history. Staff see each request with who is done, pending review, rejected or missing.
+- **W-9 signed this year (2026-11-27).** A vendor can be set to "Requires a W-9 signed this year". Its invoices attach the payee's W-9 only when it was signed in the current calendar year, agency time. Otherwise the deputy sees a notice when billing that vendor, staff see it on the invoice and the vendor page, and the invoice goes without the W-9. Billing is flagged, never blocked, consistent with the sign-up-only lock.
+- **W-9s on file at the update (2026-11-27).** W-9s already on file were approved (grandfathered) with the signature date unknown and a system audit entry, so nobody is locked by the update. Staff can ask for new ones afterwards.
+
+## Messages and calendar
+
+- **About a detail (2026-11-27).** The message field "About a job" is now "About a detail". A deputy may link only a detail they are signed up for, pending on or offered a spot on that has not ended; staff may link any detail that has not ended. Past details are never offered, and the server refuses any other link (form and API). A detail a deputy is not on is never offered to them.
+- **Message recipients (2026-11-27).** "Send to" is either Everyone (with the count of people) or Choose recipients (people by name, a rank, a detail's roster or the coordinators, as removable chips). Choosing Everyone replaces the chips and offers Undo; no confirmation is asked. Someone covered by more than one chip gets one copy.
+- **Calendar link import (2026-11-27).** Adding or changing the calendar link in Profile (or through the API) imports it at once, through the same path and 15-minute limit as Sync now, instead of waiting for the nightly run. The card shows "Importing your calendar..." and then the last fetched time or the error.
+- **To-do wording (2026-11-27).** The To-do page counts "To-do: 3 items." and never says something "needs you".
+
 ## Notifications
 
 - **Agency notification settings (2026-11-24).** Admins and coordinators can switch Email and Push on or off for each notification type and each group.

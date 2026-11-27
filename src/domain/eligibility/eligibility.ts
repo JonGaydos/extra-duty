@@ -35,6 +35,8 @@ export type EligibilityContext = {
   person: { active: boolean; suspendedUntil: Date | null; rankId: string; qualificationIds: string[] };
   personAssignments: Array<{ jobId: string; jobNumber: number; startAt: Date; endAt: Date; status: AssignmentStatus }>;
   billingLock: { locked: boolean; unbilledCount: number; unacknowledgedCount: number };
+  /** The W-9 sign-up lock: no approved W-9, or a requested renewal past due. */
+  w9Lock: { locked: boolean; message: string };
   caps: CapResult[];
   /** Coordinator vendor restriction for this person and this job's vendor, computed by the caller. */
   restrictedFromVendor: boolean;
@@ -114,6 +116,7 @@ export function evaluateSignup(ctx: EligibilityContext): EligibilityResult {
     "billing_lock",
     billingLock.locked ? billingMessage(billingLock.unbilledCount, billingLock.unacknowledgedCount) : null,
   );
+  add("w9", ctx.w9Lock.locked ? ctx.w9Lock.message : null);
   const overlapping = ctx.personAssignments.find(
     (a) =>
       a.jobId !== job.id &&

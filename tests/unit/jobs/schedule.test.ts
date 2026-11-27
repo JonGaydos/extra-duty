@@ -31,6 +31,10 @@ describe("job schedule", () => {
     expect(names("10 8 * * *")).toEqual(["unbilled-reminders"]);
   });
 
+  test("daily at 8:20 AM: W-9 renewal reminders", () => {
+    expect(names("20 8 * * *")).toEqual(["w9-renewal-reminders"]);
+  });
+
   test("daily at 2:10 AM: suspensions, inactivity, contracts, access review, old sign-in attempts", () => {
     expect(names("10 2 * * *")).toEqual(["access-review", "auth-throttle-prune", "contract-expiry", "inactivity-lock", "lift-expired-suspensions"]);
     // Sign-in attempts live only in the live database.
@@ -45,7 +49,7 @@ describe("job schedule", () => {
   test("every entry runs in agency time and names are unique", () => {
     expect(SCHEDULE.every((t) => t.tz === "America/Chicago")).toBe(true);
     expect(new Set(SCHEDULE.map((t) => t.name)).size).toBe(SCHEDULE.length);
-    expect(SCHEDULE).toHaveLength(15);
+    expect(SCHEDULE).toHaveLength(16);
   });
 
   test("a failing tick is logged and does not throw, so the others still run", async () => {

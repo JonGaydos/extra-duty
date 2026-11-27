@@ -101,6 +101,7 @@ function InvoiceNotices({ inv }: Readonly<{ inv: Invoice }>) {
           <Link href={`/coordinate/send-invoices#vendor-${inv.vendorId}`}>Review the batch</Link>
         </Notice>
       ) : null}
+      {inv.w9Notice ? <Notice tone="warning">{inv.w9Notice}</Notice> : null}
       {inv.status === "approved_unsent" ? (
         <Notice tone="info">Approved, not sent. The vendor does not see this invoice until it is sent, and nobody&apos;s response time runs until then.</Notice>
       ) : null}

@@ -14,6 +14,7 @@ import { queueInvoiceEmail } from "@/domain/invoices/email";
 import { createInvoice } from "@/domain/invoices/invoices";
 import { updateSettings } from "@/domain/settings/settings";
 import { readW9ForInvoiceEmail, uploadW9 } from "@/domain/w9/w9";
+import { approveCurrentW9 } from "../w9/helpers";
 import { NotFoundError, ValidationError } from "@/domain/errors";
 import { EMAIL_QUEUE, INVOICE_EMAIL_QUEUE, decodeEmailJob, getBoss, queueEmail, queueInvoiceJob, type EmailJob } from "@/jobs/boss";
 import { handleInvoiceEmailJob } from "@/jobs/email-worker";
@@ -55,7 +56,8 @@ describe("invoice email delivery", () => {
 
   async function mkInvoice(attachW9: boolean) {
     const { db } = get();
-    const person = await fx.person();
+    // No W-9 yet: each test uploads and approves the one it needs.
+    const person = await fx.person("Deputy Sheriff", { w9: false });
     const { job, positionId } = await fx.mkJob();
     const [a] = await db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: person.userId, status: "billed" }).returning();
     const inv = await db.transaction((tx) => createInvoice(tx, { assignmentId: a.id, minutes: 240, rateCents: 7000, status: "sent" }));
@@ -74,6 +76,7 @@ describe("invoice email delivery", () => {
     const { db } = get();
     const { inv, job, person } = await mkInvoice(true);
     await db.transaction((tx) => uploadW9(person, tx, W9_PDF, "w9.pdf"));
+    await approveCurrentW9(db, person.userId);
     await db.transaction((tx) => queueInvoiceEmail(tx, inv.id));
     expect(mail.sent).toHaveLength(0);
     expect(await status(inv.id)).toBe("queued");
@@ -103,10 +106,13 @@ describe("invoice email delivery", () => {
     const off = await mkInvoice(false);
     await expect(db.transaction((tx) => readW9ForInvoiceEmail(tx, off.inv.id))).rejects.toBeInstanceOf(NotFoundError);
     const on = await mkInvoice(true);
-    await expect(db.transaction((tx) => readW9ForInvoiceEmail(tx, on.inv.id))).rejects.toThrow("No W-9 on file.");
+    expect(await db.transaction((tx) => readW9ForInvoiceEmail(tx, on.inv.id))).toBeNull();
     await db.transaction((tx) => uploadW9(on.person, tx, W9_PDF, "w9.pdf"));
+    // Pending review: never attached.
+    expect(await db.transaction((tx) => readW9ForInvoiceEmail(tx, on.inv.id))).toBeNull();
+    await approveCurrentW9(db, on.person.userId);
     const r = await db.transaction((tx) => readW9ForInvoiceEmail(tx, on.inv.id));
-    expect(r.body.equals(W9_PDF)).toBe(true);
+    expect(r?.body.equals(W9_PDF)).toBe(true);
   });
 
   test("without attachW9 only the invoice PDF is attached", async () => {
@@ -155,16 +161,18 @@ describe("invoice email delivery", () => {
     expect(JSON.stringify(audit.rows[0].after)).toContain("secret-host");
   });
 
-  test("a payee with no W-9 on file fails at once, without retrying, and alerts", async () => {
+  test("a payee with no approved W-9 still gets the invoice sent, without a W-9", async () => {
     const { db } = get();
-    let attempts = 0;
-    setEmailSender({ send() { attempts++; return Promise.resolve(); } });
-    const { inv } = await mkInvoice(true);
+    const sent: Array<{ attachments?: Array<{ filename: string }>; text?: string }> = [];
+    setEmailSender({ send(m) { sent.push(m as never); return Promise.resolve(); } });
+    const { inv, person } = await mkInvoice(true);
+    // Uploaded but still pending review: never attached.
+    await db.transaction((tx) => uploadW9(person, tx, W9_PDF, "w9.pdf"));
     await db.transaction((tx) => queueInvoiceEmail(tx, inv.id));
     await drain();
-    expect(attempts).toBe(0);
-    expect(await status(inv.id)).toBe("failed");
-    expect(await db.select().from(notifications).where(sql`${notifications.type} = 'invoice.email_failed' and ${notifications.body} like '%No W-9%'`)).not.toHaveLength(0);
+    expect(await status(inv.id)).toBe("sent");
+    expect(sent).toHaveLength(1);
+    expect(sent[0].attachments?.map((a) => a.filename).some((n) => n.startsWith("W-9"))).toBe(false);
   });
 
   const staffIds = async () =>

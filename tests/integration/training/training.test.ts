@@ -22,6 +22,7 @@ import { updateSettings } from "@/domain/settings/settings";
 import { contextForSession, practiceActor, switchMode, type PracticeRole } from "@/domain/training/mode";
 import { resetTrainingData } from "@/domain/training/reset";
 import { uploadW9 } from "@/domain/w9/w9";
+import { giveApprovedW9 } from "../w9/helpers";
 import { INVOICE_EMAIL_QUEUE, getBoss, stopBoss, type InvoiceEmailJob } from "@/jobs/boss";
 import { handleInvoiceEmailJob } from "@/jobs/email-worker";
 import { runTick, SCHEDULE } from "@/jobs/schedule";
@@ -92,6 +93,8 @@ describe("training mode", () => {
     const [p] = await db.insert(users).values({ name: "Live Deputy", email: "deputy@live.test", role: "personnel", rankId: ds.id, mailingAddress: "1 Main St, Town, FL 32400" }).returning();
     coordinator = { userId: c.id, role: "coordinator", rankId: null, vendorId: null };
     personnel = { userId: p.id, role: "personnel", rankId: ds.id, vendorId: null };
+    // Sign-ups need an approved W-9 (owner decision 2026-11-27).
+    await giveApprovedW9(db, p.id);
     const [v] = await db.insert(vendors).values({ name: "Live Vendor", defaultRateCents: 6000, billingEmails: ["ap@live-vendor.test"] }).returning();
     const [t] = await db.select().from(jobTypes).limit(1);
     const [pt] = await db.select().from(positionTypes).where(eq(positionTypes.name, "Deputy Sheriff"));

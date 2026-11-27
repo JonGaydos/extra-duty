@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { Audience } from "@/domain/messages/messages";
 import { Button } from "@/ui/components/Button";
 import { Card } from "@/ui/components/Card";
 import { FormField, Input, Select, TextArea } from "@/ui/components/FormField";
 import { Icon } from "@/ui/icons";
 import { sendMessageAction } from "../../_personnel/actions";
 import { ActionStatus, useAction } from "../../_personnel/use-action";
+import { addPick, audiencesFor, chooseEveryone, chooseRecipients, removePick, START, undoEveryone, type Pick, type ToState } from "./recipients";
 
 type Option = { id: string; name: string };
 
@@ -17,11 +17,12 @@ type Props = {
   ranks: Option[];
   jobs: Option[];
   canMessageAll: boolean;
+  /** How many people Everyone reaches (active, not vendors, not the sender). */
+  everyoneCount: number;
   initialJobId: string;
   reply: { id: string; subject: string; to: string } | null;
 };
 
-type Pick = { key: string; label: string; audience: Audience };
 
 /** A reply's subject: "Re: " added once; blank for a new message. */
 function replySubject(reply: Props["reply"]): string {
@@ -82,13 +83,13 @@ function RankAdder({ ranks, rankId, setRankId, add }: Readonly<{ ranks: Option[]
   );
 }
 
-/** Add everyone on one of the person's upcoming jobs. */
+/** Add everyone on a detail that has not ended: one of the person's own, or any for staff. */
 function RosterAdder({ jobs, rosterJob, setRosterJob, add }: Readonly<{ jobs: Option[]; rosterJob: string; setRosterJob: (v: string) => void; add: Add }>) {
-  if (jobs.length === 0) return <p className="m-0 text-sm text-muted">You are not on any upcoming jobs.</p>;
+  if (jobs.length === 0) return <p className="m-0 text-sm text-muted">You are not on any upcoming details.</p>;
   return (
     <div className="flex items-end gap-2">
       <div className="min-w-0 flex-1">
-        <FormField label="Job">
+        <FormField label="Detail">
           <Select value={rosterJob} onChange={(e) => setRosterJob(e.target.value)}>
             {jobs.map((j) => (
               <option key={j.id} value={j.id}>
@@ -105,24 +106,46 @@ function RosterAdder({ jobs, rosterJob, setRosterJob, add }: Readonly<{ jobs: Op
   );
 }
 
+/** "Everyone (42 people)" or "Choose recipients", as two radio rows. Everyone shows only where it is allowed. */
+function SendToChoice({ mode, everyoneCount, onEveryone, onChoose }: Readonly<{ mode: ToState["mode"]; everyoneCount: number; onEveryone: () => void; onChoose: () => void }>) {
+  const row = (value: ToState["mode"], label: string, pick: () => void) => (
+    <label
+      className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-body ${mode === value ? "border-2 border-accent" : "border-line"}`}
+    >
+      <input type="radio" name="send-to" value={value} checked={mode === value} onChange={pick} className="size-4.5 shrink-0 accent-accent" />
+      {label}
+    </label>
+  );
+  return (
+    <fieldset className="m-0 flex flex-col gap-2 border-0 p-0 sm:flex-row">
+      <legend className="mb-1.5 text-sm font-medium text-muted">Send to</legend>
+      {row("choose", "Choose recipients", onChoose)}
+      {row("everyone", `Everyone (${everyoneCount} ${everyoneCount === 1 ? "person" : "people"})`, onEveryone)}
+    </fieldset>
+  );
+}
+
 /**
- * New message: recipients from everyone, people by name, ranks, a job's roster or the coordinators, an
- * optional job link, subject and body. Vendors are never offered.
+ * New message. "Send to" is Everyone or Choose recipients, never both: choosing Everyone replaces the chips, with Undo
+ * to bring them back. Recipients are people by name, a rank, a detail's roster or the coordinators; vendors are never
+ * offered. Then an optional detail it is about, a subject and the message.
  */
 export function Compose(p: Readonly<Props>) {
   const router = useRouter();
-  const [picks, setPicks] = useState<Pick[]>(() => {
+  const [to, setTo] = useState<ToState>(() => {
     const job = p.jobs.find((j) => j.id === p.initialJobId);
-    return job && !p.reply ? [{ key: `job:${job.id}`, label: `Everyone on ${job.name}`, audience: { kind: "job", jobId: job.id } }] : [];
+    return job && !p.reply ? addPick(START, { key: `job:${job.id}`, label: `Everyone on ${job.name}`, audience: { kind: "job", jobId: job.id } }) : START;
   });
-  const [kind, setKind] = useState<"person" | "rank" | "job" | "coordinators" | "all">("person");
+  const [replaced, setReplaced] = useState<Pick[]>([]);
+  const [kind, setKind] = useState<"person" | "rank" | "job" | "coordinators">("person");
   const [query, setQuery] = useState("");
   const [rankId, setRankId] = useState(p.ranks[0]?.id ?? "");
   const [rosterJob, setRosterJob] = useState(p.jobs[0]?.id ?? "");
-  const [jobLink, setJobLink] = useState(p.initialJobId);
+  const [jobLink, setJobLink] = useState(p.jobs.some((j) => j.id === p.initialJobId) ? p.initialJobId : "");
   const [subject, setSubject] = useState(replySubject(p.reply));
   const [body, setBody] = useState("");
   const { run, busy, result } = useAction();
+  const picks = to.picks;
 
   const matches = useMemo(() => {
     const t = query.trim().toLowerCase();
@@ -130,12 +153,16 @@ export function Compose(p: Readonly<Props>) {
     return p.people.filter((x) => x.name.toLowerCase().includes(t) && !picks.some((k) => k.key === `user:${x.id}`)).slice(0, 6);
   }, [query, p.people, picks]);
 
-  const add = (pick: Pick) => setPicks((list) => (list.some((x) => x.key === pick.key) ? list : [...list, pick]));
-  const audiences = (): Audience[] => {
-    const users = picks.flatMap((x) => (x.audience.kind === "users" ? x.audience.userIds : []));
-    const rest = picks.filter((x) => x.audience.kind !== "users").map((x) => x.audience);
-    return users.length ? [...rest, { kind: "users", userIds: users }] : rest;
+  const add = (pick: Pick) => {
+    setReplaced([]);
+    setTo((s) => addPick(s, pick));
   };
+  const everyone = () => {
+    const r = chooseEveryone(to);
+    setTo(r.state);
+    setReplaced(r.replaced);
+  };
+  const canSend = to.mode === "everyone" || picks.length > 0 || p.reply !== null;
 
   // The control for the chosen kind of recipient (a render function, so it keeps its place in the form).
   const adder = () => {
@@ -143,8 +170,8 @@ export function Compose(p: Readonly<Props>) {
     if (kind === "rank") return <RankAdder ranks={p.ranks} rankId={rankId} setRankId={setRankId} add={add} />;
     if (kind === "job") return <RosterAdder jobs={p.jobs} rosterJob={rosterJob} setRosterJob={setRosterJob} add={add} />;
     return (
-      <Button variant="secondary" className="w-fit" onClick={() => add(kind === "all" ? { key: "all", label: "Everyone", audience: { kind: "all" } } : { key: "coordinators", label: "Coordinators", audience: { kind: "coordinators" } })}>
-        {kind === "all" ? "Add everyone" : "Add the coordinators"}
+      <Button variant="secondary" className="w-fit" onClick={() => add({ key: "coordinators", label: "Coordinators", audience: { kind: "coordinators" } })}>
+        Add the coordinators
       </Button>
     );
   };
@@ -155,7 +182,7 @@ export function Compose(p: Readonly<Props>) {
       onSubmit={(e) => {
         e.preventDefault();
         run(
-          () => sendMessageAction({ audiences: audiences(), subject, body, jobId: jobLink || undefined, replyToMessageId: p.reply?.id }),
+          () => sendMessageAction({ audiences: audiencesFor(to), subject, body, jobId: jobLink || undefined, replyToMessageId: p.reply?.id }),
           (r) => router.push(r.value ? `/messages/${r.value}` : "/messages?tab=sent"),
           false,
         );
@@ -165,35 +192,69 @@ export function Compose(p: Readonly<Props>) {
         <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
           <legend className="mb-2 text-title font-semibold md:text-base">To</legend>
           {p.reply ? <p className="m-0 text-sm">Your reply goes to {p.reply.to}. Add more people if you need to.</p> : null}
-          {picks.length > 0 ? (
-            <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Recipients">
-              {picks.map((x) => (
-                <li key={x.key} className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 pr-0.5 pl-3 text-sm font-semibold text-link">
-                  {x.label}
-                  <button type="button" onClick={() => setPicks((l) => l.filter((y) => y.key !== x.key))} aria-label={`Remove ${x.label}`} className="flex size-8 items-center justify-center rounded-full hover:bg-surface pointer-coarse:size-11">
-                    <Icon name="cross" size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {p.canMessageAll ? (
+            <SendToChoice
+              mode={to.mode}
+              everyoneCount={p.everyoneCount}
+              onEveryone={everyone}
+              onChoose={() => {
+                setReplaced([]);
+                setTo(chooseRecipients);
+              }}
+            />
           ) : null}
-          <FormField label="Add">
-            <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-              <option value="person">People by name</option>
-              <option value="rank">Everyone with a rank</option>
-              <option value="job">Everyone on a job</option>
-              <option value="coordinators">The coordinators</option>
-              {p.canMessageAll ? <option value="all">Everyone</option> : null}
-            </Select>
-          </FormField>
-          {adder()}
-          <p className="m-0 text-xs text-muted">Pick everyone, people by name, a rank, a job&apos;s roster, or coordinators. Vendors cannot be messaged here.</p>
+          {to.mode === "everyone" && replaced.length > 0 ? (
+            <output className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-subtle px-3 py-2 text-sm">
+              <span>
+                Replaced {replaced.length} {replaced.length === 1 ? "recipient" : "recipients"} with everyone.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setTo(undoEveryone(replaced));
+                  setReplaced([]);
+                }}
+                className="min-h-11 font-semibold text-link underline underline-offset-2"
+              >
+                Undo
+              </button>
+            </output>
+          ) : null}
+          {to.mode === "choose" ? (
+            <>
+              {picks.length > 0 ? (
+                <ul className="m-0 flex list-none flex-wrap gap-2 p-0" aria-label="Recipients">
+                  {picks.map((x) => (
+                    <li key={x.key} className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 pr-0.5 pl-3 text-sm font-semibold text-link">
+                      {x.label}
+                      <button type="button" onClick={() => setTo((s) => removePick(s, x.key))} aria-label={`Remove ${x.label}`} className="flex size-8 items-center justify-center rounded-full hover:bg-surface pointer-coarse:size-11">
+                        <Icon name="cross" size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <FormField label="Add by">
+                <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+                  <option value="person">People by name</option>
+                  <option value="rank">Everyone with a rank</option>
+                  <option value="job">A detail&apos;s roster</option>
+                  <option value="coordinators">The coordinators</option>
+                </Select>
+              </FormField>
+              {adder()}
+            </>
+          ) : null}
+          <p className="m-0 text-xs text-muted">
+            {to.mode === "everyone" ? "Everyone who works details, coordinators and admins. " : "Add people by name, a rank, a detail's roster, or the coordinators. "}
+            Someone covered twice gets one copy. Vendors cannot be messaged here.
+          </p>
         </fieldset>
       </Card>
       <Card>
-        <FormField label="About a job" hint="Optional. Links the message to the job.">
+        <FormField label="About a detail" hint="Optional. Links the message to a detail that has not ended.">
           <Select value={jobLink} onChange={(e) => setJobLink(e.target.value)}>
-            <option value="">No job</option>
+            <option value="">No detail</option>
             {p.jobs.map((j) => (
               <option key={j.id} value={j.id}>
                 {j.name}
@@ -209,7 +270,7 @@ export function Compose(p: Readonly<Props>) {
         </FormField>
       </Card>
       <ActionStatus result={result} />
-      <Button type="submit" size="lg" busy={busy} disabled={picks.length === 0 && !p.reply} className="md:w-fit">
+      <Button type="submit" size="lg" busy={busy} disabled={!canSend} className="md:w-fit">
         Send message
       </Button>
     </form>

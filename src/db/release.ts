@@ -14,6 +14,7 @@ import { runMigrations } from "./migrate";
 import { vendors } from "./schema";
 import { seed } from "./seed";
 import { closeDeputyConfirmedInvoices } from "../domain/billing/payments";
+import { auditGrandfatheredW9s } from "../domain/w9/w9";
 import { appEnvFromProcess } from "../lib/env";
 
 async function prepare(mode: DataMode, url: string, opts: { adminEmail?: string; demoIfEmpty: boolean }): Promise<void> {
@@ -24,6 +25,9 @@ async function prepare(mode: DataMode, url: string, opts: { adminEmail?: string;
     // Owner decision 2026-11-26: invoices the deputy confirmed under the old two-sided rule close as paid.
     const closed = await runInMode(mode, () => db.transaction((tx) => closeDeputyConfirmedInvoices(tx)));
     if (closed) console.log(`release: ${closed} deputy-confirmed invoices closed as paid (${mode})`);
+    // Owner decision 2026-11-27: the W-9s the migration grandfathered as approved each get a system audit entry.
+    const grandfathered = await runInMode(mode, () => db.transaction((tx) => auditGrandfatheredW9s(tx)));
+    if (grandfathered) console.log(`release: ${grandfathered} W-9s on file recorded as approved (${mode})`);
     if (opts.demoIfEmpty && (await db.select({ n: count() }).from(vendors))[0].n === 0) {
       // In the database's own mode, so the demo files go to its own storage.
       await runInMode(mode, () => seedDemo(db));

@@ -24,6 +24,7 @@ import { eq, inArray } from "drizzle-orm";
 import { Client } from "pg";
 import { uuidv7 } from "uuidv7";
 import { db as appDb } from "@/db/client";
+import { seedApprovedW9 } from "./w9-seed";
 import { accounts, jobPositions, jobs, jobTypes, positionTypes, qualifications, ranks, userQualifications, users, vendorLocations, vendors, vendorUsers } from "@/db/schema";
 import { updateSettings } from "@/domain/settings/settings";
 import type { SettingsPatch } from "@/domain/settings/settings";
@@ -232,9 +233,9 @@ export class Agency {
     return new Agency(tag, coordinator, admin, vendorLogin, deputy, { id: v.id, name: v.name, billingEmail, location: { id: loc.id, name: loc.name, address } });
   }
 
-  /** Another deputy (rank Deputy Sheriff unless given), with flags by name. */
-  async addDeputy(name: string, o: { rank?: string; flags?: string[] } = {}): Promise<Person> {
-    const p = await person({ name, email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}.${this.tag.toLowerCase()}@flow.test`, role: "personnel", rank: o.rank });
+  /** Another deputy (rank Deputy Sheriff unless given), with flags by name; with an approved W-9 unless `w9: false`. */
+  async addDeputy(name: string, o: { rank?: string; flags?: string[]; w9?: boolean } = {}): Promise<Person> {
+    const p = await person({ name, email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}.${this.tag.toLowerCase()}@flow.test`, role: "personnel", rank: o.rank, w9: o.w9 });
     if (o.flags?.length) {
       const qs = await appDb.select().from(qualifications).where(inArray(qualifications.name, o.flags));
       for (const q of qs) await appDb.insert(userQualifications).values({ userId: p.id, qualificationId: q.id });
@@ -282,7 +283,7 @@ export class Agency {
   }
 }
 
-async function person(p: { name: string; email: string; role: "personnel" | "coordinator" | "admin" | "vendor"; rank?: string }): Promise<Person> {
+async function person(p: { name: string; email: string; role: "personnel" | "coordinator" | "admin" | "vendor"; rank?: string; w9?: boolean }): Promise<Person> {
   const rankName = p.role === "personnel" ? (p.rank ?? "Deputy Sheriff") : null;
   const [rank] = rankName ? await appDb.select().from(ranks).where(eq(ranks.name, rankName)) : [];
   const [u] = await appDb
@@ -299,6 +300,8 @@ async function person(p: { name: string; email: string; role: "personnel" | "coo
     .returning();
   passwordHash ??= hashPassword(PASSWORD);
   await appDb.insert(accounts).values({ id: uuidv7(), accountId: u.id, providerId: "credential", userId: u.id, password: await passwordHash });
+  // Sign-ups need an approved W-9 (owner decision 2026-11-27); a flow that tests the W-9 itself passes w9: false.
+  if (p.role !== "vendor" && p.w9 !== false) await seedApprovedW9(appDb, u.id);
   return { id: u.id, name: u.name, email: u.email };
 }
 

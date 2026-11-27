@@ -11,7 +11,7 @@ import { eligibilityFor } from "@/domain/assignments/signup";
 import { ForbiddenError, NotFoundError, RuleViolation, ValidationError } from "@/domain/errors";
 import { createJob, listJobs, updateJob, type JobInput } from "@/domain/jobs/jobs";
 import { CalendarFetchError, setCalendarFetchDeps, type HopResponse } from "@/domain/planning/calendar-fetch";
-import { getCalendarFeedStatus, listCalendarBusy, setCalendarFeed, syncCalendarNow } from "@/domain/planning/calendar";
+import { getCalendarFeedStatus, listCalendarBusy, saveCalendarLink, setCalendarFeed, syncCalendarNow } from "@/domain/planning/calendar";
 import { getEarningsGoal, hideVendor, listHiddenVendors, setEarningsGoal, unhideVendor } from "@/domain/planning/preferences";
 import { goalProgress, recommendationsFor } from "@/domain/planning/recommend";
 import { addScheduleException, getWorkSchedule, listScheduleExceptions, removeScheduleException, setWorkSchedule, type WorkScheduleInput } from "@/domain/planning/schedule";
@@ -428,6 +428,28 @@ describe("personal planning", () => {
       expect((await syncCalendarNow(me, run, third)).ok).toBe(true);
       expect((await run((tx) => listCalendarBusy(me, tx, me.userId))).map((b) => b.title)).toEqual(["Training"]);
       expect((await run((tx) => getCalendarFeedStatus(me, tx, me.userId))).lastError).toBeNull();
+    });
+
+    test("adding or changing the link imports it at once, through Sync now and its limit", async () => {
+      const me = await f.person();
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: okRequest(ICS("Dentist")) });
+      const added = await saveCalendarLink(me, run, FEED_URL, NOW);
+      expect(added).toMatchObject({ connected: true, lastError: null, waitMessage: null });
+      expect(added.lastFetchedAt?.getTime()).toBe(NOW.getTime());
+      expect((await run((tx) => listCalendarBusy(me, tx, me.userId))).map((b) => b.title)).toEqual(["Dentist"]);
+
+      // A second change within 15 minutes keeps the limit: saved, not fetched, and says when Sync now works again.
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: okRequest(ICS("Court")) });
+      const soon = await saveCalendarLink(me, run, `${FEED_URL}?v=2`, new Date(NOW.getTime() + 5 * 60_000));
+      expect(soon).toMatchObject({ connected: true, lastFetchedAt: null, waitMessage: "You can sync again in 10 minutes" });
+
+      // A failed fetch is reported, not thrown.
+      setCalendarFetchDeps({ resolve: () => Promise.resolve([PUBLIC]), request: () => Promise.resolve({ status: 500, location: null, body: emptyBody(), close: () => {} }) });
+      const failed = await saveCalendarLink(me, run, FEED_URL, new Date(NOW.getTime() + 30 * 60_000));
+      expect(failed.lastError).toBe("Could not fetch the calendar: the server answered 500");
+
+      // Removing the link fetches nothing.
+      expect(await saveCalendarLink(me, run, null, new Date(NOW.getTime() + 31 * 60_000))).toEqual({ connected: false, lastFetchedAt: null, lastError: null, waitMessage: null });
     });
 
     test("syncing without a link, and unexpected errors, give short messages", async () => {

@@ -282,7 +282,7 @@ function ApproveStep({
       {attachW9 ? null : (
         <Check
           label={`Attach ${payeeName}'s W-9`}
-          hint={payeeHasW9 ? "Sent with this invoice. The W-9 read is logged under your name." : "No W-9 on file, so none can be attached."}
+          hint={payeeHasW9 ? "Sent with this invoice. The W-9 read is logged under your name." : "No W-9 that can go: none is approved, or this vendor needs one signed this year."}
           checked={withW9}
           disabled={!payeeHasW9}
           onChange={setWithW9}

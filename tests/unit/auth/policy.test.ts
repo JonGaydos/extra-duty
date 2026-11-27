@@ -30,6 +30,8 @@ const unscoped: Array<[Action, boolean, boolean, boolean, boolean]> = [
   ["invoice.review", true, true, false, false],
   ["invoice.close", true, true, false, false],
   ["billing.overrideLock", true, true, false, false],
+  ["w9.uploadFor", true, true, false, false],
+  ["w9.review", true, true, false, false],
   ["paymentIssue.report", true, true, true, false],
   ["paymentIssue.manage", true, true, false, false],
   ["user.manage", true, true, false, false],

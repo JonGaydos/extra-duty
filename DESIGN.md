@@ -368,6 +368,7 @@ Tactile and plain: solid blue for the action, quiet outlined for the rest.
 - **Error:** border turns danger, a 12 px 500 danger-ink message below, `aria-invalid` and `aria-describedby` wired by `FormField`.
 - **Disabled:** subtle fill, muted text.
 - **Choices:** radio rows are 12 px padded, 12 px radius, 1 px line; the selected row gets a 2 px accent border. The theme control is a segmented radiogroup (System, Day, Night) built on native radios. Signed in, a choice is kept only after the profile saves it; on failure the page returns to the previous theme and a danger note says so (inline on Profile, a small floating note under the header control with a Dismiss button). The browser chrome color (`theme-color`) follows the chosen theme.
+- **Exclusive modes replace, with Undo:** where two choices cannot mix (the message "Send to": Everyone or Choose recipients), they are radio rows, never a dropdown that adds a chip. Choosing the broader mode clears what the narrower one held and shows a quiet note ("Replaced 3 recipients with everyone.") with an Undo text button, instead of a confirmation. Chips appear only in the mode that uses them.
 - **Switches:** a `button` with `role="switch"` and `aria-checked`, a 30 by 18 px track (field color off, accent on) and a visible text label (Training mode, Alert me if it opens).
 
 ### Navigation

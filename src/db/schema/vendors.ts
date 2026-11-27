@@ -34,6 +34,8 @@ export const vendors = pgTable("vendors", {
   invoiceSendSchedule: invoiceSendSchedule("invoice_send_schedule"),
   /** Pre-selects "Approve and send" (true) or "Approve, don't send" (false) when a coordinator approves an invoice. */
   emailApprovedInvoices: boolean("email_approved_invoices").notNull().default(true),
+  /** Invoices to this vendor attach the payee's W-9 only when it was signed in the current calendar year (agency time). */
+  requiresCurrentYearW9: boolean("requires_current_year_w9").notNull().default(false),
   notes: text("notes"),
   ...timestamps,
 });

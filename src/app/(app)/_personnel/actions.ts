@@ -11,14 +11,14 @@ import { hideMessages, markRead, sendMessage, type Audience } from "@/domain/mes
 import { markAllAlertsRead } from "@/domain/notifications/inbox";
 import { markRead as markAlertsRead, setPreference, setQuietHours, subscribePush } from "@/domain/notifications/prefs";
 import { reportNonPayment } from "@/domain/payment-issues/issues";
-import { setCalendarFeed, syncCalendarNow } from "@/domain/planning/calendar";
+import { saveCalendarLink, syncCalendarNow } from "@/domain/planning/calendar";
 import { revokeCalendarToken, rotateCalendarToken } from "@/domain/planning/ics-feed";
 import { hideVendor, setEarningsGoal, unhideVendor } from "@/domain/planning/preferences";
 import { addScheduleException, removeScheduleException, setWorkSchedule, type ExceptionInput, type WorkScheduleInput } from "@/domain/planning/schedule";
 import { agencyDateOnly } from "@/domain/time/agency-time";
 import { updateOwnContact } from "@/domain/users/contact";
 import { billMessage } from "./bill-message";
-import { fromLocalInput } from "./format";
+import { dateTime, fromLocalInput } from "./format";
 import { act, actOutsideTx, type ActionResult } from "./result";
 
 /** Server actions for the personnel screens: each one checks the person, calls one service and reports back. */
@@ -177,10 +177,15 @@ export async function saveGoalAction(dollars: string): Promise<ActionResult> {
   });
 }
 
+/** Saves the link and imports it at once (same path and limit as Sync now); removing it needs no import. */
 export async function setCalendarLinkAction(url: string | null): Promise<ActionResult> {
-  return act(async (actor, tx) => {
-    await setCalendarFeed(actor, tx, url?.trim() ? url.trim() : null);
-    return { ok: true, message: url ? "Calendar link saved. Choose Sync now to import it." : "Calendar link removed." };
+  return actOutsideTx(async (actor) => {
+    const link = url?.trim() ? url.trim() : null;
+    const r = await saveCalendarLink(actor, withTx, link);
+    if (!link) return { ok: true, message: "Calendar link removed." };
+    if (r.waitMessage) return { ok: true, message: `Calendar link saved. ${r.waitMessage} to import it, or it imports overnight.` };
+    if (r.lastError) return { ok: false, error: `Calendar link saved. ${r.lastError}` };
+    return { ok: true, message: `Calendar imported. Last fetched ${r.lastFetchedAt ? dateTime(r.lastFetchedAt) : "just now"}.` };
   });
 }
 

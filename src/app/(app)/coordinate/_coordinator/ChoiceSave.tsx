@@ -6,7 +6,7 @@ import { Button } from "@/ui/components/Button";
 import { FormField, Select } from "@/ui/components/FormField";
 import type { ActionResult } from "../../_personnel/result";
 import { Switch } from "../../admin/_admin/forms";
-import { setVendorEmailApprovedAction, setVendorSendScheduleAction, setWaitForAllDeputiesAction } from "./actions";
+import { setVendorEmailApprovedAction, setVendorCurrentYearW9Action, setVendorSendScheduleAction, setWaitForAllDeputiesAction } from "./actions";
 import { useCoordAction } from "./status";
 
 /** One labeled choice with its own Save, shown only once the choice changes. */
@@ -84,6 +84,32 @@ export function VendorEmailApproved({ vendorId, initial }: Readonly<{ vendorId: 
           setOn(next);
           run(async () => {
             const r = await setVendorEmailApprovedAction({ vendorId, on: next }).catch((e: unknown) => {
+              setOn(!next);
+              throw e;
+            });
+            if (!r.ok) setOn(!next);
+            return r;
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+/** The vendor's "Requires a W-9 signed this year" switch. */
+export function VendorCurrentYearW9({ vendorId, initial }: Readonly<{ vendorId: string; initial: boolean }>) {
+  const [on, setOn] = useState(initial);
+  const { run } = useCoordAction();
+  return (
+    <div className="sm:max-w-120">
+      <Switch
+        label="Requires a W-9 signed this year"
+        hint={on ? "Invoices attach the payee's W-9 only when it was signed this calendar year. Billing is never blocked." : "Invoices attach the payee's approved W-9, whenever it was signed."}
+        checked={on}
+        onChange={(next) => {
+          setOn(next);
+          run(async () => {
+            const r = await setVendorCurrentYearW9Action({ vendorId, on: next }).catch((e: unknown) => {
               setOn(!next);
               throw e;
             });

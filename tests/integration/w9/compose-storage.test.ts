@@ -27,7 +27,7 @@ describe("W-9 upload and download on Compose's disk storage", () => {
     process.env.STORAGE_DRIVER = "local";
     process.env.STORAGE_LOCAL_DIR = join(mount, "live");
     process.env.TRAINING_STORAGE_LOCAL_DIR = join(mount, "training");
-    const user = await makeUser(get().db, "personnel", "compose-w9@example.test");
+    const user = await makeUser(get().db, "personnel", "compose-w9@example.test", {}, { w9: false });
     owner = user.actor;
     token = await sessionToken(get().db, user.row.id);
   });

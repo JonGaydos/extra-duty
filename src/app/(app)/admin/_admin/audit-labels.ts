@@ -21,6 +21,12 @@ const EXACT: Record<string, string> = {
   "file.upload": "File uploaded",
   "access_review.decide": "Access review decision",
   "billing.lock_override": "Billing lock lifted",
+  "w9.upload": "W-9 uploaded",
+  "w9.read": "W-9 opened",
+  "w9.approve": "W-9 approved",
+  "w9.reject": "W-9 not approved",
+  "w9.grandfather": "W-9 approved when review began",
+  "w9.request": "New W-9 requested",
 };
 
 const VERBS: Record<string, string> = {

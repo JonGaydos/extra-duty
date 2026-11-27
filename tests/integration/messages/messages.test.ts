@@ -132,11 +132,23 @@ describe("message center", () => {
     await put("canceled");
     await put("removed");
     const bystander = await person();
-    const m = await send(deputy, [{ kind: "job", jobId: job.id }], { jobId: job.id });
+    // The roster reaches its people; linking the message "About" the detail is a separate rule (about-detail.test.ts).
+    const m = await send(deputy, [{ kind: "job", jobId: job.id }]);
     expect(await recipients(m.id)).toEqual([signed, backup, pending].sort(byText));
     expect(await recipients(m.id)).not.toContain(bystander.userId);
-    expect(m.jobId).toBe(job.id);
+    expect(m.jobId).toBeNull();
     await expect(send(deputy, [{ kind: "job", jobId: "00000000-0000-7000-8000-000000000000" }])).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  test("a person picked by name who is also on a picked roster gets one copy and one alert", async () => {
+    const deputy = await person();
+    const onJob = await person();
+    const { job, positionId } = await f.mkJob({ count: 2 });
+    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: onJob.userId, status: "signed_up" });
+    const m = await send(deputy, [{ kind: "job", jobId: job.id }, { kind: "users", userIds: [onJob.userId] }]);
+    expect(await recipients(m.id)).toEqual([onJob.userId]);
+    const alerts = await get().db.select().from(notifications).where(and(eq(notifications.userId, onJob.userId), eq(notifications.link, `/messages/${m.id}`)));
+    expect(alerts).toHaveLength(1);
   });
 
   test("rank and coordinator audiences; overlapping audiences send one copy each", async () => {

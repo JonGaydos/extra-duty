@@ -322,6 +322,13 @@ export async function sendApprovedInvoiceAction(invoiceId: string): Promise<Acti
   });
 }
 
+export async function setVendorCurrentYearW9Action(input: { vendorId: string; on: boolean }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await updateVendor(actor, tx, input.vendorId, { requiresCurrentYearW9: input.on === true });
+    return { ok: true, message: input.on ? "Invoices to this vendor attach a W-9 only when it was signed this year." : "Invoices to this vendor attach any approved W-9." };
+  });
+}
+
 export async function setVendorEmailApprovedAction(input: { vendorId: string; on: boolean }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     await updateVendor(actor, tx, input.vendorId, { emailApprovedInvoices: input.on === true });

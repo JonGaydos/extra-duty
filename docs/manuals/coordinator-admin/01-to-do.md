@@ -11,7 +11,7 @@ Coordinators and admins see the same tabs and pages as deputies: **Home**, **Det
 
 ## To-do
 
-1. Open **To-do**. Each group has a count: **Vendor requests**, **Details missing a contract**, **Invoices to review**, **Unfilled, starting within 72 hours**, **Sign-up locks**, **Left the agency: not billed** and more. Long groups end with a button such as **Show 47 more**.
+1. Open **To-do**. Each group has a count: **Vendor requests**, **W-9 to review**, **Details missing a contract**, **Invoices to review**, **Unfilled, starting within 72 hours**, **Sign-up locks**, **Left the agency: not billed** and more. Long groups end with a button such as **Show 47 more**.
 
    ![The To-do page](../images/coordinator-admin/01-to-do-1-desktop.webp)
 

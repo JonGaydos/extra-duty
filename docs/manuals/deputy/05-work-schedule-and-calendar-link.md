@@ -9,7 +9,7 @@ Tell Signal 90 when you are on duty. It then shows which details you can work an
    ![My schedule on Profile](../images/deputy/05-work-schedule-and-calendar-link-1-phone.webp)
 
 4. Check the **Next 4 weeks** preview. For leave, a swap or an extra shift, choose **Add a one-off change**.
-5. To see your Outlook appointments as busy time, paste your published calendar link in **Calendar link (.ics)** under **Outlook calendar**, then choose **Save link**. In Outlook, the link is under Settings, Calendar, Shared calendars, Publish a calendar, ICS link.
+5. To see your Outlook appointments as busy time, paste your published calendar link in **Calendar link (.ics)** under **Outlook calendar**, then choose **Save link**. In Outlook, the link is under Settings, Calendar, Shared calendars, Publish a calendar, ICS link. The app imports it right away: "Importing your calendar..." shows, then the time it was last fetched, or why it could not be fetched. After that it refreshes every night, and **Sync now** fetches it again at most once every 15 minutes. Changing the link twice within 15 minutes saves it and imports it at the next chance.
 
    ![The Outlook calendar card](../images/deputy/05-work-schedule-and-calendar-link-2-phone.webp)
 

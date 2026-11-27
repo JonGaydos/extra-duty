@@ -4,8 +4,8 @@ import { asc, eq } from "drizzle-orm";
 import { withTx } from "@/ui/shell/request";
 import { ranks, users } from "@/db/schema";
 import { DomainError } from "@/domain/errors";
-import { getMessage } from "@/domain/messages/messages";
-import { messageDirectory, myDetails } from "@/domain/personnel/views";
+import { getMessage, linkableDetails } from "@/domain/messages/messages";
+import { messageDirectory } from "@/domain/personnel/views";
 import { getSettings } from "@/domain/settings/settings";
 import { Icon } from "@/ui/icons";
 import { dayLabel } from "../../_personnel/format";
@@ -25,7 +25,8 @@ export default async function NewMessagePage({ searchParams }: Readonly<Props>) 
   const data = await withTx(async (tx) => {
     const people = (await messageDirectory(actor, tx)).filter((p) => p.id !== actor.userId);
     const rankRows = await tx.select({ id: ranks.id, name: ranks.name }).from(ranks).where(eq(ranks.active, true)).orderBy(asc(ranks.sortOrder));
-    const mine = (await myDetails(actor, tx, now, { from: new Date(now.getTime() - 30 * 86_400_000) })).filter((d) => !["canceled", "removed"].includes(d.status));
+    // Only details that have not ended: a deputy's own (signed up, pending or offered), any for staff.
+    const linkable = await linkableDetails(actor, tx, now);
     const settings = await getSettings(tx);
     let reply = null;
     const replyTo = one(sp.replyTo);
@@ -41,8 +42,9 @@ export default async function NewMessagePage({ searchParams }: Readonly<Props>) 
     return {
       people: people.map((p) => ({ id: p.id, name: p.name })),
       ranks: rankRows,
-      jobs: mine.map((d) => ({ id: d.job.id, name: `#${d.job.number} ${d.job.vendorName}, ${dayLabel(d.job.startAt)}` })),
+      jobs: linkable.map((d) => ({ id: d.id, name: `#${d.number} ${d.vendorName}, ${dayLabel(d.startAt)}` })),
       canMessageAll: actor.role !== "personnel" || settings.personnelCanMessageAll,
+      everyoneCount: people.length,
       reply,
     };
   });
@@ -54,7 +56,7 @@ export default async function NewMessagePage({ searchParams }: Readonly<Props>) 
         Back to messages
       </Link>
       <h1 className="m-0 text-2xl font-bold md:text-3xl">{data.reply ? "Reply" : "New message"}</h1>
-      <Compose people={data.people} ranks={data.ranks} jobs={data.jobs} canMessageAll={data.canMessageAll} initialJobId={one(sp.jobId)} reply={data.reply} />
+      <Compose people={data.people} ranks={data.ranks} jobs={data.jobs} canMessageAll={data.canMessageAll} everyoneCount={data.everyoneCount} initialJobId={one(sp.jobId)} reply={data.reply} />
     </div>
   );
 }

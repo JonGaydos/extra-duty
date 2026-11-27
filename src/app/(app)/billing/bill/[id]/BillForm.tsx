@@ -23,6 +23,8 @@ type Props = {
   minimum: number;
   reviewMode: "immediate" | "changed_hours_only" | "all";
   w9: string | null;
+  /** This vendor needs a W-9 signed this year and the approved one is older: it will not be attached. */
+  w9Notice?: string | null;
   sendsTo: string[];
   payee: string;
   mailingAddress: string | null;
@@ -92,9 +94,14 @@ function BillPreview({ p, worked, billed, valid, total }: Readonly<{ p: Readonly
   );
 }
 
+/** A vendor that needs a W-9 signed this year, when the approved one is older. */
+function W9Notice({ text }: Readonly<{ text?: string | null }>) {
+  return text ? <Notice tone="warning">{text}</Notice> : null;
+}
+
 function w9Note(p: Readonly<Props>): string {
-  if (p.w9) return `Uploaded ${p.w9}`;
-  return p.onBehalf ? "No W-9 on file." : "No W-9 on file. Upload one in Profile.";
+  if (p.w9) return `Approved W-9, uploaded ${p.w9}`;
+  return p.onBehalf ? "No approved W-9 on file." : "No approved W-9 on file. Upload one in Profile; it can go once approved.";
 }
 
 /** Billing needs a mailing address: it prints on the invoice. */
@@ -174,6 +181,7 @@ export function BillForm(p: Readonly<Props>) {
 
       <Card>
         <CardTitle>Invoice</CardTitle>
+        <W9Notice text={p.w9Notice} />
         <label className="flex min-h-11 items-center gap-2.5">
           <input type="checkbox" checked={attachW9} disabled={p.w9 === null} onChange={(e) => setAttachW9(e.target.checked)} className="size-4.5 accent-accent" />
           <span className="flex flex-col">

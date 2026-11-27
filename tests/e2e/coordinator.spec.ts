@@ -336,7 +336,7 @@ test("a coordinator sends a vendor's due batch with W-9s for all, holding nothin
   await expect(card).toContainText(`${COORD.waitingJob.split(",")[0]}`);
   await expect(card).toContainText(COORD.waitingDeputy);
   await card.getByRole("switch", { name: "Attach W-9s for every deputy in this batch" }).click();
-  await expect(card).toContainText(`No W-9 on file: ${COORD.signed.name}`);
+  await expect(card).toContainText(`No W-9 that can go: ${COORD.signed.name}`);
   await card.getByRole("radio", { name: "Send their invoices without a W-9" }).check();
   await expectNoSeriousA11yIssues(page);
   await card.getByRole("button", { name: `Send 1 invoice to ${COORD.batchVendor}` }).click();
@@ -675,6 +675,8 @@ test.describe("staff capabilities on the shared Details pages", () => {
     await card.getByRole("link", { name: "Open To-do" }).click();
     await expect(page).toHaveURL(/\/coordinate$/);
     await expect(page.locator('[data-shell="top-nav"]').getByRole("link", { name: "To-do", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("main")).toContainText(/To-do: \d+ items?\./);
+    await expect(page.getByText(/\bneeds? you\b/i)).toHaveCount(0);
   });
 
   test("deputies see the same pages without the staff controls", async ({ page, context }) => {

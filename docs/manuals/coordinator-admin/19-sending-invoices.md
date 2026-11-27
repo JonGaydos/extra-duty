@@ -7,7 +7,7 @@ Invoices can go out right away, or in a batch weekly, every two weeks or monthly
    ![A vendor's send schedule](../images/coordinator-admin/19-sending-invoices-2-desktop.webp)
 
 2. Open **Payments** and choose **Send invoices**. Each vendor with invoices ready shows its schedule, the invoices and the total. When nothing is queued, the page says which vendors are on a batched schedule, with links to **Billing settings** and to each vendor.
-3. Tick **Attach W-9s for every deputy in this batch** to send each deputy's current W-9 with their invoice.
+3. Tick **Attach W-9s for every deputy in this batch** to send each deputy's approved W-9 with their invoice. A W-9 waiting for review, rejected, or (for a vendor that needs one signed this year) signed in an earlier year never goes; **No W-9 that can go** names those deputies.
 4. On the send day, batches go out by themselves. To send before the day, type a **Reason for sending early** and choose **Send early**.
 
    ![Send invoices](../images/coordinator-admin/19-sending-invoices-1-desktop.webp)

@@ -16,7 +16,8 @@ import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
 import { clock, dateTime, dayLabel, hoursText, longDay, plural, prefixed, relativeDay, timeRange, whenText } from "../_personnel/format";
 import { coordinatorActor } from "./_coordinator/session";
-import { manageHref, todoCount } from "./_coordinator/todo";
+import { manageHref, todoCount, todoLine } from "./_coordinator/todo";
+import { uploadedBy } from "../_shared/w9";
 import { CountSection, Row, Rows } from "./_coordinator/ui";
 import { ApproveInvoiceButton, FlagDecision, LiftLock, LockedCancel, NoteReview } from "./TodoActions";
 
@@ -30,7 +31,7 @@ function greeting(now: Date): string {
   return h < 17 ? "Good afternoon" : "Good evening";
 }
 
-const missingW9Text = (missing: Array<{ name: string }>) => (missing.length ? ` No W-9 on file: ${missing.map((m) => m.name).join(", ")}.` : "");
+const missingW9Text = (missing: Array<{ name: string }>) => (missing.length ? ` No W-9 that can go: ${missing.map((m) => m.name).join(", ")}.` : "");
 
 /** Rows past the first few fold into a disclosure, so a long list does not push the rest of the to-do down. */
 function Capped<T>({ items, render }: Readonly<{ items: T[]; render: (item: T) => React.ReactNode }>) {
@@ -162,7 +163,7 @@ export default async function TodoPage() {
             {greeting(now)}, {first}
           </h1>
           <p className="m-0 text-muted">
-            {longDay(now)}. {total === 0 ? "Nothing needs you right now." : `${plural(total, "item needs", "items need")} you.`}
+            {longDay(now)}. {todoLine(total)}
           </p>
         </div>
         <ButtonLink href="/jobs/new">
@@ -212,6 +213,27 @@ export default async function TodoPage() {
               <Row key={f.id} title={`${f.userName}: ${f.qualificationName}`} meta={f.note ?? `Asked ${dateTime(f.requestedAt)}`} actions={<FlagDecision requestId={f.id} who={f.userName} />} />
             ))}
           </Rows>
+        </CountSection>
+      ) : null}
+
+      {t.w9Reviews.length ? (
+        <CountSection title="W-9 to review" count={t.w9Reviews.length}>
+          <Capped
+            items={t.w9Reviews}
+            render={(w) => (
+              <Row
+                key={w.w9Id}
+                title={w.name}
+                href={`/admin/users/${w.userId}#w9`}
+                meta={`Uploaded ${dateTime(w.uploadedAt)}${uploadedBy(w.uploadedByName)}. Approve it or say what to fix.`}
+                actions={
+                  <ButtonLink href={`/admin/users/${w.userId}#w9`} size="sm" variant="secondary" aria-label={`Review W-9, ${w.name}`}>
+                    Review
+                  </ButtonLink>
+                }
+              />
+            )}
+          />
         </CountSection>
       ) : null}
 

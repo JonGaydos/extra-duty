@@ -26,8 +26,9 @@ export async function setupFixture(db: Db, prefix: string) {
 
   const run = <T>(fn: (tx: Tx) => Promise<T>) => db.transaction(fn);
 
-  const person = async (rankName = "Deputy Sheriff") => {
-    const { actor } = await makeUser(db, "personnel", `${prefix}${userSeq++}@example.test`, { rankId: rank[rankName] });
+  const person = async (rankName = "Deputy Sheriff", opts: { w9?: boolean } = {}) => {
+    // Sign-ups need an approved W-9 (owner decision 2026-11-27); makeUser gives one unless `w9: false`.
+    const { actor } = await makeUser(db, "personnel", `${prefix}${userSeq++}@example.test`, { rankId: rank[rankName] }, { w9: opts.w9 });
     return { ...actor, rankId: rank[rankName] } as Actor;
   };
 

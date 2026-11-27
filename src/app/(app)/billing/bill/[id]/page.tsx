@@ -7,7 +7,7 @@ import { lateCancelMinutes, resolveMinimum } from "@/domain/billing/rules";
 import { activePaymentMethods, toBill, toBillFor } from "@/domain/personnel/views";
 import { getSettings } from "@/domain/settings/settings";
 import { getOwnContact } from "@/domain/users/contact";
-import { currentW9 } from "@/domain/w9/w9";
+import { approvedW9, attachableW9, currentYearNotice } from "@/domain/w9/w9";
 import { Card } from "@/ui/components/Card";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { Icon } from "@/ui/icons";
@@ -38,7 +38,7 @@ export default async function BillPage({ params }: Readonly<Props>) {
     }
     if (!item) return null;
     const [row] = await tx
-      .select({ jobMin: jobs.minimumBillableMinutes, vendorMin: vendors.minimumBillableMinutes, emails: vendors.billingEmails, jobStart: jobs.startAt, jobEnd: jobs.endAt })
+      .select({ vendorId: vendors.id, jobMin: jobs.minimumBillableMinutes, vendorMin: vendors.minimumBillableMinutes, emails: vendors.billingEmails, jobStart: jobs.startAt, jobEnd: jobs.endAt })
       .from(assignments)
       .innerJoin(jobs, eq(jobs.id, assignments.jobId))
       .innerJoin(vendors, eq(vendors.id, jobs.vendorId))
@@ -48,13 +48,16 @@ export default async function BillPage({ params }: Readonly<Props>) {
       row,
       settings: await getSettings(tx),
       contact: owner === actor.userId ? await getOwnContact(actor, tx) : (await tx.select({ name: users.name, mailingAddress: users.mailingAddress }).from(users).where(eq(users.id, owner)))[0],
-      w9: await currentW9(tx, owner),
+      w9: await approvedW9(tx, owner),
+      w9Attachable: row ? await attachableW9(tx, owner, row.vendorId) : null,
       owner,
       methods: await activePaymentMethods(tx),
     };
   });
 
   const onBehalf = data && data.owner !== actor.userId ? { backHref: `/admin/users/${data.owner}`, backLabel: `Back to ${data.contact.name}` } : undefined;
+  const who = onBehalf ? (data?.contact.name ?? "") : "Your";
+  const w9Notice = data?.w9Attachable ? currentYearNotice(data.w9Attachable, who, new Date()) : null;
   const back = (
     <Link href={onBehalf?.backHref ?? "/billing"} className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
       <Icon name="chevronLeft" size={18} />
@@ -99,6 +102,7 @@ export default async function BillPage({ params }: Readonly<Props>) {
         minimum={minimum}
         reviewMode={settings.invoiceReviewMode}
         w9={data.w9 ? dateLabel(data.w9.uploadedAt) : null}
+        w9Notice={w9Notice}
         sendsTo={row.emails}
         payee={data.contact.name}
         mailingAddress={data.contact.mailingAddress}

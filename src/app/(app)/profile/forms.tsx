@@ -59,11 +59,13 @@ export function ContactForm({ phone, mailingAddress }: Readonly<{ phone: string;
   );
 }
 
-export function W9Upload({ hasW9 }: Readonly<{ hasW9: boolean }>) {
+/** Uploads a W-9 PDF: the person's own (Profile), or staff for a person (`forName` and `url`). It waits for review. */
+export function W9Upload({ hasW9, url = "/api/v1/me/w9", forName }: Readonly<{ hasW9: boolean; url?: string; forName?: string }>) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const ownLabel = hasW9 ? "Replace your W-9" : "Upload your W-9";
   return (
     <form
       className="flex flex-col gap-3"
@@ -75,9 +77,9 @@ export function W9Upload({ hasW9 }: Readonly<{ hasW9: boolean }>) {
         try {
           const body = new FormData();
           body.set("file", file);
-          const res = await fetch("/api/v1/me/w9", { method: "POST", body });
+          const res = await fetch(url, { method: "POST", body });
           const err = res.ok ? null : ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message;
-          setMsg(res.ok ? { ok: true, text: "W-9 uploaded." } : { ok: false, text: err ?? "The W-9 could not be uploaded. Use a PDF under 20 MB." });
+          setMsg(res.ok ? { ok: true, text: "W-9 uploaded. It waits for review." } : { ok: false, text: err ?? "The W-9 could not be uploaded. Use a PDF under 20 MB." });
           if (res.ok) router.refresh();
         } catch {
           setMsg({ ok: false, text: "The W-9 could not be uploaded. Check your connection and try again." });
@@ -86,7 +88,10 @@ export function W9Upload({ hasW9 }: Readonly<{ hasW9: boolean }>) {
         }
       }}
     >
-      <FormField label={hasW9 ? "Replace your W-9" : "Upload your W-9"} hint="PDF only. Stored encrypted; only you and the extra duty office can open it.">
+      <FormField
+        label={forName ? `Upload a W-9 for ${forName}` : ownLabel}
+        hint={forName ? "PDF only. Stored encrypted. It starts as pending review, like one they upload." : "PDF only. Stored encrypted; only you and the extra duty office can open it."}
+      >
         <Input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="py-2" />
       </FormField>
       <Button type="submit" variant="secondary" busy={busy} disabled={!file} className="w-fit">
@@ -292,8 +297,11 @@ export function RemoveException({ id, label }: Readonly<{ id: string; label: str
   );
 }
 
+/** The calendar link: saving it imports it at once (Sync now's path and limit), with "Importing your calendar..." meanwhile. */
 export function CalendarLinkForm({ connected }: Readonly<{ connected: boolean }>) {
   const [url, setUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const router = useRouter();
   const { run, busy, result } = useAction();
   return (
     <div className="flex flex-col gap-3">
@@ -301,7 +309,16 @@ export function CalendarLinkForm({ connected }: Readonly<{ connected: boolean }>
         className="flex flex-col gap-2.5"
         onSubmit={(e) => {
           e.preventDefault();
-          run(() => setCalendarLinkAction(url), () => setUrl(""));
+          setImporting(true);
+          run(
+            () =>
+              setCalendarLinkAction(url).finally(() => {
+                setImporting(false);
+                // A failed import still saved the link: show it and its error.
+                router.refresh();
+              }),
+            () => setUrl(""),
+          );
         }}
       >
         <FormField label={connected ? "Replace the calendar link" : "Calendar link (.ics)"} hint="From Outlook: Settings, Calendar, Shared calendars, Publish a calendar, ICS link.">
@@ -321,7 +338,11 @@ export function CalendarLinkForm({ connected }: Readonly<{ connected: boolean }>
           </Button>
         </div>
       ) : null}
-      <ActionStatus result={result} />
+      {importing ? (
+        <output className="m-0 block text-sm text-muted">Importing your calendar...</output>
+      ) : (
+        <ActionStatus result={result} />
+      )}
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { coordinatorAudience } from "@/domain/notifications/audiences";
 import { emit } from "@/domain/notifications/notify";
 import { getSettings, type AgencySettings } from "@/domain/settings/settings";
 import { minutesBetween } from "@/domain/time/agency-time";
-import { currentW9 } from "@/domain/w9/w9";
+import { approvedW9 } from "@/domain/w9/w9";
 
 export type BillInput = {
   startAt: Date;
@@ -76,9 +76,9 @@ async function billedTimes(tx: Tx, job: Job, input: BillInput, lateCancel: boole
   return { startAt, endAt };
 }
 
-/** Refuses a bill the payee is not ready for: a W-9 attached but never uploaded, no mailing address, or an unknown payment method. */
+/** Refuses a bill the payee is not ready for: a W-9 attached but not approved, no mailing address, or an unknown payment method. */
 async function assertPayeeReady(tx: Tx, userId: string, input: BillInput): Promise<void> {
-  if (input.attachW9 && !(await currentW9(tx, userId))) throw violation("w9", "Upload your W-9 before attaching it");
+  if (input.attachW9 && !(await approvedW9(tx, userId))) throw violation("w9", "Your W-9 must be approved before it can be attached");
   const [payee] = await tx.select({ mailingAddress: users.mailingAddress }).from(users).where(eq(users.id, userId));
   if (!payee?.mailingAddress?.trim()) throw violation("mailing_address", "Add your mailing address in Profile before billing");
 

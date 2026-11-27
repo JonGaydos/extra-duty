@@ -24,6 +24,7 @@ import { seedPersonnel } from "./personnel-fixtures";
 import { seedAdmin } from "./admin-fixtures";
 import { seedVendor } from "./vendor-fixtures";
 import { startFakeNominatim } from "./fake-nominatim";
+import { seedApprovedW9 } from "./w9-seed";
 
 // E2E_DEMO=staging runs the site as staging on the demo agency (for scripts/capture-screenshots.ts): the live
 // database holds the demo data instead of the e2e accounts.
@@ -53,7 +54,14 @@ async function seedE2E(): Promise<void> {
   await seedCoordinator(db);
   await seedAdmin(db);
   await seedVendor(db);
+  // Everyone who works details has an approved W-9, except the two people the specs need without one.
+  const noW9 = new Set(["capped@e2e.test", "riley@e2e.test"]);
+  const people = await db.select({ id: users.id, email: users.email }).from(users).where(sql`${users.role} <> 'vendor'`);
+  // Sequential: each W-9 is stored and recorded in its own transaction.
+  for (const p of people) if (!noW9.has(p.email)) await seedApprovedW9(db, p.id);
 }
+// The W-9s seeded below are stored like uploads: encrypted, in the live folder the server reads.
+Object.assign(process.env, { FILE_MASTER_KEY: E2E.appEnv.FILE_MASTER_KEY, STORAGE_DRIVER: "local" });
 try {
   if (stagingDemo) {
     Object.assign(process.env, { STORAGE_DRIVER: "local", STORAGE_LOCAL_DIR: "test-results/e2e-storage" });

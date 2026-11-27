@@ -38,6 +38,8 @@ export type VendorInput = {
   invoiceSendSchedule?: SendSchedule | null;
   /** "Email approved invoices to this vendor": pre-selects Approve and send (true) or Approve, don't send. */
   emailApprovedInvoices?: boolean;
+  /** "Requires a W-9 signed this year": invoices attach the payee's W-9 only when signed in the current calendar year. */
+  requiresCurrentYearW9?: boolean;
 };
 
 const SCHEDULES: readonly SendSchedule[] = ["immediate", "weekly", "every_2_weeks", "monthly"];
@@ -134,6 +136,10 @@ function setInvoiceOptions(patch: Partial<typeof vendors.$inferInsert>, input: P
   if (input.emailApprovedInvoices !== undefined) {
     if (typeof input.emailApprovedInvoices !== "boolean") throw new ValidationError("Choose whether approved invoices are emailed to this vendor.");
     patch.emailApprovedInvoices = input.emailApprovedInvoices;
+  }
+  if (input.requiresCurrentYearW9 !== undefined) {
+    if (typeof input.requiresCurrentYearW9 !== "boolean") throw new ValidationError("Choose whether this vendor needs a W-9 signed this year.");
+    patch.requiresCurrentYearW9 = input.requiresCurrentYearW9;
   }
 }
 

@@ -70,6 +70,8 @@ const EXPORTED = [
   "vendor_types",
   "vendor_users",
   "vendors",
+  "w9_request_people",
+  "w9_requests",
   "w9s",
   "work_schedules",
 ] as const;

@@ -14,7 +14,7 @@ import { normalizeEmail } from "@/domain/auth/sign-in-policy";
 import { formatInvoiceNumber, type Invoice } from "@/domain/invoices/invoices";
 import { getSettings } from "@/domain/settings/settings";
 import { minutesBetween } from "@/domain/time/agency-time";
-import { currentW9 } from "@/domain/w9/w9";
+import { approvedW9 } from "@/domain/w9/w9";
 import type { Cents, Minutes } from "@/domain/types";
 import { isEmail } from "@/lib/is-email";
 
@@ -122,9 +122,9 @@ export async function approveInvoice(actor: Actor, tx: Tx, id: string, now: Date
   if (inv.status !== "pending_review") throw violation("not_pending", "Only an invoice waiting for review can be approved.");
   if (opts.send !== undefined && typeof opts.send !== "boolean") throw new ValidationError("Choose whether to send the invoice.");
   if (opts.attachW9 && !inv.attachW9) {
-    if (!(await currentW9(tx, inv.payeeUserId))) {
+    if (!(await approvedW9(tx, inv.payeeUserId))) {
       const [payee] = await tx.select({ name: users.name }).from(users).where(eq(users.id, inv.payeeUserId));
-      throw violation("w9_missing", `${payee?.name ?? "The payee"} has no W-9 on file, so it cannot be attached.`);
+      throw violation("w9_missing", `${payee?.name ?? "The payee"} has no approved W-9, so none can be attached.`);
     }
     [inv] = await tx.update(invoices).set({ attachW9: true, w9RequestedBy: actor.userId }).where(eq(invoices.id, id)).returning();
   }

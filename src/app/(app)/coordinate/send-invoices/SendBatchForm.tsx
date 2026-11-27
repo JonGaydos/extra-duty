@@ -30,7 +30,7 @@ function MissingW9Choice({ id, names, value, onChange }: Readonly<{ id: string; 
     <fieldset className="m-0 flex flex-col gap-1 rounded-md border border-warning-line bg-warning-soft px-3.5 py-2.5" aria-describedby={`${id}-missing`}>
       <legend className="sr-only">Deputies without a W-9</legend>
       <p id={`${id}-missing`} className="m-0 text-sm text-warning-ink">
-        <strong className="font-semibold">No W-9 on file:</strong> {names.join(", ")}
+        <strong className="font-semibold">No W-9 that can go:</strong> {names.join(", ")}
       </p>
       {(["send", "hold"] as const).map((v) => (
         <label key={v} className="flex min-h-11 cursor-pointer items-center gap-2.5 text-body">

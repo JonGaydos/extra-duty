@@ -63,6 +63,11 @@ export const NOTIFICATION_TYPES = [
   "job.reactivated",
   // Task 43 addition
   "settings.email_replaced",
+  // W-9 review (owner, 2026-11-27)
+  "w9.approved",
+  "w9.rejected",
+  "w9.renewal_requested",
+  "w9.renewal_reminder",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

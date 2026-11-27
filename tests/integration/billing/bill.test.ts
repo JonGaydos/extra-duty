@@ -14,6 +14,7 @@ import { ForbiddenError, RuleViolation, ValidationError } from "@/domain/errors"
 import { updateSettings } from "@/domain/settings/settings";
 import { agencyDateParts, agencyInstant } from "@/domain/time/agency-time";
 import { uploadW9 } from "@/domain/w9/w9";
+import { approveCurrentW9 } from "../w9/helpers";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 
@@ -55,7 +56,7 @@ describe("billing a detail", () => {
 
   async function mk(o: { status?: "signed_up" | "late_canceled"; hours?: [number, number]; address?: string | null } = {}) {
     const { db } = get();
-    const person = await fx.person();
+    const person = await fx.person("Deputy Sheriff", { w9: false });
     await db.update(users).set({ mailingAddress: o.address === undefined ? "1 Main St, Town, TX 75001" : o.address }).where(eq(users.id, person.userId));
     const { job, positionId } = await fx.mkJob({ hours: o.hours });
     const [a] = await db
@@ -156,9 +157,12 @@ describe("billing a detail", () => {
   test("attachW9 without a W-9 throws and creates no invoice; with one it is stored", async () => {
     const { a, job, person } = await mk();
     await expect(bill(person, a.id, input(job, { attachW9: true }))).rejects.toThrow(RuleViolation);
-    await expect(bill(person, a.id, input(job, { attachW9: true }))).rejects.toThrow("Upload your W-9 before attaching it");
-    expect(await invoiceCount(a.id)).toBe(0);
+    await expect(bill(person, a.id, input(job, { attachW9: true }))).rejects.toThrow("Your W-9 must be approved before it can be attached");
+    // An upload alone is not enough: it waits for review.
     await get().db.transaction((tx) => uploadW9(person, tx, W9_PDF, "w9.pdf"));
+    await expect(bill(person, a.id, input(job, { attachW9: true }))).rejects.toThrow("approved");
+    expect(await invoiceCount(a.id)).toBe(0);
+    await approveCurrentW9(get().db, person.userId);
     const r = await bill(person, a.id, input(job, { attachW9: true }));
     expect(r.invoice.attachW9).toBe(true);
   });

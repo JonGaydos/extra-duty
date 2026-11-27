@@ -15,6 +15,7 @@ import { approveInvoice, resendInvoice } from "@/domain/invoices/review";
 import { updateSettings } from "@/domain/settings/settings";
 import { agencyInstant } from "@/domain/time/agency-time";
 import { uploadW9 } from "@/domain/w9/w9";
+import { approveCurrentW9 } from "../w9/helpers";
 import { setEmailSender } from "@/lib/email/sender";
 import { createMemorySender } from "@/lib/email/types";
 import { byText } from "@/lib/sort";
@@ -52,7 +53,7 @@ describe("resend an invoice", () => {
 
   async function held() {
     const { db } = get();
-    const p = await fx.person();
+    const p = await fx.person("Deputy Sheriff", { w9: false });
     await db.update(users).set({ mailingAddress: "1 Main St, Town, TX 75001" }).where(eq(users.id, p.userId));
     const { job, positionId } = await fx.mkJob();
     const [a] = await db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: p.userId, status: "signed_up" }).returning();
@@ -114,7 +115,7 @@ describe("resend an invoice", () => {
     const { db } = get();
     const inv = await held();
     await db.transaction((tx) => approveInvoice(fx.coord, tx, inv.id, BILL, { send: true }));
-    const deputy = await fx.person();
+    const deputy = await fx.person("Deputy Sheriff", { w9: false });
     await expect(db.transaction((tx) => resendInvoice(deputy, tx, inv.id, {}, LATER))).rejects.toThrow(ForbiddenError);
     await expect(db.transaction((tx) => resendInvoice(vendorActor, tx, inv.id, {}, LATER))).rejects.toThrow(ForbiddenError);
   });
@@ -123,9 +124,10 @@ describe("resend an invoice", () => {
     const { db } = get();
     process.env.STORAGE_DRIVER = "local";
     process.env.STORAGE_LOCAL_DIR = await mkdtemp(join(tmpdir(), "extra-duty-resend-"));
-    const p = await fx.person();
+    const p = await fx.person("Deputy Sheriff", { w9: false });
     await db.update(users).set({ mailingAddress: "1 Main St, Town, TX 75001" }).where(eq(users.id, p.userId));
     await db.transaction((tx) => uploadW9(p, tx, W9_PDF, "w9.pdf"));
+    await approveCurrentW9(db, p.userId);
     const { job, positionId } = await fx.mkJob();
     const [a] = await db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: p.userId, status: "signed_up" }).returning();
     const inv = (await db.transaction((tx) => billAssignment(p, tx, a.id, { startAt: job.startAt, endAt: job.endAt, attachW9: true }, BILL))).invoice;

@@ -168,6 +168,10 @@ export const CATALOG: Record<CatalogKey, CatalogEntry> = {
     groups: P,
     inAppOnly: "Suspensions are a personnel matter, so this is never emailed or pushed.",
   },
+  "w9.approved": { category: "Account", label: "W-9 approved", description: "Staff approve the W-9 the person or staff uploaded.", groups: P, note: "Never sent to vendors." },
+  "w9.rejected": { category: "Account", label: "W-9 not approved", description: "Staff reject a W-9, with the reason and a link to upload a new one.", groups: P, note: "Never sent to vendors." },
+  "w9.renewal_requested": { category: "Account", label: "New W-9 requested", description: "Staff ask the person for a new W-9 by a due date.", groups: P, note: "Never sent to vendors." },
+  "w9.renewal_reminder": { category: "Account", label: "New W-9 due soon", description: "A requested W-9 is still missing a week before, and the day before, the due date.", groups: P, note: "Never sent to vendors." },
   "access_review.reminder": { category: "Account", label: "Access review reminder", description: "The yearly access review still has accounts to decide.", groups: S },
 };
 

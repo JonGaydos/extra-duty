@@ -132,6 +132,7 @@ const vendorBody = z
     notes: optText,
     invoiceSendSchedule: z.enum(["immediate", "weekly", "every_2_weeks", "monthly"]).nullable(),
     emailApprovedInvoices: z.boolean(),
+    requiresCurrentYearW9: z.boolean(),
   })
   .partial()
   .loose();
@@ -333,7 +334,7 @@ export const routes = define({
   "GET /calendar.ics": { tag: "Planning", summary: "A personal calendar feed", description: "The token in the link is the only credential.", public: true, query: z.object({ token: text.optional() }).loose(), response: file("text/calendar", "The feed.") },
   "GET /me/calendar-busy": { tag: "Planning", summary: "Busy times from the linked calendar", response: list("A busy time.") },
   "GET /me/calendar-feed": { tag: "Planning", summary: "Whether a calendar link is set", response: anything("Status; the link itself is never returned.") },
-  "PUT /me/calendar-feed": { tag: "Planning", summary: "Set or remove the calendar link", body: z.object({ url: z.string().nullable() }), response: ok },
+  "PUT /me/calendar-feed": { tag: "Planning", summary: "Set or remove the calendar link", body: z.object({ url: z.string().nullable() }), description: "A new link is imported at once, with the same once-per-15-minutes limit as Sync now; `waitMessage` says when it can sync again.", response: z.object({ ok: z.literal(true), connected: z.boolean(), lastFetchedAt: text.nullable(), lastError: text.nullable(), waitMessage: text.nullable() }) },
   "POST /me/calendar-feed/sync": { tag: "Planning", summary: "Sync the linked calendar now", response: anything("The sync result.") },
   "GET /me/earnings-goal": { tag: "Planning", summary: "The earnings goal and progress", response: anything("Goal progress.") },
   "PUT /me/earnings-goal": { tag: "Planning", summary: "Set the earnings goal", body: z.object({ monthlyCents: z.number().int().nullable() }), response: anything("Goal progress.") },
@@ -444,6 +445,42 @@ export const routes = define({
   },
   "DELETE /users/{id}/suspension": { tag: "Users", summary: "Lift a suspension", response: record("The user.") },
   "GET /users/{id}/w9": { tag: "Users", summary: "Download a person's W-9", description: "The owner, coordinators and admins; every read is audited. API keys need the w9 scope.", w9: true, hideForbidden: true, response: file("application/pdf", "The W-9.") },
+  "POST /users/{id}/w9": {
+    tag: "Users",
+    summary: "Upload a W-9 for a person",
+    description: "Coordinators and admins. Stored encrypted; it becomes the person's latest W-9, pending review. API keys need the w9 scope.",
+    w9: true,
+    form: { file: "A PDF up to 20 MB." },
+    response: z.object({ id: text, status: text, uploadedAt: text }),
+  },
+  "GET /w9-requests": { tag: "Users", summary: "W-9 renewal requests", description: "Coordinators and admins. Newest first, with counts of people done, pending review, rejected and missing.", response: list("A request.") },
+  "POST /w9-requests": {
+    tag: "Users",
+    summary: "Ask for a new W-9",
+    description: "Coordinators and admins. After the due date (an agency date), each person asked without a W-9 uploaded since and approved is sign-up locked. Each is notified, with reminders a week and a day before.",
+    body: z.object({
+      audience: z.discriminatedUnion("kind", [
+        z.object({ kind: z.literal("everyone") }),
+        z.object({ kind: z.literal("users"), userIds: z.array(text) }),
+        z.object({ kind: z.literal("rank"), rankId: text }),
+        z.object({ kind: z.literal("flag"), qualificationId: text }),
+      ]),
+      dueOn: text.meta({ description: "YYYY-MM-DD, after today." }),
+      note: optText,
+    }),
+    response: record("The request."),
+    status: 201,
+  },
+  "POST /users/{id}/w9/review": {
+    tag: "Users",
+    summary: "Approve or reject a person's W-9",
+    description: "Coordinators and admins, for the person's latest W-9 while it is pending. Approve with the signature date (YYYY-MM-DD) and the IRS form revision; reject with a reason. The person is notified; audited.",
+    body: z.discriminatedUnion("decision", [
+      z.object({ decision: z.literal("approve"), signedOn: text, formRevision: text }),
+      z.object({ decision: z.literal("reject"), reason: text }),
+    ]),
+    response: z.object({ id: text, status: text, signedOn: optText, formRevision: optText, rejectReason: optText }),
+  },
 
   // Vendors
   "GET /vendors": { tag: "Vendors", summary: "Vendors", query: z.object({ active: bool.optional(), typeId: text.optional() }).loose(), response: list("A vendor.") },

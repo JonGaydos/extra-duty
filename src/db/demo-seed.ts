@@ -39,6 +39,7 @@ import {
   vendors,
   vendorTypes,
   vendorUsers,
+  w9s,
 } from "./schema";
 import { seed } from "./seed";
 import { storeFile } from "../domain/files/files";
@@ -63,6 +64,8 @@ type DemoInvoice = WithId<Omit<Ins<typeof invoices>, "id" | "number" | "deputyMe
 type DemoOpsPlan = WithId<Omit<Ins<typeof opsPlans>, "id">> & {
   version: { submittedBy: string; submittedAt: Date; decision: "agreed" | "pending"; decidedBy: string | null; decidedAt: Date | null } | null;
 };
+/** A demo W-9: the file is a stand-in PDF, stored encrypted like an upload. */
+type DemoW9 = { userId: string; status: "pending" | "approved" | "rejected"; uploadedAt: Date; signedOn: string | null; formRevision: string | null; rejectReason: string | null; reviewedBy: string | null; current: boolean };
 type DemoAudit = { action: string; entityType: string; entityId: string; actorUserId: string | null; at: Date; reason?: string; before?: unknown; after?: unknown };
 
 export type DemoData = {
@@ -83,6 +86,7 @@ export type DemoData = {
   paymentIssues: WithId<Ins<typeof paymentIssues>>[];
   paymentIssueNotes: Ins<typeof paymentIssueNotes>[];
   opsPlans: DemoOpsPlan[];
+  w9s: DemoW9[];
   audit: DemoAudit[];
   /** Overrides of the default settings. */
   settings: Partial<AgencySettings>;
@@ -170,6 +174,7 @@ export function buildDemoData(today: Date): DemoData {
     paymentIssues: [],
     paymentIssueNotes: [],
     opsPlans: [],
+    w9s: [],
     audit: [],
     settings: {},
   };
@@ -211,6 +216,32 @@ export function buildDemoData(today: Date): DemoData {
   const suspended = personnel.at(-5)!; // a Posse member
   suspended.suspensionReason = "Administrative review";
   suspended.suspendedUntil = new Date(today.getTime() + 20 * DAY);
+
+  // W-9s: everyone who works details has an approved one, signed in January this year (a few last year, which a vendor
+  // that needs this year's flags). Two newer uploads wait for review and one was not approved, for the To-do and Profile.
+  const year = agencyDateParts(today).year;
+  const w9 = (u: DemoUser, status: DemoW9["status"], daysAgo: number, o: Partial<DemoW9> = {}): DemoW9 => ({
+    userId: u.id,
+    status,
+    uploadedAt: new Date(today.getTime() - daysAgo * DAY),
+    signedOn: status === "approved" ? `${year}-01-${String(5 + (daysAgo % 20)).padStart(2, "0")}` : null,
+    formRevision: status === "approved" ? "March 2024" : null,
+    rejectReason: null,
+    reviewedBy: status === "pending" ? null : coordinator.id,
+    current: true,
+    ...o,
+  });
+  d.users.filter((u) => u.role !== "vendor").forEach((u, i) => {
+    const lastYear = i % 9 === 4;
+    d.w9s.push(w9(u, "approved", 300 - i, lastYear ? { signedOn: `${year - 1}-12-${String(10 + (i % 18)).padStart(2, "0")}` } : {}));
+  });
+  const newer = (u: DemoUser, row: DemoW9) => {
+    for (const r of d.w9s) if (r.userId === u.id) r.current = false;
+    d.w9s.push(row);
+  };
+  newer(personnel[3], w9(personnel[3], "pending", 2));
+  newer(personnel[6], w9(personnel[6], "pending", 1));
+  newer(personnel[9], w9(personnel[9], "rejected", 6, { rejectReason: "Not signed" }));
 
   // Vendors, each with a location and site contacts; one on payment hold, one batched weekly, one approve-only.
   const BATCHED_VENDORS: Partial<Record<number, "weekly" | "monthly">> = { 4: "weekly", 7: "monthly" };
@@ -656,6 +687,11 @@ export async function loadDemoData(tx: Tx, data: DemoData): Promise<void> {
     if (!version) continue;
     const file = await storeFile("system", tx, { kind: "ops_plan", filename: `${plan.eventName} ops plan.pdf`, contentType: "application/pdf", body: DEMO_PDF }, { only: "pdf" });
     await tx.insert(opsPlanVersions).values({ opsPlanId: plan.id, fileId: file.id, ...version });
+  }
+  // Sequential: each W-9 file is stored and recorded in this transaction.
+  for (const w of data.w9s) {
+    const file = await storeFile("system", tx, { kind: "w9", filename: "W-9.pdf", contentType: "application/pdf", body: DEMO_PDF, ownerUserId: w.userId }, { only: "pdf" });
+    await tx.insert(w9s).values({ ...w, fileId: file.id, reviewedAt: w.status === "pending" ? null : w.uploadedAt });
   }
   if (data.audit.length) await tx.insert(auditLog).values(data.audit.map((a) => ({ ...a, reason: a.reason ?? null, before: a.before ?? null, after: a.after ?? null })));
   const [row] = await tx.select({ id: settingsTable.id }).from(settingsTable).limit(1);

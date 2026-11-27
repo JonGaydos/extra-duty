@@ -14,7 +14,10 @@ import { StatTile } from "@/ui/components/StatTile";
 import { Icon } from "@/ui/icons";
 import { dateLabel, hoursText, plural } from "../../../_personnel/format";
 import { coordinatorActor } from "../../_coordinator/session";
-import { VendorEmailApproved, VendorSendSchedule } from "../../_coordinator/ChoiceSave";
+import { VendorCurrentYearW9, VendorEmailApproved, VendorSendSchedule } from "../../_coordinator/ChoiceSave";
+import { Notice } from "@/ui/components/Notice";
+import { agencyDateParts } from "@/domain/time/agency-time";
+import { dayText, vendorW9Gaps } from "@/domain/w9/w9";
 import { getSettings } from "@/domain/settings/settings";
 import { CountSection, Row, Rows } from "../../_coordinator/ui";
 import { ContactsManager } from "../../_coordinator/ContactsManager";
@@ -62,7 +65,7 @@ function LocationMeta({ l }: Readonly<{ l: VendorRec["locations"][number] }>) {
 }
 
 /** The vendor's facts, edit, payment hold, send schedule and email choice. */
-function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySchedule: Parameters<typeof VendorSendSchedule>[0]["agency"] }>) {
+function VendorCard({ rec, agencySchedule, w9Gaps, year }: Readonly<{ rec: VendorRec; agencySchedule: Parameters<typeof VendorSendSchedule>[0]["agency"]; w9Gaps: Awaited<ReturnType<typeof vendorW9Gaps>>; year: number }>) {
   const v = rec.vendor;
   return (
     <Card>
@@ -94,6 +97,7 @@ function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySc
             ),
           },
           { label: "Email approved invoices", value: v.emailApprovedInvoices ? "Yes, approving sends them" : "No, approving does not send them" },
+          { label: "W-9", value: v.requiresCurrentYearW9 ? "Must be signed this year" : "Any approved W-9" },
           { label: "Notes", value: v.notes ? <span className="whitespace-pre-line">{v.notes}</span> : null },
         ]}
       />
@@ -107,7 +111,20 @@ function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySc
       <div id="send-settings" className="flex scroll-mt-24 flex-col gap-3">
         <VendorSendSchedule vendorId={v.id} current={v.invoiceSendSchedule} agency={agencySchedule} />
         <VendorEmailApproved vendorId={v.id} initial={v.emailApprovedInvoices} />
+        <VendorCurrentYearW9 vendorId={v.id} initial={v.requiresCurrentYearW9} />
       </div>
+      {w9Gaps.length ? (
+        <Notice tone="warning">
+          This vendor needs a W-9 signed in {year}. These payees have open invoices to it without one, so their invoices go without a W-9:{" "}
+          {w9Gaps.map((g, i) => (
+            <span key={g.userId}>
+              {i ? ", " : ""}
+              <Link href={`/admin/users/${g.userId}#w9`}>{g.name}</Link> ({g.signedOn ? `signed ${dayText(g.signedOn)}` : "no signature date"})
+            </span>
+          ))}
+          .
+        </Notice>
+      ) : null}
       {v.paymentHold ? <p className="m-0 text-sm text-danger-ink">On hold: {v.paymentHoldReason}. Future details are locked and closed to sign-ups.</p> : null}
     </Card>
   );
@@ -119,7 +136,7 @@ export default async function VendorPage({ params }: Readonly<Props>) {
   const { id } = await params;
   const data = await withTx(async (tx) => {
     try {
-      return { rec: await vendorRecord(actor, tx, id), people: await staffDirectory(actor, tx), agencySchedule: (await getSettings(tx)).invoiceSendSchedule };
+      return { rec: await vendorRecord(actor, tx, id), people: await staffDirectory(actor, tx), agencySchedule: (await getSettings(tx)).invoiceSendSchedule, w9Gaps: await vendorW9Gaps(actor, tx, id) };
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;
@@ -136,7 +153,7 @@ export default async function VendorPage({ params }: Readonly<Props>) {
         <Icon name="chevronLeft" size={18} />
         Back to vendors
       </Link>
-      <VendorCard rec={rec} agencySchedule={data.agencySchedule} />
+      <VendorCard rec={rec} agencySchedule={data.agencySchedule} w9Gaps={data.w9Gaps} year={agencyDateParts(new Date()).year} />
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-6">
         <div className="flex min-w-0 flex-col gap-4.5">

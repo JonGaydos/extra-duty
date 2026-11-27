@@ -42,7 +42,7 @@ import { upcomingMissingContract } from "../jobs/contract-status";
 import { opsPlanDueAt } from "../ops-plans/ops-plans";
 import { scheduledPayCents } from "../planning/recommend";
 import { getSettings, type AgencySettings as AgencySettingsLike } from "../settings/settings";
-import { currentW9 } from "../w9/w9";
+import { attachableW9, currentYearNotice, pendingW9Reviews, type PendingW9 } from "../w9/w9";
 import { findOpenReview } from "../users/access-review";
 import { lockedDetailsForTodo } from "../vendor-portal/holds";
 import { releaseAt } from "../release/release";
@@ -94,6 +94,8 @@ export type CoordinatorTodo = {
   sendInvoices: VendorBatch[];
   /** Worked details of people who left the agency, still to bill for them or write off. */
   departed: Array<DepartureUnbilled & { name: string }>;
+  /** Latest W-9s waiting for staff review. */
+  w9Reviews: PendingW9[];
 };
 
 export type RateRow = { jobId: string; title: string; vendorName: string; startAt: Date; rateCents: Cents };
@@ -378,6 +380,7 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
     ratesOutOfRange: await ratesOutsideRange(tx, settings, now),
     sendInvoices: await dueInvoiceBatches(tx, settings, now),
     departed: isStaff(actor) ? await departedUnbilled(tx, now) : [],
+    w9Reviews: await pendingW9Reviews(tx),
   };
 }
 
@@ -577,7 +580,10 @@ export type StaffInvoice = {
   /** "Send paid invoice" applies: paid and never sent or queued. */
   canSendPaid: boolean;
   attachW9: boolean;
+  /** Whether a W-9 can go with this invoice: approved and, for a vendor that needs it, signed this year. */
   payeeHasW9: boolean;
+  /** For a vendor that needs a W-9 signed this year, why the payee's will not be attached; else null. */
+  w9Notice: string | null;
   party: Party | null;
   dueAt: Date | null;
   overdue: boolean;
@@ -627,6 +633,7 @@ export async function staffInvoice(actor: Actor, tx: Tx, id: string, now: Date =
   const [issue] = await tx.select().from(paymentIssues).where(and(eq(paymentIssues.invoiceId, id), eq(paymentIssues.status, "open")));
   const party = r.inv.responsibleParty as Party | null;
   const since = r.inv.responsibleSince;
+  const w9 = await attachableW9(tx, r.inv.payeeUserId, r.inv.vendorId, now);
   return {
     id: r.inv.id,
     number: formatInvoiceNumber(s.invoiceNumberPrefix, r.inv.number),
@@ -658,7 +665,8 @@ export async function staffInvoice(actor: Actor, tx: Tx, id: string, now: Date =
     canSendNow: sendableLater(r.inv) === "unsent",
     canSendPaid: sendableLater(r.inv) === "paid",
     attachW9: r.inv.attachW9,
-    payeeHasW9: Boolean(await currentW9(tx, r.inv.payeeUserId)),
+    payeeHasW9: w9.w9 !== null,
+    w9Notice: currentYearNotice(w9, r.payeeName, now),
     party: r.inv.status === "paid" || r.inv.status === "written_off" ? null : party,
     dueAt: party && since ? responsibleDueAt(party, since, s) : null,
     overdue: party ? isOverdue({ responsibleParty: party, responsibleSince: since }, now, s) : false,

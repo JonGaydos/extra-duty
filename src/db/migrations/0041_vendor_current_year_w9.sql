@@ -1,0 +1,1 @@
+ALTER TABLE "vendors" ADD COLUMN "requires_current_year_w9" boolean DEFAULT false NOT NULL;

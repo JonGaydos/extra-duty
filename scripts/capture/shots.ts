@@ -285,6 +285,14 @@ deputy("21-alerts-and-notification-preferences", 2, D, visit("/profile"), { targ
 deputy("22-theme", 1, B, visit("/profile"), { target: card("Theme") });
 deputy("22-theme", 2, D, visit("/home"), { target: (page) => page.locator('[data-shell="top-nav"]') });
 
+// New message with one chip chosen; the Send to choice above it.
+deputy("23-messages", 1, P, async (page) => {
+  await page.goto("/messages/new");
+  await main(page).getByRole("combobox", { name: "Add by" }).selectOption("coordinators");
+  await main(page).getByRole("button", { name: "Add the coordinators" }).click();
+  await main(page).getByRole("list", { name: "Recipients" }).waitFor();
+});
+
 /* ------------------------------------------------------------------------------------------------------------------ */
 /* Vendor manual                                                                                                       */
 /* ------------------------------------------------------------------------------------------------------------------ */
@@ -554,6 +562,24 @@ coord("29-email-outbox", 1, D, visit("/coordinate/outbox"));
 admin("30-api-keys-and-data-export", 1, D, visit("/admin/api"));
 admin("31-email-server-and-security", 1, D, visit("/admin/system"));
 admin("31-email-server-and-security", 2, D, visit("/admin/system/security"));
+
+coord("32-w9-review-and-requests", 1, D, visit("/coordinate"), { target: region(/^W-9 to review/) });
+// A W-9 waiting for review, with Approve chosen.
+coord("32-w9-review-and-requests", 2, D, async (page, ctx) => {
+  const row = await one<{ id: string }>(ctx, `select w.user_id as id from w9s w join users u on u.id = w.user_id where w.current and w.status = 'pending' and u.active order by w.uploaded_at limit 1`);
+  await page.goto(`/admin/users/${row.id}#w9`);
+  await main(page).locator("#w9").getByRole("button", { name: "Approve" }).click();
+  await main(page).locator("#w9").getByLabel("Signature date").waitFor();
+}, { stagingOnly: true, target: (page) => main(page).locator("#w9") });
+coord("32-w9-review-and-requests", 3, D, visit("/admin/w9"), { target: region("Ask for a new W-9") });
+// Everyone chosen after picking a recipient: the Undo note shows.
+coord("33-messages", 1, D, async (page) => {
+  await page.goto("/messages/new");
+  await main(page).getByRole("combobox", { name: "Add by" }).selectOption("coordinators");
+  await main(page).getByRole("button", { name: "Add the coordinators" }).click();
+  await main(page).getByRole("radio", { name: /^Everyone/ }).check();
+  await main(page).getByText(/^Replaced 1 recipient/).waitFor();
+});
 
 /** A made-up logo for the demo agency (never a real agency's artwork). */
 async function demoLogo(): Promise<string> {

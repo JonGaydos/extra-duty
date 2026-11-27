@@ -28,7 +28,7 @@ describe("API keys", () => {
     await seed(db);
     admin = (await makeUser(db, "admin", "keys-admin@example.test")).actor;
     coordinator = (await makeUser(db, "coordinator", "keys-coord@example.test")).actor;
-    personnelId = (await makeUser(db, "personnel", "keys-deputy@example.test")).row.id;
+    personnelId = (await makeUser(db, "personnel", "keys-deputy@example.test", {}, { w9: false })).row.id;
   });
 
   const make = (scopes: Array<"read" | "write" | "w9">, extra: { name?: string; expiresAt?: Date } = {}) =>

@@ -25,6 +25,7 @@ import { emit } from "../notifications/notify";
 import { scheduleShiftsForCaps } from "../planning/schedule";
 import { getSettings, type AgencySettings } from "../settings/settings";
 import { validatePlannedTimes } from "../jobs/status";
+import { readW9Lock } from "../w9/requests";
 import { isRestricted } from "./restrictions";
 
 export type Assignment = typeof assignments.$inferSelect;
@@ -222,6 +223,7 @@ export async function buildContext(tx: Tx, a: ContextArgs): Promise<EligibilityC
       status: m.status,
     })),
     billingLock: await readBillingLock(tx, a.userId, a.now),
+    w9Lock: await readW9Lock(tx, a.userId, a.now),
     caps,
     restrictedFromVendor: await isRestricted(tx, a.userId, job.vendorId),
     rollingWindowHours: settings.rollingCapWindowHours,

@@ -35,9 +35,9 @@ describe("files and W-9", () => {
       },
       get: (k) => local.get(k),
     };
-    owner = (await makeUser(db, "personnel", "owner@example.test")).actor;
-    other = (await makeUser(db, "personnel", "other@example.test")).actor;
-    coordinator = (await makeUser(db, "coordinator", "coord@example.test")).actor;
+    owner = (await makeUser(db, "personnel", "owner@example.test", {}, { w9: false })).actor;
+    other = (await makeUser(db, "personnel", "other@example.test", {}, { w9: false })).actor;
+    coordinator = (await makeUser(db, "coordinator", "coord@example.test", {}, { w9: false })).actor;
     vendor = (await makeUser(db, "vendor", "vend@example.test")).actor;
   });
 
@@ -154,7 +154,7 @@ describe("files and W-9", () => {
 
   test("W-9 filenames are never stored or audited; other names are capped", async () => {
     const { db } = get();
-    const u = (await makeUser(db, "personnel", "named@example.test")).actor;
+    const u = (await makeUser(db, "personnel", "named@example.test", {}, { w9: false })).actor;
     await db.transaction((tx) => uploadW9(u, tx, PDF, "Jane Doe 123-45-6789.pdf", storage));
     const fileRows = await db.select().from(files).where(eq(files.ownerUserId, u.userId));
     expect(fileRows[0].filename).toBe("W-9.pdf");
@@ -168,7 +168,7 @@ describe("files and W-9", () => {
 
   test("concurrent W-9 uploads leave exactly one current row", async () => {
     const { db } = get();
-    const u = (await makeUser(db, "personnel", "race@example.test")).actor;
+    const u = (await makeUser(db, "personnel", "race@example.test", {}, { w9: false })).actor;
     await Promise.all([
       db.transaction((tx) => uploadW9(u, tx, PDF, "a.pdf", storage)),
       db.transaction((tx) => uploadW9(u, tx, PDF2, "b.pdf", storage)),

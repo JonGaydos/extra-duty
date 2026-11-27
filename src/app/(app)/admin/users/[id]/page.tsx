@@ -18,9 +18,15 @@ import { ROLE_LABEL } from "../../_admin/labels";
 import { managementActor } from "../../_admin/session";
 import { AccessActions, EditAccount, GrantFlag, LiftSuspension, ReactivateForm, RevokeFlag, SuspendForm, WriteOffDetail } from "../UserActions";
 import { UNPAID_STATUS_LABEL } from "../departure-labels";
-import { ButtonLink } from "@/ui/components/Button";
+import { ActionLink, ButtonLink } from "@/ui/components/Button";
 import { dollars } from "@/ui/components/PayLabel";
 import { CountSection, Row, Rows } from "../../../coordinate/_coordinator/ui";
+import { Disclosure } from "@/ui/components/Disclosure";
+import { Icon } from "@/ui/icons";
+import { W9_FORM_REVISIONS, w9History, type W9HistoryRow } from "@/domain/w9/w9";
+import { signedText, W9StatusChip } from "../../../_shared/w9";
+import { W9Upload } from "../../../profile/forms";
+import { W9Review } from "../W9Review";
 
 export const metadata: Metadata = { title: "User" };
 
@@ -176,6 +182,60 @@ function FlagsCard({ rec, flags }: Readonly<{ rec: UserRec; flags: Array<{ id: s
   );
 }
 
+/** The person's W-9s, newest first: review the latest while it is pending, download it (logged) or upload one for them. */
+function W9Card({ rec, history, today }: Readonly<{ rec: UserRec; history: W9HistoryRow[]; today: string }>) {
+  const u = rec.user;
+  const [latest, ...older] = history;
+  const by = (h: W9HistoryRow) => (h.uploadedByName ? ` by ${h.uploadedByName}` : "");
+  return (
+    <Card id="w9" className="scroll-mt-24">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>W-9</CardTitle>
+        {latest ? <W9StatusChip status={latest.status} /> : null}
+      </div>
+      {latest ? (
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="m-0 flex flex-wrap items-center gap-x-3">
+            Uploaded {dateLabel(latest.uploadedAt)}
+            {by(latest)}.
+            <a href={`/api/v1/users/${u.id}/w9`} className="inline-flex min-h-11 items-center gap-1 font-semibold" download>
+              <Icon name="download" size={16} />
+              Download
+              <span className="sr-only">, logged under your name</span>
+            </a>
+          </p>
+          {latest.status === "approved" ? <p className="m-0 text-muted">{signedText(latest)}. Approved{latest.reviewedByName ? ` by ${latest.reviewedByName}` : ""}.</p> : null}
+          {latest.status === "rejected" ? <p className="m-0 text-danger-ink">Not approved: {latest.rejectReason}</p> : null}
+          <p className="m-0 text-xs text-muted">Every download is kept in the audit log. W-9s hold Social Security numbers.</p>
+        </div>
+      ) : (
+        <p className="m-0 text-sm text-muted">No W-9 on file. They cannot sign up for details until one is approved.</p>
+      )}
+      {latest?.status === "pending" ? <W9Review w9Id={latest.id} name={u.name} today={today} revisions={W9_FORM_REVISIONS} /> : null}
+      {older.length ? (
+        <Disclosure label={`Earlier W-9s (${older.length})`} openLabel="Hide earlier W-9s">
+          <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
+            {older.map((h) => (
+              <li key={h.id} className="flex flex-col gap-1 py-2 text-sm">
+                <span className="flex flex-wrap items-center gap-2">
+                  <W9StatusChip status={h.status} />
+                  Uploaded {dateLabel(h.uploadedAt)}
+                  {by(h)}
+                </span>
+                <span className="text-muted">{h.status === "rejected" ? `Not approved: ${h.rejectReason}` : null}{h.status === "approved" ? signedText(h) : null}</span>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      ) : null}
+      {u.active ? <W9Upload hasW9={history.length > 0} url={`/api/v1/users/${u.id}/w9`} forName={u.name} /> : null}
+      {u.active ? (
+        <ActionLink href={`/admin/w9?person=${u.id}`}>Ask {u.name} for a new W-9</ActionLink>
+      ) : null}
+    </Card>
+  );
+}
+
 /** Suspension and access for an active account someone else may change. */
 function ManageCards({ rec, today, apiKeys }: Readonly<{ rec: UserRec; today: string; apiKeys: Array<{ name: string; prefix: string }> }>) {
   const u = rec.user;
@@ -211,14 +271,15 @@ export default async function UserPage({ params }: Readonly<Props>) {
       const rec = await userRecord(actor, tx, id, now);
       // Turning an admin off stops the API keys they made: an admin deactivating them sees which.
       const apiKeys = actor.role === "admin" && rec.user.role === "admin" && rec.user.active ? await activeApiKeysOf(actor, tx, id, now) : [];
-      return { rec, apiKeys, ranks: (await listRanks(tx)).filter((r) => r.active), flags: (await listQualifications(actor, tx)).filter((f) => f.active) };
+      const w9 = rec.user.role === "vendor" ? [] : await w9History(actor, tx, id);
+      return { rec, apiKeys, w9, ranks: (await listRanks(tx)).filter((r) => r.active), flags: (await listQualifications(actor, tx)).filter((f) => f.active) };
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;
     }
   });
   if (!data || data.rec.user.role === "vendor") notFound();
-  const { rec, apiKeys, ranks, flags } = data;
+  const { rec, apiKeys, ranks, flags, w9 } = data;
   const u = rec.user;
 
   return (
@@ -234,6 +295,7 @@ export default async function UserPage({ params }: Readonly<Props>) {
         <div className="flex flex-col gap-4.5">
           <AccountCard rec={rec} ranks={ranks} canPickAdmin={actor.role === "admin"} />
           <FlagsCard rec={rec} flags={flags} />
+          <W9Card rec={rec} history={w9} today={agencyDayKey(now)} />
         </div>
         {rec.canChange && u.active && u.id !== actor.userId ? <ManageCards rec={rec} today={agencyDayKey(now)} apiKeys={apiKeys} /> : null}
       </div>
