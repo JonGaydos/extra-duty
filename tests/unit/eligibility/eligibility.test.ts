@@ -171,7 +171,7 @@ describe("evaluateSignup", () => {
     });
     const mid = agencyInstant(2026, 12, 5, 12, 0);
     expect(failing(ctx({ personAssignments: [other("signed_up", mid, agencyInstant(2026, 12, 5, 20, 0))] }))).toEqual([
-      { check: "overlap", ok: false, message: "Overlaps job #68689" },
+      { check: "overlap", ok: false, message: "Overlaps Detail #68689" },
     ]);
     expect(failing(ctx({ personAssignments: [other("backup", mid, agencyInstant(2026, 12, 5, 20, 0))] }))).toEqual([]);
     expect(failing(ctx({ personAssignments: [other("canceled", mid, agencyInstant(2026, 12, 5, 20, 0))] }))).toEqual([]);

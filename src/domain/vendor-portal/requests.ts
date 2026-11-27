@@ -253,7 +253,7 @@ export async function approveRequest(actor: Actor, tx: Tx, jobId: string, edits?
   await emit(tx, {
     recipients: await vendorAudience(tx, out[0].vendorId),
     type: "vendor.request_decided",
-    title: `Request approved: ${out[0].title}`,
+    title: `Request approved: #${out[0].number} ${out[0].title}`,
     body: out.length === 1 ? `Approved for ${when(out[0].startAt)}.` : `Approved for ${out.length} dates starting ${when(out[0].startAt)}.`,
     link: `/jobs/${out[0].id}`,
   });
@@ -275,7 +275,7 @@ export async function declineRequest(actor: Actor, tx: Tx, jobId: string, reason
   await emit(tx, {
     recipients: await vendorAudience(tx, out[0].vendorId),
     type: "vendor.request_decided",
-    title: `Request declined: ${out[0].title}`,
+    title: `Request declined: #${out[0].number} ${out[0].title}`,
     body: `The coordinators declined this request: ${why}`,
     link: `/jobs/${out[0].id}`,
   });
@@ -351,7 +351,7 @@ async function applyPatch(actor: Actor, tx: Tx, job: Job, patch: Partial<JobInpu
   if (changes.some((c) => c === "headcount_up" || c === "headcount_down")) details.push("The number of positions changed.");
   if (changes.includes("description")) details.push("The description or notes changed.");
   if (details.length && after.state !== "requested") {
-    await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: ${after.title}`, body: details.join(" "), link: `/jobs/${after.id}` });
+    await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: #${after.number} ${after.title}`, body: details.join(" "), link: `/jobs/${after.id}` });
   }
   return after;
 }
@@ -372,7 +372,7 @@ async function editRequest(actor: Actor, tx: Tx, job: Job, clean: VendorEditPatc
   await emit(tx, {
     recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
     type: "vendor.request_edited",
-    title: `Vendor request edited: ${after.title}`,
+    title: `Vendor request edited: #${after.number} ${after.title}`,
     body: `The request now starts ${when(after.startAt)}.`,
     link: `/jobs/${after.id}`,
   });
@@ -420,7 +420,7 @@ export async function vendorEditJob(actor: Actor, tx: Tx, jobId: string, patch: 
   await emit(tx, {
     recipients: await coordinatorAudience(tx),
     type: "vendor.request_edited",
-    title: `Vendor change to approve: ${job.title}`,
+    title: `Vendor change to approve: #${job.number} ${job.title}`,
     body: `The vendor asks to change ${changes.map((c) => c.replace("_", " ")).join(", ")}.`,
     link: `/jobs/${job.id}`,
   });
@@ -450,7 +450,7 @@ export async function approveJobChange(actor: Actor, tx: Tx, requestId: string, 
   await emit(tx, {
     recipients: await vendorAudience(tx, job.vendorId),
     type: "vendor.request_decided",
-    title: `Change approved: ${job.title}`,
+    title: `Change approved: #${job.number} ${job.title}`,
     body: "The coordinators approved your change.",
     link: `/jobs/${job.id}`,
   });
@@ -468,7 +468,7 @@ export async function declineJobChange(actor: Actor, tx: Tx, requestId: string, 
   await emit(tx, {
     recipients: await vendorAudience(tx, job.vendorId),
     type: "vendor.request_decided",
-    title: `Change declined: ${job.title}`,
+    title: `Change declined: #${job.number} ${job.title}`,
     body: `The coordinators declined your change: ${why}`,
     link: `/jobs/${job.id}`,
   });
@@ -520,7 +520,7 @@ export async function waiveLateCancelPay(actor: Actor, tx: Tx, jobId: string, re
   await emit(tx, {
     recipients: waived.map((a) => a.userId),
     type: "job.late_cancel_waived",
-    title: `Late cancellation pay waived: ${job.title}`,
+    title: `Late cancellation pay waived: #${job.number} ${job.title}`,
     body: `A coordinator waived the late cancellation pay for this detail: ${why}`,
     link: `/jobs/${jobId}`,
   });

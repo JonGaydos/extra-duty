@@ -2,7 +2,7 @@
 
 ## One detail
 
-1. Open the detail. **Quick edit** changes the **Rate per hour**, **Start time**, **End time**, positions and **Description**. Choose **Save changes**. Quick edit is for details that have not started.
+1. Open the detail and choose **Manage this detail**. **Quick edit** changes the **Rate per hour**, **Start time**, **End time**, positions and **Description**. Choose **Save changes**. Quick edit is for details that have not started.
 
    ![Quick edit](../images/coordinator-admin/08-quick-and-bulk-edit-1-desktop.webp)
 

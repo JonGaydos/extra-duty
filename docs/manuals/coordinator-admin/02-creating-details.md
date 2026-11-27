@@ -1,6 +1,6 @@
 # Creating a detail
 
-1. Choose **New detail** on To-do or Details. Under **Vendor and place**, pick the **Vendor**, the **Location** and the **Type**, give it a **Title** and a **Description** (what deputies read before they sign up), and pick the **Site contact**.
+1. Choose **New detail** on **Details** or **To-do**. Under **Vendor and place**, pick the **Vendor**, the **Location** and the **Type**, give it a **Title** and a **Description** (what deputies read before they sign up), and pick the **Site contact**.
 
    ![The New detail page](../images/coordinator-admin/02-creating-details-1-desktop.webp)
 

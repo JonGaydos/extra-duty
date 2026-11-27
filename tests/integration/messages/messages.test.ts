@@ -158,7 +158,7 @@ describe("message center", () => {
     const deputy = await person();
     const { job } = await f.mkJob();
     const m = await run((tx) => messageCoordinators(deputy, tx, { jobId: job.id, body: "Is a vest needed?" }));
-    expect(m.subject).toBe(`Question about job #${job.number}: ${job.title}`);
+    expect(m.subject).toBe(`Question about Detail #${job.number}: ${job.title}`);
     expect(m.jobId).toBe(job.id);
     expect(await recipients(m.id)).toContain(f.coord.userId);
     await expect(run((tx) => messageCoordinators(deputy, tx, { jobId: "00000000-0000-7000-8000-000000000000", body: "Hi" }))).rejects.toBeInstanceOf(NotFoundError);

@@ -2,8 +2,8 @@ import type { Page } from "@playwright/test";
 import { DESKTOP, PHONE, agencyAt, expect, one, pdf, sql, type Person, test } from "../fixtures";
 
 /**
- * Coordinators and admins also work details, so everything a deputy has works for them too: their own work from the
- * navigation (My work, Open details, My billing, Profile; on a phone from More), signing up, hiding a vendor, every
+ * Coordinators and admins also work details, so everything a deputy has works for them too: the same tabs as a deputy
+ * (Home, Details, Billing, Profile; Profile from More on a phone), starting on Home, signing up, hiding a vendor, every
  * Profile setting, the personal calendar link, billing their own detail and confirming its payment.
  */
 for (const [role, viewport] of [
@@ -22,11 +22,14 @@ for (const [role, viewport] of [
     await clock.advanceTo(worked.id, "end", 60);
     const page = await session(me, { viewport });
 
-    await test.step("My work and the rest of their own work are one step away", async () => {
-      await page.goto("/coordinate");
-      await openOwn(page, viewport, "My work");
+    await test.step("they start on Home, with their To-do on top, and use the deputy's own tabs", async () => {
+      await page.goto("/");
       await expect(page).toHaveURL(/\/home$/);
-      await openOwn(page, viewport, "Open details");
+      await expect(page.getByTestId("home-todo").getByRole("link", { name: "Open To-do" })).toBeVisible();
+      await page.goto("/coordinate");
+      await openOwn(page, viewport, "Home");
+      await expect(page).toHaveURL(/\/home$/);
+      await openOwn(page, viewport, "Details");
       await expect(page).toHaveURL(/\/jobs$/);
       await expect(page.getByRole("heading", { level: 1, name: "Details" })).toBeVisible();
     });
@@ -74,9 +77,9 @@ for (const [role, viewport] of [
       await expect(page.getByLabel("Your calendar link")).toHaveValue(/\/api\/v1\/calendar\.ics\?token=/);
     });
 
-    await test.step("bill the worked detail through My billing and confirm the payment", async () => {
+    await test.step("bill the worked detail through Billing and confirm the payment", async () => {
       await page.goto("/coordinate");
-      await openOwn(page, viewport, "My billing");
+      await openOwn(page, viewport, "Billing");
       await expect(page).toHaveURL(/\/billing$/);
       await page.getByRole("article", { name: `${agency.vendor.name}, ${workedTitle}` }).getByRole("link", { name: "Review and send invoice" }).click();
       await page.getByRole("button", { name: "Send invoice" }).click();
@@ -92,10 +95,12 @@ for (const [role, viewport] of [
   });
 }
 
-/** Opens one of the person's own sections: the "My work" nav on a desktop, the More page on a phone. */
+/** Opens one of the shared tabs: the top nav on a desktop; the tab bar, or More for Profile, on a phone. */
 async function openOwn(page: Page, viewport: { width: number }, name: string): Promise<void> {
   if (viewport.width >= 768) {
-    await page.locator('[data-shell="top-nav"]').getByRole("navigation", { name: "My work" }).getByRole("link", { name: new RegExp(`^${name}`) }).click();
+    await page.locator('[data-shell="top-nav"]').getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true }).click();
+  } else if (name !== "Profile") {
+    await page.locator('[data-shell="tab-bar"]').getByRole("link", { name, exact: true }).click();
   } else {
     await page.locator('[data-shell="tab-bar"]').getByRole("link", { name: "More" }).click();
     await page.getByRole("main").getByRole("link", { name, exact: true }).click();
@@ -103,10 +108,12 @@ async function openOwn(page: Page, viewport: { width: number }, name: string): P
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 }
 
-/** The deputy's own "Mark received", on the Waiting tab of My billing (the invoice page itself is the staff view). */
+/** The deputy's own "Mark received", on the Waiting tab of Billing (the invoice page itself is the staff view). */
 async function markReceived(page: Page, title: string): Promise<void> {
   await page.goto("/billing?tab=waiting");
   await page.getByRole("article").filter({ hasText: title }).getByRole("button", { name: /^Mark received/ }).click();
   await page.getByRole("button", { name: "Record payment" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Payment recorded." })).toBeVisible();
+  // The card can leave the Waiting tab, its message with it, as soon as the payment closes the invoice.
+  await expect(page.getByRole("status").filter({ hasText: "Payment recorded." }).or(page.getByRole("article").filter({ hasText: title }).getByText(/Paid/))
+    .or(page.getByRole("heading", { name: "Nothing waiting" }))).toBeVisible();
 }

@@ -1,10 +1,7 @@
-import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Actor } from "@/domain/actor";
 import { agencyDateParts } from "@/domain/time/agency-time";
-import { Icon } from "@/ui/icons";
-import { coordinatorActor } from "../../_coordinator/session";
-import type { DetailWire } from "../../_coordinator/detail-input";
+import type { DetailWire } from "../../../coordinate/_coordinator/detail-input";
 import { loadDetail } from "./load";
 import {
   AttachmentsCard,
@@ -22,20 +19,17 @@ import {
   type DetailContext,
 } from "./sections";
 
-export const metadata: Metadata = { title: "Detail" };
-
-type Props = { params: Promise<{ id: string }> };
-
 const hhmm = (d: Date) => {
   const p = agencyDateParts(d);
   return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
 };
 
-/** A detail as a coordinator runs it: request decision, edit (one or series), roster actions, ops plan review, copy, repeat and cancel. */
-export default async function CoordinatorDetailPage({ params }: Readonly<Props>) {
-  const actor = await coordinatorActor();
-  const { id } = await params;
-  const now = new Date();
+/**
+ * Manage this detail (coordinators and admins, on the shared detail page): request decision, quick edit and edit
+ * (one or series), hold and release, cancel and reactivate, the roster and sign-up history with assign and remove,
+ * officer safety, the ops plan review, attachments and contract, activity, copy and repeat.
+ */
+export async function ManageDetail({ actor, id, now }: Readonly<{ actor: Actor; id: string; now: Date }>) {
   const data = await loadDetail(actor, id, now);
   if (!data) notFound();
   const { job, ops } = data;
@@ -68,11 +62,7 @@ export default async function CoordinatorDetailPage({ params }: Readonly<Props>)
   };
 
   return (
-    <div className="flex flex-col gap-4.5">
-      <Link href="/coordinate/details" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
-        <Icon name="chevronLeft" size={18} />
-        Back to details
-      </Link>
+    <div className="flex flex-col gap-4.5" data-testid="manage-detail">
       <DetailHeader c={c} />
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[auto_1fr] md:items-start md:gap-6">

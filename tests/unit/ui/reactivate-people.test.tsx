@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 vi.mock("@/app/(app)/coordinate/_coordinator/actions", () => ({}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
-const { ReactivatePeople } = await import("@/app/(app)/coordinate/details/[id]/DetailActions");
+const { ReactivatePeople } = await import("@/app/(app)/jobs/[id]/_manage/DetailActions");
 
 const ann = { userId: "u1", name: "Ann Lee" };
 const bo = { userId: "u2", name: "Bo Diaz" };

@@ -4,7 +4,6 @@ import type { JobDisplayStatus } from "@/domain/jobs/status";
 import { editBlockReason } from "@/domain/jobs/bulk-edit";
 import { MAX_FILE_BYTES } from "@/domain/files/files";
 import { agencyDateParts, agencyDayKey } from "@/domain/time/agency-time";
-import { ActionLink } from "@/ui/components/Button";
 import { Card, CardTitle } from "@/ui/components/Card";
 import { Chip } from "@/ui/components/Chip";
 import { SiteContact } from "@/ui/components/ContactList";
@@ -15,11 +14,11 @@ import { StaffingGrid } from "@/ui/components/StaffingGrid";
 import { Icon } from "@/ui/icons";
 import { keyedByContent } from "@/lib/list-keys";
 import { clock, dateLabel, dateTime, plural, timeRange, whenText } from "../../../_personnel/format";
-import { DetailInvoiceHold } from "../../_coordinator/ChoiceSave";
-import type { DetailWire } from "../../_coordinator/detail-input";
-import { QuickEdit } from "../../_coordinator/EditPanel";
-import { RateOverrideNote } from "../../_coordinator/rate-override";
-import { Facts } from "../../_coordinator/ui";
+import { DetailInvoiceHold } from "../../../coordinate/_coordinator/ChoiceSave";
+import type { DetailWire } from "../../../coordinate/_coordinator/detail-input";
+import { QuickEdit } from "../../../coordinate/_coordinator/EditPanel";
+import { RateOverrideNote } from "../../../coordinate/_coordinator/rate-override";
+import { Facts } from "../../../coordinate/_coordinator/ui";
 import {
   AssignForm,
   AttachContract,
@@ -95,7 +94,7 @@ export function DetailHeader({ c }: Readonly<{ c: DetailContext }>) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap gap-1.5">
-        <Chip>#{job.number}</Chip>
+        <Chip>Detail #{job.number}</Chip>
         <StateChip c={c} />
         {job.held ? <Chip tone="warning">Held</Chip> : null}
         {admin.locked ? <Chip tone="danger">Locked: vendor on payment hold</Chip> : null}
@@ -156,7 +155,6 @@ export function ManageCard({ c }: Readonly<{ c: DetailContext }>) {
         <HoldRelease jobId={job.id} held={job.held} opensLater={!!job.releaseAt && job.releaseAt.getTime() > c.now.getTime()} seriesLater={admin.laterInSeries} status={c.releaseStatus} />
       ) : null}
       {live ? <DetailInvoiceHold jobId={job.id} current={job.waitForAllDeputies} agency={c.d.agencyWait} /> : null}
-      {live ? <ActionLink href={`/jobs/${job.id}`}>Open the deputy view</ActionLink> : null}
       {c.d.reactivation ? <ReactivateDetail jobId={job.id} preview={c.d.reactivation} /> : null}
       {job.state === "canceled" && admin.lateCanceled > 0 && !job.lateCancelWaivedReason ? (
         <>

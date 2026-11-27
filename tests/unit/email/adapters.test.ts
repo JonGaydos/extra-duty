@@ -12,7 +12,7 @@ const W9 = Buffer.from("%PDF-1.4 w9");
 const msg: OutgoingEmail = {
   to: ["ap@vendor.example", "boss@vendor.example"],
   replyTo: "billing@sheriff.example",
-  subject: "Invoice ED-000123 for job #69344",
+  subject: "Invoice ED-000123 for Detail #69344",
   text: "plain body",
   html: "<p>html body</p>",
   attachments: [
@@ -102,7 +102,7 @@ describe("email adapters", () => {
     const input = (send.mock.calls[0] as unknown as [{ input: { Content: { Raw: { Data: Uint8Array } } } }])[0].input;
     const raw = Buffer.from(input.Content.Raw.Data).toString("utf8");
     expect(raw).toContain("Reply-To: billing@sheriff.example");
-    expect(raw).toContain("Subject: Invoice ED-000123 for job #69344");
+    expect(raw).toContain("Subject: Invoice ED-000123 for Detail #69344");
     expect(raw).toContain("filename=ED-000123.pdf");
     expect(raw).toContain('filename="W-9 Pat Doe.pdf"');
     expect(raw).toContain(W9.toString("base64"));

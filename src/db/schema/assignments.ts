@@ -45,7 +45,7 @@ export const assignments = pgTable(
     isIncidentCommander: boolean("is_incident_commander").notNull().default(false),
     /** When a coordinator named this person Incident Commander (null for an IC position, which uses createdAt). */
     icAssignedAt: tstz("ic_assigned_at"),
-    /** Set once when the "Bill job #N" alert goes out after the job ends. */
+    /** Set once when the "Bill Detail #N" alert goes out after the job ends. */
     billReadyAlertedAt: tstz("bill_ready_alerted_at"),
     /** Staff wrote off a worked detail that will never be billed (someone who left); it leaves every to-bill list. */
     writtenOffAt: tstz("written_off_at"),

@@ -2,7 +2,7 @@
 
 ## Canceling
 
-1. Open the detail and choose **Cancel detail**.
+1. Open the detail, choose **Manage this detail**, then **Cancel detail**.
 2. Type the **Reason**. Everyone on the detail is told. The vendor gets an email too, unless that alert is switched off.
 3. If you are canceling for the vendor, tick **The vendor canceled (late cancellation pay applies inside the window)**. Inside the window (24 hours by default) the people on it are then paid the minimum.
 4. Choose **Cancel detail** again to confirm.

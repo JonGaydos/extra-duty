@@ -62,14 +62,14 @@ const HOUR_MS = 3_600_000;
 const isStaff = (a: Actor) => a.role === "coordinator" || a.role === "admin";
 
 type LockedRow = { jobId: string; number: number; title: string; vendorName: string; startAt: Date; endAt: Date; holdPlacedAt: Date; signedUp: number; latePay: boolean };
-type RequestRow = { jobId: string; title: string; vendorName: string; locationName: string | null; startAt: Date; endAt: Date; dates: number; positions: string; flex: { earliestStartAt: Date; latestEndAt: Date } | null };
-type ChangeRow = { requestId: string; jobId: string; title: string; vendorName: string; requestedAt: Date };
+type RequestRow = { jobId: string; number: number; title: string; vendorName: string; locationName: string | null; startAt: Date; endAt: Date; dates: number; positions: string; flex: { earliestStartAt: Date; latestEndAt: Date } | null };
+type ChangeRow = { requestId: string; jobId: string; number: number; title: string; vendorName: string; requestedAt: Date };
 type NoteRow = { id: string; body: string; vendorName: string; locationName: string | null; authorName: string; submittedAt: Date };
 type FlagRequestRow = { id: string; userName: string; qualificationName: string; note: string | null; requestedAt: Date };
 type MissingContractRow = { jobId: string; number: number; title: string; vendorId: string; vendorName: string; startAt: Date };
 type IssueRow = { issueId: string; invoiceId: string; number: string; vendorName: string; payeeName: string; totalCents: Cents; since: Date; day: number; limitDays: number };
 export type OpsRow = { jobId: string; opsPlanId: string | null; title: string; vendorName: string; startAt: Date; dueAt: Date | null; icName: string | null; version: number; waitingSince: Date | null; canReview: boolean; versionId: string | null };
-type UnfilledRow = { jobId: string; title: string; vendorName: string; startAt: Date; open: number };
+type UnfilledRow = { jobId: string; number: number; title: string; vendorName: string; startAt: Date; open: number };
 type LockRow = { userId: string; name: string; unbilled: number; unacknowledged: number };
 
 export type CoordinatorTodo = {
@@ -246,6 +246,7 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
     const { job, vendorName, locationName } = g[0];
     return {
       jobId: job.id,
+      number: job.number,
       title: job.title,
       vendorName,
       locationName,
@@ -259,13 +260,13 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
 
   const changes = (
     await tx
-      .select({ id: jobChangeRequests.id, jobId: jobs.id, title: jobs.title, vendorName: vendors.name, at: jobChangeRequests.createdAt })
+      .select({ id: jobChangeRequests.id, jobId: jobs.id, number: jobs.number, title: jobs.title, vendorName: vendors.name, at: jobChangeRequests.createdAt })
       .from(jobChangeRequests)
       .innerJoin(jobs, eq(jobs.id, jobChangeRequests.jobId))
       .innerJoin(vendors, eq(vendors.id, jobs.vendorId))
       .where(eq(jobChangeRequests.status, "pending"))
       .orderBy(asc(jobChangeRequests.createdAt))
-  ).map((r) => ({ requestId: r.id, jobId: r.jobId, title: r.title, vendorName: r.vendorName, requestedAt: r.at }));
+  ).map((r) => ({ requestId: r.id, jobId: r.jobId, number: r.number, title: r.title, vendorName: r.vendorName, requestedAt: r.at }));
 
   const notes = (
     await tx
@@ -336,7 +337,7 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
   const ops = await opsPlanQueue(actor, tx, now);
 
   const soon = await tx
-    .select({ id: jobs.id, title: jobs.title, vendorName: vendors.name, startAt: jobs.startAt })
+    .select({ id: jobs.id, number: jobs.number, title: jobs.title, vendorName: vendors.name, startAt: jobs.startAt })
     .from(jobs)
     .innerJoin(vendors, eq(vendors.id, jobs.vendorId))
     .where(and(inArray(jobs.state, ["scheduled", "active"]), gt(jobs.startAt, now), lte(jobs.startAt, new Date(now.getTime() + 72 * HOUR_MS)), eq(vendors.paymentHold, false)))
@@ -354,7 +355,7 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
       )
     : new Map<string, number>();
   const unfilled = soon
-    .map((j) => ({ jobId: j.id, title: j.title, vendorName: j.vendorName, startAt: j.startAt, open: (needed.get(j.id) ?? 0) - (filled.get(j.id) ?? 0) }))
+    .map((j) => ({ jobId: j.id, number: j.number, title: j.title, vendorName: j.vendorName, startAt: j.startAt, open: (needed.get(j.id) ?? 0) - (filled.get(j.id) ?? 0) }))
     .filter((j) => j.open > 0);
 
   const locks: LockRow[] = (await lockedPeople(tx, now)).map((p) => ({ userId: p.userId, name: p.name, unbilled: p.unbilledCount, unacknowledged: p.unacknowledgedCount }));

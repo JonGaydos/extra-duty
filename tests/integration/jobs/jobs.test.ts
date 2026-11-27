@@ -323,7 +323,7 @@ describe("jobs", () => {
       expect([a.plannedStartAt, a.plannedEndAt]).toEqual([newStart, newEnd]);
       const alerts = await db.select().from(notifications).where(and(eq(notifications.userId, person.userId), eq(notifications.type, "job.changed")));
       expect(alerts.map((n) => [n.title, n.body])).toEqual([
-        ["Detail changed: Stadium security", "The hourly rate changed from $70.00 to $90.00. The time changed to Jun 10, 2035, 6:00 PM to Jun 11, 2035, 12:00 AM."],
+        [`Detail changed: #${job.number} Stadium security`, "The hourly rate changed from $70.00 to $90.00. The time changed to Jun 10, 2035, 6:00 PM to Jun 11, 2035, 12:00 AM."],
       ]);
     });
 

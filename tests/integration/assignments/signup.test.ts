@@ -234,7 +234,7 @@ describe("sign-up", () => {
       expect(after.status).toBe("canceled");
       const [note] = await get().db.select().from(notifications).where(eq(notifications.userId, me.userId));
       expect([note.type, note.body]).toEqual(["signup.short_declined", after.removalReason]);
-      expect(note.body).toBe(`Overlaps job #${other.job.number}`);
+      expect(note.body).toBe(`Overlaps Detail #${other.job.number}`);
     });
 
     test("two pending requests confirm in request order", async () => {

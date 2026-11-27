@@ -37,14 +37,14 @@ test("cancel, backup window, backup claims", async ({ agency, session, mail, clo
 
     const since = mail.mark();
     await clock.deliver();
-    await mail.waitFor({ to: kai.email, subject: `Spot available: ${title}`, since });
+    await mail.waitFor({ to: kai.email, subject: `Spot available: #${job.number} ${title}`, since });
     expect(mail.find({ to: noor.email, since })).toHaveLength(0);
 
     await second.reload();
     await expect(second.getByText("You are on this detail: Backup #2.")).toBeVisible();
     await expect(second.getByRole("button", { name: "Take the open spot" })).toHaveCount(0);
     await first.goto("/alerts");
-    await expect(first.getByRole("main")).toContainText(`Spot available: ${title}`);
+    await expect(first.getByRole("main")).toContainText(`Spot available: #${job.number} ${title}`);
     await first.goto(`/jobs/${job.id}`);
     await expect(first.getByRole("button", { name: "Take the open spot" })).toBeVisible();
   });
@@ -54,7 +54,7 @@ test("cancel, backup window, backup claims", async ({ agency, session, mail, clo
     const since = mail.mark();
     await clock.tick("backup-offer", new Date(offer.ends_at.getTime() + 60_000));
     await clock.deliver();
-    await mail.waitFor({ to: noor.email, subject: `Spot available: ${title}`, since });
+    await mail.waitFor({ to: noor.email, subject: `Spot available: #${job.number} ${title}`, since });
 
     await first.reload();
     await expect(first.getByRole("button", { name: "Take the open spot" })).toHaveCount(0);

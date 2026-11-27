@@ -37,9 +37,22 @@ On a turned-off person's page, choose **Reactivate**, enter a reason and choose 
 
 ## Ranks
 
-1. Open **Management**, then **Ranks**. The ladder runs lowest first. A higher rank can fill a lower rank's spot. Dispatcher sits outside the ladder.
-2. Use **Lower** and **Higher** to reorder, **Add rank** to add one, or **Turn off**.
+The starting ranks are only defaults. Rename, add and arrange them to match your agency.
+
+1. Open **Management**, then **Ranks**. The **Ladder** runs highest first: place 1 is the highest rank. A higher rank can fill a lower rank's spot.
+2. Use **Higher** and **Lower** to move a rank up or down the ladder, and **Rename** to change its name in place.
+3. **Outside the ladder** lists ranks that fill only their own spots, such as Dispatcher. No other rank fills theirs. Choose **Outside the ladder** on a ladder rank to move it there, or **Into the ladder** on a rank outside it and pick its place.
+4. To add a rank, enter its name under **Add a rank**, choose **Where** (a place in the ladder, or **Outside the ladder**) and choose **Add rank**.
+5. Moving, adding or taking a rank out of the ladder can change who may fill each position type. When it does, the page lists each change first, for example "Deputy Sheriff spots: CSO can now fill them. This applies to 4 upcoming details already posted." Choose **Make the change** or **Cancel**. People already signed up keep their spots, and a detail with its own rank choices is not changed.
 
    ![Ranks](../images/coordinator-admin/24-users-and-ranks-2-desktop.webp)
 
-Supervisory and special roles are special flags, not ranks.
+### Delete and turn off
+
+Records are never deleted, so **Delete** is only for a rank added by mistake. It shows only on a rank nothing has used: nobody holds or has held it, and no position type, setting, saved report or past record refers to it.
+
+A rank that has been used shows **Turn off** instead, with the reason, such as "Used by 3 people" or "Used in past records". A rank someone holds cannot be turned off until everyone on it moves to another rank. A turned-off rank can be turned back on.
+
+Position types work the same way under **Management**, **Position types**: **Edit** renames one or changes who fills it, **Add position type** adds one, **Turn off** takes it off new details, and **Delete** shows only for a type no detail or record has used.
+
+Every change is kept in the audit log. Supervisory and special roles are special flags, not ranks.

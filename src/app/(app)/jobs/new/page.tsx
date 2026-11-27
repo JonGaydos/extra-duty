@@ -6,9 +6,9 @@ import { NotFoundError } from "@/domain/errors";
 import { getJob } from "@/domain/jobs/jobs";
 import { agencyDateParts, agencyDayKey } from "@/domain/time/agency-time";
 import { Icon } from "@/ui/icons";
-import { coordinatorActor } from "../../_coordinator/session";
-import type { DetailWire } from "../../_coordinator/detail-input";
-import { emptyDetail } from "../../_coordinator/empty-detail";
+import { coordinatorActor } from "../../coordinate/_coordinator/session";
+import type { DetailWire } from "../../coordinate/_coordinator/detail-input";
+import { emptyDetail } from "../../coordinate/_coordinator/empty-detail";
 import { DetailForm } from "./DetailForm";
 
 export const metadata: Metadata = { title: "New detail" };
@@ -63,7 +63,7 @@ export default async function NewDetailPage({ searchParams }: Readonly<Props>) {
 
   return (
     <div className="flex flex-col gap-4.5">
-      <Link href="/coordinate/details" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
+      <Link href="/jobs" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
         <Icon name="chevronLeft" size={18} />
         Back to details
       </Link>

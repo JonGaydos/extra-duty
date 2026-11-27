@@ -16,6 +16,7 @@ import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
 import { clock, dateTime, dayLabel, hoursText, longDay, plural, prefixed, relativeDay, timeRange, whenText } from "../_personnel/format";
 import { coordinatorActor } from "./_coordinator/session";
+import { manageHref, todoCount } from "./_coordinator/todo";
 import { CountSection, Row, Rows } from "./_coordinator/ui";
 import { ApproveInvoiceButton, FlagDecision, LiftLock, LockedCancel, NoteReview } from "./TodoActions";
 
@@ -48,29 +49,6 @@ function Capped<T>({ items, render }: Readonly<{ items: T[]; render: (item: T) =
 
 type Todo = Awaited<ReturnType<typeof coordinatorTodo>>;
 
-/** Every item waiting on a coordinator; an open access review counts as one. */
-function todoCount(t: Todo): number {
-  return (
-    (t.accessReview ? 1 : 0) +
-    t.lockedStarted.length +
-    t.lockedSoon.length +
-    t.requests.length +
-    t.changes.length +
-    t.notes.length +
-    t.flagRequests.length +
-    t.missingContract.length +
-    t.invoices.length +
-    t.issues.length +
-    t.opsOverdue.length +
-    t.opsWaiting.length +
-    t.unfilled.length +
-    t.locks.length +
-    t.ratesOutOfRange.length +
-    t.sendInvoices.length +
-    t.departed.length
-  );
-}
-
 /** Locked details that have started: cancel each, with or without late cancellation pay. */
 function LockedStartedSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
   if (t.lockedStarted.length === 0) return null;
@@ -81,7 +59,7 @@ function LockedStartedSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
           {t.lockedStarted.map((j) => (
             <li key={j.jobId} className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-start md:justify-between">
               <div className="flex min-w-0 flex-col gap-1">
-                <Link href={`/coordinate/details/${j.jobId}`} className="font-semibold text-danger-ink hover:text-danger-ink">
+                <Link href={manageHref(j.jobId)} className="font-semibold text-danger-ink hover:text-danger-ink">
                   #{j.number} {j.title}, {j.vendorName}
                 </Link>
                 <p className="m-0 text-sm text-danger-ink">
@@ -109,8 +87,8 @@ function RequestsSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
         {t.requests.map((r) => (
           <Row
             key={r.jobId}
-            title={`${r.vendorName}: ${r.title}`}
-            href={`/coordinate/details/${r.jobId}`}
+            title={`#${r.number} ${r.vendorName}: ${r.title}`}
+            href={manageHref(r.jobId)}
             meta={
               <>
                 {whenText(r.startAt, r.endAt, now)}
@@ -120,7 +98,7 @@ function RequestsSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
               </>
             }
             actions={
-              <ButtonLink href={`/coordinate/details/${r.jobId}`} size="sm" variant="secondary" aria-label={`Review request, ${r.title}`}>
+              <ButtonLink href={manageHref(r.jobId)} size="sm" variant="secondary" aria-label={`Review request, ${r.title}`}>
                 Review
               </ButtonLink>
             }
@@ -129,11 +107,11 @@ function RequestsSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
         {t.changes.map((c) => (
           <Row
             key={c.requestId}
-            title={`${c.vendorName}: change to ${c.title}`}
-            href={`/coordinate/details/${c.jobId}`}
+            title={`#${c.number} ${c.vendorName}: change to ${c.title}`}
+            href={manageHref(c.jobId)}
             meta={`Asked ${dateTime(c.requestedAt)}`}
             actions={
-              <ButtonLink href={`/coordinate/details/${c.jobId}`} size="sm" variant="secondary" aria-label={`Review change, ${c.title}`}>
+              <ButtonLink href={manageHref(c.jobId)} size="sm" variant="secondary" aria-label={`Review change, ${c.title}`}>
                 Review
               </ButtonLink>
             }
@@ -187,7 +165,7 @@ export default async function TodoPage() {
             {longDay(now)}. {total === 0 ? "Nothing needs you right now." : `${plural(total, "item needs", "items need")} you.`}
           </p>
         </div>
-        <ButtonLink href="/coordinate/details/new">
+        <ButtonLink href="/jobs/new">
           <Icon name="plus" size={20} />
           New detail
         </ButtonLink>
@@ -207,7 +185,7 @@ export default async function TodoPage() {
         <CountSection title="Locked, starting within 24 hours" count={t.lockedSoon.length}>
           <Rows tone="warning">
             {t.lockedSoon.map((j) => (
-              <Row key={j.jobId} title={`#${j.number} ${j.vendorName}, ${relativeDay(j.startAt, now)} ${timeRange(j.startAt, j.endAt)}`} href={`/coordinate/details/${j.jobId}`} meta={`Vendor on payment hold. ${plural(j.signedUp, "person", "people")} signed up.`} />
+              <Row key={j.jobId} title={`#${j.number} ${j.vendorName}, ${relativeDay(j.startAt, now)} ${timeRange(j.startAt, j.endAt)}`} href={manageHref(j.jobId)} meta={`Vendor on payment hold. ${plural(j.signedUp, "person", "people")} signed up.`} />
             ))}
           </Rows>
         </CountSection>
@@ -242,7 +220,7 @@ export default async function TodoPage() {
           <Capped
             items={t.missingContract}
             render={(m) => (
-              <Row key={m.jobId} title={`#${m.number} ${m.vendorName}, ${relativeDay(m.startAt, now)}`} href={`/coordinate/details/${m.jobId}`} meta={`${m.title}. No vendor contract and none on the detail.`} actions={<ButtonLink href={`/coordinate/vendors/${m.vendorId}#documents`} size="sm" variant="secondary" aria-label={`Add contract, ${m.vendorName}`}>Add contract</ButtonLink>} />
+              <Row key={m.jobId} title={`#${m.number} ${m.vendorName}, ${relativeDay(m.startAt, now)}`} href={manageHref(m.jobId)} meta={`${m.title}. No vendor contract and none on the detail.`} actions={<ButtonLink href={`/coordinate/vendors/${m.vendorId}#documents`} size="sm" variant="secondary" aria-label={`Add contract, ${m.vendorName}`}>Add contract</ButtonLink>} />
             )}
           />
         </CountSection>
@@ -342,7 +320,7 @@ export default async function TodoPage() {
               <Row
                 key={o.jobId}
                 title={`${o.title}${prefixed(", IC ", o.icName)}`}
-                href={`/coordinate/details/${o.jobId}#ops-plan`}
+                href={manageHref(o.jobId, "#ops-plan")}
                 meta={o.vendorName}
                 actions={<Chip tone="danger">Overdue, due {o.dueAt ? dateTime(o.dueAt) : "before the start"}</Chip>}
               />
@@ -351,7 +329,7 @@ export default async function TodoPage() {
               <Row
                 key={o.jobId}
                 title={`${o.title}, version ${o.version}`}
-                href={`/coordinate/details/${o.jobId}#ops-plan`}
+                href={manageHref(o.jobId, "#ops-plan")}
                 meta={o.vendorName}
                 actions={<Chip tone="warning">Waiting for the reviewer since {o.waitingSince ? dateTime(o.waitingSince) : ""}</Chip>}
               />
@@ -364,7 +342,7 @@ export default async function TodoPage() {
         <CountSection title="Unfilled, starting within 72 hours" count={t.unfilled.length}>
           <Capped
             items={t.unfilled}
-            render={(u) => <Row key={u.jobId} title={`${u.vendorName}, ${relativeDay(u.startAt, now)} ${clock(u.startAt, true)}`} href={`/coordinate/details/${u.jobId}`} meta={u.title} actions={<Chip tone="attention">{u.open} open</Chip>} />}
+            render={(u) => <Row key={u.jobId} title={`#${u.number} ${u.vendorName}, ${relativeDay(u.startAt, now)} ${clock(u.startAt, true)}`} href={manageHref(u.jobId)} meta={u.title} actions={<Chip tone="attention">{u.open} open</Chip>} />}
           />
         </CountSection>
       ) : null}
@@ -377,7 +355,7 @@ export default async function TodoPage() {
               <Row
                 key={r.jobId}
                 title={`${r.vendorName}, ${relativeDay(r.startAt, now)} ${clock(r.startAt, true)}`}
-                href={`/coordinate/details/${r.jobId}`}
+                href={manageHref(r.jobId)}
                 meta={r.title}
                 actions={<Chip tone="warning">{rateDollars(r.rateCents)} an hour</Chip>}
               />

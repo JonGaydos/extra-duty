@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import type { Map as LeafletMapType } from "leaflet";
+import { guardWheelZoom, markZoom, useWheelHint, WheelHint } from "@/ui/components/wheel-zoom";
 
 export type MapPin = { id: string; lat: number; lng: number; label: string; name: string; tone?: "pay" | "safety" | "plain" };
 
@@ -23,6 +24,7 @@ export function LeafletMap({
   className = "h-80",
   zoom = 13,
   center,
+  wheel = "guarded",
 }: Readonly<{
   tileUrl: string;
   attribution: string;
@@ -33,19 +35,26 @@ export function LeafletMap({
   zoom?: number;
   /** Where the map opens with no pins (the agency's default center from settings). */
   center: { lat: number; lng: number; zoom: number };
+  /** "page": the map is the page (/map), so a plain wheel always zooms; "guarded": see guardWheelZoom. */
+  wheel?: "page" | "guarded";
 }>) {
   const box = useRef<HTMLElement>(null);
   const map = useRef<LeafletMapType | null>(null);
   const select = useRef(onSelect);
   select.current = onSelect;
+  const hint = useWheelHint();
+  const showHint = hint.show;
 
   useEffect(() => {
     let alive = true;
+    let unguard = () => {};
     void import("leaflet").then((L) => {
       if (!alive || !box.current) return;
       map.current?.remove();
-      const m = L.map(box.current, { scrollWheelZoom: false, attributionControl: true });
+      const m = L.map(box.current, { scrollWheelZoom: wheel === "page", attributionControl: true });
       map.current = m;
+      if (wheel === "guarded") unguard = guardWheelZoom(m, box.current, showHint);
+      markZoom(m, box.current);
       // Only the agency's attribution from settings (the tile provider's credit); no library badge.
       m.attributionControl.setPrefix(false);
       L.tileLayer(tileUrl, { attribution, maxZoom: 19 }).addTo(m);
@@ -77,10 +86,16 @@ export function LeafletMap({
     });
     return () => {
       alive = false;
+      unguard();
       map.current?.remove();
       map.current = null;
     };
-  }, [tileUrl, attribution, pins, zoom, center.lat, center.lng, center.zoom]);
+  }, [tileUrl, attribution, pins, zoom, center.lat, center.lng, center.zoom, wheel, showHint]);
 
-  return <section ref={box} aria-label={label} className={`ed-map relative z-0 w-full overflow-hidden rounded-xl border border-line md:rounded-2xl ${className}`} />;
+  return (
+    <div className="relative z-0 overflow-hidden rounded-xl md:rounded-2xl">
+      <section ref={box} aria-label={label} className={`ed-map relative z-0 w-full overflow-hidden rounded-xl border border-line md:rounded-2xl ${className}`} />
+      {wheel === "guarded" ? <WheelHint visible={hint.visible} /> : null}
+    </div>
+  );
 }

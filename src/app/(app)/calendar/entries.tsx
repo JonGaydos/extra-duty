@@ -29,8 +29,8 @@ const MINE_LABEL: Record<string, string> = { signed_up: "Signed up", backup: "Ba
 /** "Vendor or title, Place", or the first part alone when there is no place. */
 export const withPlace = (text: string, place: string | null) => (place ? `${text}, ${place}` : text);
 
-/** Where an entry opens: the coordinator's page for staff, the deputy's page for everyone else. */
-export const entryHref = (e: CalEntry, staff: boolean) => (staff ? `/coordinate/details/${e.id}` : `/jobs/${e.id}`);
+/** Where an entry opens: the detail page everyone shares (staff find their controls on it). */
+export const entryHref = (e: CalEntry) => `/jobs/${e.number}`;
 
 /** What a screen reader hears after the entry's text. */
 function statusWords(e: CalEntry): string {
@@ -38,10 +38,10 @@ function statusWords(e: CalEntry): string {
 }
 
 /** "7:00 AM Vendor name" in a month cell, with the title on hover. */
-export function CompactEntry({ e, staff }: Readonly<{ e: CalEntry; staff: boolean }>) {
+export function CompactEntry({ e }: Readonly<{ e: CalEntry }>) {
   return (
     <Link
-      href={entryHref(e, staff)}
+      href={entryHref(e)}
       title={withPlace(e.title, e.locationName)}
       data-card-link
       className="group flex min-h-6 items-stretch gap-1.5 rounded-xs py-0.5 pr-1 text-xs text-ink no-underline hover:bg-subtle hover:text-ink"
@@ -62,10 +62,10 @@ export function CompactEntry({ e, staff }: Readonly<{ e: CalEntry; staff: boolea
 }
 
 /** One entry in the day, week and list views. */
-export function EntryRow({ e, staff }: Readonly<{ e: CalEntry; staff: boolean }>) {
+export function EntryRow({ e }: Readonly<{ e: CalEntry }>) {
   return (
     <div className="flex flex-col rounded-md border border-line bg-surface">
-      <Link href={entryHref(e, staff)} data-card-link className="group flex items-stretch gap-3 rounded-md py-2.5 pr-3 pl-2.5 text-ink no-underline hover:bg-subtle hover:text-ink">
+      <Link href={entryHref(e)} data-card-link className="group flex items-stretch gap-3 rounded-md py-2.5 pr-3 pl-2.5 text-ink no-underline hover:bg-subtle hover:text-ink">
         <span className={`w-1.5 shrink-0 rounded-full ${STRIPE[e.status]}`} aria-hidden />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex flex-wrap items-center justify-between gap-2">

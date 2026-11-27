@@ -12,6 +12,7 @@ import { agencyDateOnly, agencyDateParts, agencyDayKey, agencyInstant, agencyWee
 import { scheduledPayCents } from "../planning/recommend";
 import { isReleased } from "../release/release";
 import { getSettings } from "../settings/settings";
+import { keepForYou } from "./for-you";
 import type { Cents } from "../types";
 
 /**
@@ -162,6 +163,13 @@ type EntryFacts = {
   status: CalStatus;
 };
 
+/** A spot the person could still take: as the job card counts it, a pending shorter shift does not hold a spot. */
+function openForThem(job: typeof jobs.$inferSelect, needed: number, on: Array<{ status: string }>, mine: boolean, status: CalStatus, now: Date): boolean {
+  if (mine || job.startAt.getTime() <= now.getTime() || status === "not_released" || status === "canceled" || status === "requested") return false;
+  const taken = on.filter((p) => p.status !== "pending_short" && FILLING.includes(p.status)).length;
+  return needed - taken > 0;
+}
+
 /** Whether a detail passes the shared filters (`q` already trimmed and lowercased). */
 function keptByFilters(f: DetailFilters, q: string, job: typeof jobs.$inferSelect, e: EntryFacts): boolean {
   if (f.mine && !e.mine) return false;
@@ -180,11 +188,14 @@ function keptByFilters(f: DetailFilters, q: string, job: typeof jobs.$inferSelec
 export async function calendarEntries(actor: Actor, tx: Tx, range: DetailRange, f: DetailFilters, now: Date = new Date()): Promise<{ entries: CalEntry[]; truncated: boolean }> {
   if (actor.role === "vendor") throw new ForbiddenError();
   assertCan(actor, "job.read");
-  const { rows, truncated } = await calendarJobs(actor, tx, range, f);
+  const read = await calendarJobs(actor, tx, range, f);
+  const { truncated } = read;
+  const settings = await getSettings(tx);
+  // The For you filters apply in every view (List, Calendar and Map share one filter set).
+  const rows = await keepForYou(tx, actor.userId, read.rows, f, now, settings.weekStartsOn);
   if (rows.length === 0) return { entries: [], truncated };
 
   const ids = rows.map((j) => j.id);
-  const settings = await getSettings(tx);
   const vendorRows = await tx.select({ id: vendors.id, name: vendors.name, typeId: vendors.typeId, minimum: vendors.minimumBillableMinutes }).from(vendors).where(inArray(vendors.id, [...new Set(rows.map((j) => j.vendorId))]));
   const vendorById = new Map(vendorRows.map((v) => [v.id, v]));
   const locIds = [...new Set(rows.map((j) => j.locationId).filter((x): x is string => !!x))];
@@ -210,6 +221,9 @@ export async function calendarEntries(actor: Actor, tx: Tx, range: DetailRange, 
     const status = calStatus(job, needed, filled, now);
 
     if (!keptByFilters(f, q, job, { vendorTypeId: vendor?.typeId, vendorName: vendor?.name ?? "", locationName, on, mine, status })) continue;
+    // Open spots only: a spot the person could still take, as the job card counts it (a pending shorter shift does
+    // not hold a spot), released, not started and not theirs.
+    if (f.openOnly && !openForThem(job, needed, on, mine, status, now)) continue;
 
     const span = { startAt: job.startAt, endAt: job.endAt };
     // As on the job card: a person on the detail sees their own position's pay; everyone else the base and the highest.
@@ -249,8 +263,9 @@ export async function calendarEntries(actor: Actor, tx: Tx, range: DetailRange, 
 }
 
 /**
- * The personnel Details list: job cards (pay, staffing, the person's own status) for the details the shared
- * filters keep, in date order. Details that started are left out unless the person is on them.
+ * The Details list: job cards (pay, staffing, the person's own status) for the details the shared filters keep, in
+ * date order. Details that started are left out unless the person is on them, or `keepStarted` (staff, who manage
+ * a running detail until it ends).
  */
 export async function detailCards(
   actor: Actor,
@@ -258,6 +273,7 @@ export async function detailCards(
   range: DetailRange,
   f: DetailFilters,
   now: Date = new Date(),
+  opts: { keepStarted?: boolean } = {},
 ): Promise<{ cards: JobCard[]; truncated: boolean; hiddenBySchedule: number; gone: MyDetail[] }> {
   // With My details only, the person's canceled or removed sign-ups stay listed (30 days) with the reason.
   const gone = f.mine ? (await myDetails(actor, tx, now, range)).filter((d) => d.reason !== null) : [];
@@ -269,14 +285,15 @@ export async function detailCards(
     to = new Date(Math.min(to.getTime(), agencyInstant(p.year, p.month, p.day + 7, 0, 0).getTime()));
   }
   const window = { from: range.from, to, runningAt: range.runningAt };
-  const { entries, truncated } = await calendarEntries(actor, tx, window, f, now);
+  // Workable is applied below with the schedule's own count of what it hid.
+  const { entries, truncated } = await calendarEntries(actor, tx, window, { ...f, workable: false }, now);
   const keep = new Set(entries.map((e) => e.id));
   if (keep.size === 0) return { cards: [], truncated, hiddenBySchedule: 0, gone };
   const base = { ...window, mine: f.mine || undefined, sort: f.sort, direction: f.sort === "date" ? ("asc" as const) : ("desc" as const) };
   const shown = (await listAllJobs(actor, tx, { ...base, onlyWorkable: f.workable || undefined })).jobs.filter((j) => keep.has(j.id));
   const toCards = async (rows: typeof shown) =>
     (await loadJobCards(actor, tx, rows, now)).filter(
-      (c) => (c.availability !== "started" || c.mine) && (!f.openOnly || (c.availability === "open" && !c.mine)) && (!f.flex || c.flex !== null),
+      (c) => (c.availability !== "started" || c.mine || opts.keepStarted) && (!f.openOnly || (c.availability === "open" && !c.mine)) && (!f.flex || c.flex !== null),
     );
   const cards = await toCards(shown);
   // "Only details I can work" is the person's private schedule filter: say how many it hid.

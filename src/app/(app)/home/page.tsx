@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { withTx } from "@/ui/shell/request";
+import { coordinatorTodo } from "@/domain/coordinator/views";
 import { unreadMessageCount } from "@/domain/messages/messages";
 import { unreadAlertCount } from "@/domain/notifications/inbox";
-import { capSummary, loadJobCards, myDetails, myInvoices, toBill, type CapUse } from "@/domain/personnel/views";
+import { capSummary, loadJobCards, myDetails, myInvoices, toBill, upNextAndBackup, type CapUse } from "@/domain/personnel/views";
 import { goalProgress, recommendationsFor } from "@/domain/planning/recommend";
 import { ButtonLink } from "@/ui/components/Button";
 import { Card, CardTitle } from "@/ui/components/Card";
@@ -19,6 +20,7 @@ import { filteredJobs, parseFilters } from "../_personnel/filters";
 import { AlertsBell } from "@/ui/shell/AlertsBell";
 import { personnelActor } from "../_personnel/session";
 import { Section } from "../_personnel/TabLinks";
+import { firstTodoItems, todoCount, type TodoItem } from "../coordinate/_coordinator/todo";
 
 export const metadata: Metadata = { title: "Home" };
 
@@ -53,14 +55,14 @@ function Recommendations({ recs, remainingCents }: Readonly<{ recs: Awaited<Retu
         {recs.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-3">
             <span className="flex min-w-0 flex-col">
-              <Link href={`/jobs/${r.id}`} className="font-medium">
+              <Link href={`/jobs/${r.number}`} className="font-medium">
                 {r.vendorName}
               </Link>
               <span className="text-sm text-muted">
                 {dayLabel(r.startAt)}, {timeRange(r.startAt, r.endAt)}. <PayLabel variant="plain" totalCents={r.totalCents} rateCents={r.rateCents} />
               </span>
             </span>
-            <ButtonLink href={`/jobs/${r.id}#sign-up`} size="sm" aria-label={`Sign up for ${r.vendorName} on ${dayLabel(r.startAt)}`}>
+            <ButtonLink href={`/jobs/${r.number}#sign-up`} size="sm" aria-label={`Sign up for ${r.vendorName} on ${dayLabel(r.startAt)}`}>
               Sign up
             </ButtonLink>
           </li>
@@ -70,12 +72,54 @@ function Recommendations({ recs, remainingCents }: Readonly<{ recs: Awaited<Retu
   );
 }
 
-/** The deputy's start page: goal, caps, what to bill, what is next, what is open, and what is owed. */
+/**
+ * Coordinators and admins: how many to-do items wait on them, the first few, and the way to the To-do tab. It heads
+ * their Home, so the phone (which has no To-do tab) reaches it in one tap.
+ */
+function TodoCard({ count, items }: Readonly<{ count: number; items: TodoItem[] }>) {
+  return (
+    <Card tone={count ? "accent" : "default"} as="section" aria-labelledby="todo-title" data-testid="home-todo">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="todo-title" className="m-0 flex items-center gap-2 text-title font-semibold md:text-base">
+          <span>To-do</span>
+          <span className="inline-flex h-5.5 min-w-5.5 items-center justify-center rounded-full bg-accent-soft px-1.5 text-xs font-semibold text-link" data-numeric>
+            {count}
+            <span className="sr-only"> {count === 1 ? "item" : "items"}</span>
+          </span>
+        </h2>
+        <Link href="/coordinate" className="text-sm font-semibold">
+          Open To-do
+        </Link>
+      </div>
+      {count === 0 ? (
+        <p className="m-0 text-sm text-muted">Nothing on your to-do list. New requests, invoices and issues show up here.</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {items.map((i) => (
+            <li key={i.key}>
+              <Link href={i.href} className="text-sm">
+                {i.text}
+              </Link>
+            </li>
+          ))}
+          {count > items.length ? <li className="text-sm text-muted">and {plural(count - items.length, "more item")}</li> : null}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Everyone's start page: goal, caps, what to bill, what is next, what is open, and what is owed. Coordinators and
+ * admins also get their To-do card at the top.
+ */
 export default async function HomePage() {
   const actor = await personnelActor();
   const shell = (await loadShell())!;
+  const staff = actor.role === "coordinator" || actor.role === "admin";
   const now = new Date();
   const data = await withTx(async (tx) => {
+    const todo = staff ? await coordinatorTodo(actor, tx, now) : null;
     // One transaction holds one connection, so these run one after another.
     const goal = await goalProgress(actor, tx, now);
     const recs = await recommendationsFor(actor, tx, now);
@@ -88,11 +132,11 @@ export default async function HomePage() {
     // Same window and query as the Details list with Open on, so "See all N" matches it.
     const open = (await filteredJobs(actor, tx, { ...parseFilters({}), open: true }, now)).cards;
     const recCards = await loadJobCards(actor, tx, recs, now);
-    return { goal, recs: recCards, caps, bill, mine, invoices, unread, alerts, open };
+    return { todo, goal, recs: recCards, caps, bill, mine, invoices, unread, alerts, open };
   });
 
-  // Canceled sign-ups stay in view (as Canceled, with the reason) rather than vanishing.
-  const upNext = data.mine.filter((d) => ["signed_up", "pending_short", "backup", "canceled", "removed"].includes(d.status) && d.plannedEndAt > now).slice(0, 4);
+  // Only what the person still works; canceled and removed sign-ups are history, kept on Details and in alerts.
+  const { upNext, onBackup } = upNextAndBackup(data.mine, now);
   const waiting = data.invoices.filter((i) => i.status === "sent" || i.status === "pending_review" || i.status === "ready_to_send" || i.status === "approved_unsent");
   const waitingTotal = waiting.reduce((n, i) => n + i.totalCents, 0);
   const turns = (t: string) => waiting.filter((i) => i.turn === t).length;
@@ -132,11 +176,16 @@ export default async function HomePage() {
             <Icon name="mail" size={20} />
             {data.unread > 0 ? <span className="absolute top-2.25 right-2.25 size-2.5 rounded-full border-2 border-surface bg-attention-dot" /> : null}
           </Link>
-          <span className="md:hidden">
-            <AlertsBell unread={data.alerts} size="md" />
-          </span>
+          {/* Staff have the bell in their phone header on every page. */}
+          {staff ? null : (
+            <span className="md:hidden">
+              <AlertsBell unread={data.alerts} size="md" />
+            </span>
+          )}
         </div>
       </div>
+
+      {data.todo ? <TodoCard count={todoCount(data.todo)} items={firstTodoItems(data.todo)} /> : null}
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-start md:gap-6">
         <div className="flex flex-col gap-4.5 md:gap-6">
@@ -211,27 +260,30 @@ export default async function HomePage() {
               {upNext.length === 0 ? (
                 <EmptyState title="Nothing scheduled">Details you sign up for show here.</EmptyState>
               ) : (
-                <RowList>
+                <RowList label="Up next">
                   {upNext.map((d) => (
                     <li key={d.assignmentId}>
-                      <JobRow
-                        card={d.job}
-                        now={now}
-                        extra={
-                          d.reason ? (
-                            <>
-                              <Chip tone="danger">{d.label}</Chip>
-                              <span className="text-sm text-muted">{d.reason}</span>
-                            </>
-                          ) : undefined
-                        }
-                      />
+                      <JobRow card={d.job} now={now} />
                     </li>
                   ))}
                 </RowList>
               )}
             </Card>
           </Section>
+
+          {onBackup.length > 0 ? (
+            <Section title="On backup">
+              <Card pad={false}>
+                <RowList label="On backup">
+                  {onBackup.map((d) => (
+                    <li key={d.assignmentId}>
+                      <JobRow card={d.job} now={now} />
+                    </li>
+                  ))}
+                </RowList>
+              </Card>
+            </Section>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-4.5 md:gap-6">

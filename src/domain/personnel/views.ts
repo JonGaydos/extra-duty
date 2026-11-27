@@ -85,6 +85,8 @@ export type JobCard = {
   mine: AssignmentStatus | null;
   watching: boolean;
   typeId: string;
+  /** The repeat series the detail belongs to, if any. */
+  seriesId: string | null;
 };
 
 const LIVE: AssignmentStatus[] = ["pending_short", "signed_up", "backup", "billed", "paid", "late_canceled", "no_show"];
@@ -194,6 +196,7 @@ export async function loadJobCards(actor: Actor, tx: Tx, rows: Job[], now: Date 
       mine: mineRow?.status ?? null,
       watching: watched.has(job.id),
       typeId: job.typeId,
+      seriesId: job.seriesId ?? null,
     };
   });
 }
@@ -208,6 +211,25 @@ export type MyDetail = {
   plannedEndAt: Date;
   job: JobCard;
 };
+
+/**
+ * Sign-ups the person is still responsible for working. A spot they offer to give away joins this list when that
+ * rule exists: it stays theirs until someone takes it.
+ */
+export const WORKING_STATUSES: readonly AssignmentStatus[] = ["signed_up", "pending_short"];
+
+/**
+ * Home's "Up next" and "On backup": details still ahead that the person works (signed up or pending a shorter
+ * shift), and those they wait on as a backup. Canceled, removed and late-canceled sign-ups, and anything on a
+ * canceled detail, are history: they stay on Details (My details) and in alerts, never here.
+ */
+export function upNextAndBackup(mine: MyDetail[], now: Date, limit = 4): { upNext: MyDetail[]; onBackup: MyDetail[] } {
+  const ahead = mine.filter((d) => d.job.state !== "canceled" && d.job.state !== "declined" && d.plannedEndAt.getTime() > now.getTime());
+  return {
+    upNext: ahead.filter((d) => WORKING_STATUSES.includes(d.status)).slice(0, limit),
+    onBackup: ahead.filter((d) => d.status === "backup").slice(0, limit),
+  };
+}
 
 /** What the deputy reads for a sign-up a suspension removed: neutral, the same words as the notice they got. */
 const SUSPENSION_REMOVAL_TEXT = "Your sign-up was canceled.";

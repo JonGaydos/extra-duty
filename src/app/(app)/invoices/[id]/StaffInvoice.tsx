@@ -66,7 +66,7 @@ function InvoiceFacts({ inv }: Readonly<{ inv: Invoice }>) {
       <div className="flex flex-col gap-0.5">
         <dt className="text-xs font-semibold text-muted">Detail</dt>
         <dd className="m-0">
-          <Link href={`/coordinate/details/${inv.jobId}`}>
+          <Link href={`/jobs/${inv.jobNumber}?tab=manage`}>
             #{inv.jobNumber} {inv.jobTitle}
           </Link>
           , {dayLabel(inv.scheduled.startAt)}

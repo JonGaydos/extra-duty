@@ -23,7 +23,7 @@ const READY_WINDOW_MS = 7 * 86_400_000;
 
 /**
  * Worker tick (every minute). Alerts each signed_up assignment once, when its job's end has passed, with
- * "Bill job #N". Canceled, declined and payment-locked jobs are skipped (a locked job is alerted after its
+ * "Bill Detail #N". Canceled, declined and payment-locked jobs are skipped (a locked job is alerted after its
  * hold lifts). The marker is set in the same transaction as the alert, and only if nobody set it first.
  */
 export async function billingReadyTick(now: Date): Promise<number> {
@@ -65,7 +65,7 @@ export async function billingReadyTick(now: Date): Promise<number> {
         {
           recipients: [row.a.userId],
           type: "billing.ready",
-          title: lateCancel ? `Bill late cancellation pay for job #${row.job.number}` : `Bill job #${row.job.number}`,
+          title: lateCancel ? `Bill late cancellation pay for Detail #${row.job.number}` : `Bill Detail #${row.job.number}`,
           body: lateCancel ? `${row.job.title} was canceled late and its end time has passed. Bill your late cancellation pay.` : `${row.job.title} has ended. Enter your hours and bill it.`,
           link: `/jobs/${row.job.id}`,
         },
@@ -109,7 +109,7 @@ export async function unbilledRemindersTick(now: Date): Promise<number> {
       );
       if (unbilled.length === 0 && waiting.length === 0) return 0;
       const lines = [
-        ...unbilled.map((u) => `Bill job #${u.jobNumber}, ${u.title}: /jobs/${u.jobId}`),
+        ...unbilled.map((u) => `Bill Detail #${u.jobNumber}, ${u.title}: /jobs/${u.jobId}`),
         ...waiting.map((i) => `Confirm payment on invoice ${formatInvoiceNumber(s.invoiceNumberPrefix, i.number)}: /jobs/${i.jobId}`),
       ];
       await tx.update(users).set({ unbilledReminderSentAt: now }).where(eq(users.id, userId));

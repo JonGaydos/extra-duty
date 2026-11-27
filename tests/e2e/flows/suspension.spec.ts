@@ -31,15 +31,19 @@ test("suspension: staff see Removed by suspension, the deputy sees Canceled, the
   });
 
   await test.step("staff see Removed by suspension on the detail", async () => {
-    await coordinator.goto(`/coordinate/details/${job.id}`);
+    await coordinator.goto(`/jobs/${job.id}?tab=manage`);
     const history = coordinator.getByRole("list", { name: "Sign-up history" });
     await expect(history.getByRole("listitem").filter({ hasText: jordan.name })).toContainText("Removed by suspension");
   });
 
   await test.step("the deputy sees a plain Canceled, with no word of the suspension", async () => {
+    // Home's Up next lists only what they still work; the canceled sign-up is history, on Details.
     await deputy.goto("/home");
-    const row = deputy.getByRole("region", { name: "Up next" }).getByRole("listitem").filter({ hasText: title });
-    await expect(row.getByText("Canceled", { exact: true })).toBeVisible();
+    await expect(deputy.getByRole("list", { name: "Up next" }).getByText(title)).toHaveCount(0);
+    await expect(deputy.locator("body")).not.toContainText(/suspen/i);
+    await deputy.goto("/jobs?f=1&mine=1&status=canceled");
+    const row = deputy.getByRole("list", { name: "Details" }).getByRole("listitem").filter({ hasText: title });
+    await expect(row.getByText("Canceled", { exact: true }).first()).toBeVisible();
     await expect(row.getByText("Your sign-up was canceled.")).toBeVisible();
     await expect(deputy.locator("body")).not.toContainText(/suspen/i);
     await expect(deputy.locator("body")).not.toContainText(reason);

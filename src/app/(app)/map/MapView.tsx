@@ -9,6 +9,7 @@ import { LeafletMap, type MapPin } from "../_personnel/LeafletMap";
 
 export type MapJob = {
   id: string;
+  number: number;
   vendorName: string;
   title: string;
   when: string;
@@ -34,7 +35,7 @@ export function MapView({ jobs, tileUrl, attribution, center }: Readonly<{ jobs:
   const job = jobs.find((j) => j.id === chosen) ?? null;
   return (
     <div className="flex flex-col gap-3">
-      <LeafletMap tileUrl={tileUrl} attribution={attribution} pins={pins} label="Map of details" onSelect={setChosen} center={center} className="h-[55vh] min-h-80" />
+      <LeafletMap tileUrl={tileUrl} attribution={attribution} pins={pins} label="Map of details" onSelect={setChosen} center={center} className="h-[55vh] min-h-80" wheel="page" />
       <output className="block" aria-live="polite">
         {job ? (
           <Card tone="accent">
@@ -51,7 +52,7 @@ export function MapView({ jobs, tileUrl, attribution, center }: Readonly<{ jobs:
               {job.held ? " Held: no new sign-ups for now." : ""}
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <ButtonLink href={`/jobs/${job.id}`}>View detail</ButtonLink>
+              <ButtonLink href={`/jobs/${job.number}`}>View detail</ButtonLink>
               <MapsLink address={job.address} lat={job.lat} lng={job.lng} />
             </div>
           </Card>

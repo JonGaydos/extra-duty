@@ -83,7 +83,7 @@ describe("invoice email delivery", () => {
     const msg = mail.sent[0];
     expect(msg.to).toEqual(["ap@vendor.example", "boss@vendor.example"]);
     expect(msg.replyTo).toBe("billing@sheriff.example");
-    expect(msg.subject).toBe(`Invoice ED-${String(inv.number).padStart(6, "0")} for job #${job.number}`);
+    expect(msg.subject).toBe(`Invoice ED-${String(inv.number).padStart(6, "0")} for Detail #${job.number}`);
     const [pdf, w9] = msg.attachments!;
     expect(msg.attachments).toHaveLength(2);
     expect(pdf.filename).toBe(`ED-${String(inv.number).padStart(6, "0")}.pdf`);

@@ -85,7 +85,7 @@ export async function assignPerson(
     await emit(tx, {
       recipients: who.map((w) => w.userId),
       type: "spot.offer_ended",
-      title: `Spot no longer available: ${job.title}`,
+      title: `Spot no longer available: #${job.number} ${job.title}`,
       body: `The spot for ${position.name} was filled by a coordinator.`,
       link: `/jobs/${job.id}`,
     });
@@ -94,7 +94,7 @@ export async function assignPerson(
     await emit(tx, { recipients: [userId],
       type: "assignment.assigned",
       mandatory: true,
-      title: `You were assigned: ${job.title}`,
+      title: `You were assigned: #${job.number} ${job.title}`,
       body: `A coordinator assigned you to ${position.name}.`,
       link: `/jobs/${job.id}`,
     });

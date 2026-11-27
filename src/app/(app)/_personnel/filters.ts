@@ -30,17 +30,6 @@ export function parseFilters(p: Params): ListFilters {
   };
 }
 
-/** The same filters as a query string, for links between List, Calendar and Map. */
-export function filterQuery(f: ListFilters): string {
-  const q = new URLSearchParams();
-  if (f.q) q.set("q", f.q);
-  for (const k of ["open", "mine", "week", "flex", "workable"] as const) if (f[k]) q.set(k, "1");
-  if (f.type) q.set("type", f.type);
-  if (f.sort !== "date") q.set("sort", f.sort);
-  const s = q.toString();
-  return s ? `?${s}` : "";
-}
-
 export type FilteredJobs = { cards: JobCard[]; hiddenBySchedule: number; hiddenVendors: number; truncated: boolean };
 
 /**

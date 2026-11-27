@@ -121,7 +121,7 @@ export function evaluateSignup(ctx: EligibilityContext): EligibilityResult {
       a.startAt.getTime() < job.endAt.getTime() &&
       a.endAt.getTime() > job.startAt.getTime(),
   );
-  add("overlap", overlapping ? `Overlaps job #${overlapping.jobNumber}` : null);
+  add("overlap", overlapping ? `Overlaps Detail #${overlapping.jobNumber}` : null);
   const n = ctx.rollingWindowHours;
   addCap(
     "cap_rolling",

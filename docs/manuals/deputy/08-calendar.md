@@ -11,6 +11,6 @@ The calendar shows every detail you are allowed to see, by day.
 
    ![The color key](../images/deputy/08-calendar-2-phone.webp)
 
-4. Choose **Filters** to show only some details, for example **My details only**, a status, a vendor or a **Person signed up**. Choose **Apply**.
+4. Choose **Filters** to show only some details. It is the same panel as on **Details**, and the filters you set there carry over: for example **My details only**, **Open spots only**, **This week**, a status, a vendor or a **Person signed up**. **This week** narrows the details shown; the month stays on screen. **Sort by** is for the list only. Choose **Apply**.
 
 > The color is never the only clue. Every detail also says its status in words.

@@ -224,7 +224,12 @@ export const routes = define({
     response: list("A detail."),
   },
   "POST /jobs": { tag: "Jobs", summary: "Create a detail", body: jobBody, response: record("The detail."), status: 201 },
-  "GET /jobs/{id}": { tag: "Jobs", summary: "One detail", response: record("The detail with positions, safety and attachments.") },
+  "GET /jobs/{id}": {
+    tag: "Jobs",
+    summary: "One detail",
+    description: "`{id}` is the detail's id or its number, as shown in the app (`9` for Detail #9). A detail the caller may not see answers 404 either way.",
+    response: record("The detail with positions, safety and attachments."),
+  },
   "PATCH /jobs/{id}": { tag: "Jobs", summary: "Change a detail", description: "`?scope=series` applies it to this and later details in the series.", query: z.object({ scope: z.enum(["one", "series"]).optional() }).loose(), body: jobBody, response: record("The detail.") },
   "POST /jobs/{id}/cancel": {
     tag: "Jobs",

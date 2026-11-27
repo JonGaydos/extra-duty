@@ -245,7 +245,7 @@ function PreviewRow({ r }: Readonly<{ r: WireRow }>) {
       {r.conflicts.map((c) => (
         <p key={`${c.assignmentId}-${c.check}`} className="m-0 text-sm font-medium text-danger-ink">
           Conflict for {c.name}: {c.message}{" "}
-          <a href={`/coordinate/details/${r.jobId}`} target="_blank" rel="noreferrer" className="font-semibold">
+          <a href={`/jobs/${r.jobId}?tab=manage`} target="_blank" rel="noreferrer" className="font-semibold">
             Open the detail in a new tab to remove them
           </a>
         </p>

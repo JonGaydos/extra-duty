@@ -134,7 +134,7 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
     const where = [r.locationName, r.address].filter((v): v is string => Boolean(v?.trim())).join(", ");
     const suffix = status === "signed_up" ? "" : ` (${label})`;
     const summary = `${r.vendorName}: ${r.job.title}${suffix}`;
-    const description = `Job #${r.job.number}. ${label}.`;
+    const description = `Detail #${r.job.number}. ${label}.`;
     lines.push(
       "BEGIN:VEVENT",
       `UID:${r.job.id}@extra-duty`,

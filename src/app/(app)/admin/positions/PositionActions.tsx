@@ -5,7 +5,7 @@ import { Button } from "@/ui/components/Button";
 import { Card } from "@/ui/components/Card";
 import { FormField, Input } from "@/ui/components/FormField";
 import { useCoordAction } from "../../coordinate/_coordinator/status";
-import { positionActiveAction, savePositionTypeAction } from "../_admin/actions";
+import { deletePositionTypeAction, positionActiveAction, savePositionTypeAction } from "../_admin/actions";
 import { Check, CheckGroup } from "../_admin/forms";
 
 type Option = { id: string; name: string };
@@ -73,7 +73,30 @@ export function AddPosition({ ranks, flags }: Readonly<{ ranks: Option[]; flags:
   );
 }
 
-export function PositionRowActions({ id, name, active, initial, ranks, flags }: Readonly<{ id: string; name: string; active: boolean; initial: PositionFields; ranks: Option[]; flags: Option[] }>) {
+/** Delete for a position type nothing has used (added by mistake), after a second press; nothing else is deleted. */
+function DeletePosition({ id, name }: Readonly<{ id: string; name: string }>) {
+  const [sure, setSure] = useState(false);
+  const { run, busy } = useCoordAction();
+  if (!sure)
+    return (
+      <Button size="sm" variant="secondary" aria-label={`Delete ${name}`} onClick={() => setSure(true)}>
+        Delete
+      </Button>
+    );
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="text-sm text-muted">Delete is only for a position type added by mistake.</span>
+      <Button size="sm" variant="danger" busy={busy} onClick={() => run(() => deletePositionTypeAction(id))}>
+        Delete {name}
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setSure(false)}>
+        Keep
+      </Button>
+    </span>
+  );
+}
+
+export function PositionRowActions({ id, name, active, used, initial, ranks, flags }: Readonly<{ id: string; name: string; active: boolean; used: string | null; initial: PositionFields; ranks: Option[]; flags: Option[] }>) {
   const [editing, setEditing] = useState(false);
   const { run, busy } = useCoordAction();
   if (editing)
@@ -90,6 +113,7 @@ export function PositionRowActions({ id, name, active, initial, ranks, flags }: 
       <Button size="sm" variant="secondary" busy={busy} aria-label={`${active ? "Turn off" : "Turn on"} ${name}`} onClick={() => run(() => positionActiveAction({ id, active: !active }))}>
         {active ? "Turn off" : "Turn on"}
       </Button>
+      {used ? null : <DeletePosition id={id} name={name} />}
     </div>
   );
 }

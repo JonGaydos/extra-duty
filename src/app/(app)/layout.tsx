@@ -60,7 +60,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
           <TopNav
             home={nav.home}
             items={nav.desktop}
-            personal={nav.personal}
+            staff={nav.staff}
             name={profile.name}
             initials={profile.initials}
             coordinator={staff}

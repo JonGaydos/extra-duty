@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { accessReviewItems, accessReviews, auditLog, invites, qualificationRequests, qualifications, ranks, userQualifications, users } from "@/db/schema";
+import { accessReviewItems, accessReviews, auditLog, invites, jobs, qualificationRequests, qualifications, ranks, userQualifications, users } from "@/db/schema";
 import type { Actor, Role } from "../actor";
 import { AUDIT_PAGE_SIZE, listAudit, type AuditFilter, type AuditRow } from "../audit/audit";
 import { assertCan } from "../auth/policy";
@@ -206,7 +206,8 @@ export async function accessReviewOverview(actor: Actor, tx: Tx): Promise<Access
 }
 
 export type AuditView = {
-  rows: Array<AuditRow & { actorName: string | null }>;
+  /** `detailNumber`: a detail's number when the record is a detail ("Detail #9"). */
+  rows: Array<AuditRow & { actorName: string | null; detailNumber: number | null }>;
   /** Record types that appear in the log, for the filter. */
   types: string[];
   hasMore: boolean;
@@ -219,8 +220,10 @@ export async function auditView(actor: Actor, tx: Tx, filter: AuditFilter, page:
   const ids = [...new Set(rows.map((r) => r.actorUserId).filter((x): x is string => !!x))];
   const names = new Map(ids.length ? (await tx.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.name]) : []);
   const types = (await tx.selectDistinct({ t: auditLog.entityType }).from(auditLog).orderBy(asc(auditLog.entityType))).map((r) => r.t);
+  const jobIds = [...new Set(rows.filter((r) => r.entityType === "job" && r.entityId).map((r) => r.entityId!))].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  const numbers = new Map(jobIds.length ? (await tx.select({ id: jobs.id, n: jobs.number }).from(jobs).where(inArray(jobs.id, jobIds))).map((j) => [j.id, j.n]) : []);
   // listAudit pages at a fixed size; a full page may have more after it.
-  return { rows: rows.map((r) => ({ ...r, actorName: r.actorUserId ? (names.get(r.actorUserId) ?? null) : null })), types, hasMore: rows.length === AUDIT_PAGE_SIZE };
+  return { rows: rows.map((r) => ({ ...r, actorName: r.actorUserId ? (names.get(r.actorUserId) ?? null) : null, detailNumber: (r.entityType === "job" && r.entityId ? numbers.get(r.entityId) : undefined) ?? null })), types, hasMore: rows.length === AUDIT_PAGE_SIZE };
 }
 
 /** Active staff who may review ops plans (coordinators, admins and personnel). */

@@ -81,10 +81,10 @@ describe("personal calendar feed", () => {
     const lines = text.replace(/\r\n /g, "").split("\r\n");
     expect(lines.filter((l) => l.startsWith("SUMMARY:") || l.startsWith("DESCRIPTION:") || l.startsWith("STATUS:"))).toEqual([
       "SUMMARY:ics Vendor: Stadium\\; gate\\, east",
-      "DESCRIPTION:Job #1. Signed up.",
+      "DESCRIPTION:Detail #1. Signed up.",
       "STATUS:CONFIRMED",
       "SUMMARY:ics Vendor: Stadium security (Backup #1)",
-      "DESCRIPTION:Job #2. Backup #1.",
+      "DESCRIPTION:Detail #2. Backup #1.",
       "STATUS:TENTATIVE",
     ]);
     // No other person's data.

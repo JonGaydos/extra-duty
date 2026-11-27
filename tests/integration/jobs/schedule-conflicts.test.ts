@@ -44,7 +44,7 @@ describe("schedule conflicts on time edits", () => {
     expect(err).toBeInstanceOf(ScheduleConflictError);
     const c = (err as ScheduleConflictError).conflicts;
     expect(c).toHaveLength(1);
-    expect(c[0]).toMatchObject({ userId: p.userId, jobId: a.id, check: "overlap", message: `Overlaps job #${b.number}` });
+    expect(c[0]).toMatchObject({ userId: p.userId, jobId: a.id, check: "overlap", message: `Overlaps Detail #${b.number}` });
     expect((await get().db.select().from(jobs).where(eq(jobs.id, a.id)))[0].endAt).toEqual(a.endAt);
   });
 
@@ -52,7 +52,7 @@ describe("schedule conflicts on time edits", () => {
     const { f, p, a, b } = await twoDetails("sc2");
     const rows = await f.run((tx) => previewEdit(f.coord, tx, [a.id], { endTime: "16:00" }));
     expect(rows[0].problem).toBeNull();
-    expect(rows[0].conflicts.map((c) => c.message)).toEqual([`Overlaps job #${b.number}`]);
+    expect(rows[0].conflicts.map((c) => c.message)).toEqual([`Overlaps Detail #${b.number}`]);
     await expect(f.run((tx) => applyEdit(f.coord, tx, [a.id], { endTime: "16:00" }))).rejects.toBeInstanceOf(ScheduleConflictError);
 
     await f.run((tx) => applyEdit(f.coord, tx, [a.id], { endTime: "16:00", conflictOverride: { reason: "Deputy agreed to swap with a partner", fingerprints: { [a.id]: rows[0].conflictFingerprint! } } }));
@@ -61,7 +61,7 @@ describe("schedule conflicts on time edits", () => {
     const [audit] = await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, a.id), eq(auditLog.action, "job.schedule_conflict_override")));
     expect(audit.reason).toBe("Deputy agreed to swap with a partner");
     expect(JSON.stringify(audit.after)).toContain(p.userId);
-    expect(JSON.stringify(audit.after)).toContain(`Overlaps job #${b.number}`);
+    expect(JSON.stringify(audit.after)).toContain(`Overlaps Detail #${b.number}`);
   });
 
   test("removing the deputy resolves the conflict", async () => {
@@ -99,7 +99,7 @@ describe("schedule conflicts on time edits", () => {
       others.push(o.job);
     }
     const rows = await f.run((tx) => previewEdit(f.coord, tx, [s1.job.id, s2.job.id], { endTime: "14:00" }));
-    expect(rows.map((r) => r.conflicts.map((c) => c.message))).toEqual([[`Overlaps job #${others[0].number}`], [`Overlaps job #${others[1].number}`]]);
+    expect(rows.map((r) => r.conflicts.map((c) => c.message))).toEqual([[`Overlaps Detail #${others[0].number}`], [`Overlaps Detail #${others[1].number}`]]);
   });
 
   test("placing a deputy on an overlapping detail needs an override; the audit names the conflict", async () => {
@@ -108,11 +108,11 @@ describe("schedule conflicts on time edits", () => {
     await get().db.update(jobs).set({ startAt: a.startAt, endAt: a.endAt }).where(eq(jobs.id, c.job.id));
     const err = await f.run((tx) => assignPerson(f.coord, tx, c.positionId, p.userId, { notify: false })).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RuleViolation);
-    expect((err as RuleViolation).checks.map((x) => x.message)).toContain(`Overlaps job #${a.number}`);
+    expect((err as RuleViolation).checks.map((x) => x.message)).toContain(`Overlaps Detail #${a.number}`);
     const row = await f.run((tx) => assignPerson(f.coord, tx, c.positionId, p.userId, { notify: false, overrideReason: "Covering the gate for ten minutes" }));
     const [audit] = await get().db.select().from(auditLog).where(and(eq(auditLog.entityId, row.id), eq(auditLog.action, "assignment.assign")));
     expect(audit.reason).toBe("Covering the gate for ten minutes");
-    expect(JSON.stringify(audit.after)).toContain(`Overlaps job #${a.number}`);
+    expect(JSON.stringify(audit.after)).toContain(`Overlaps Detail #${a.number}`);
   });
 
   test("an override is bound to the conflicts that were shown; a different set is refused", async () => {

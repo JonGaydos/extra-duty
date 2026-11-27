@@ -1,29 +1,30 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/ui/components/Button";
 import { Card, CardTitle } from "@/ui/components/Card";
-import { Chip } from "@/ui/components/Chip";
-import { PayLabel } from "@/ui/components/PayLabel";
+import { DetailRowBody, type RowView } from "../../_personnel/JobRow";
 import { BulkEdit } from "./EditPanel";
 
-export type SelectableItem = {
-  id: string;
-  href: string;
-  title: string;
-  meta: string;
-  pay: { totalCents: number; rateCents: number; maxTotalCents: number; maxRateCents: number };
-  chips: Array<{ tone: "success" | "warning" | "danger" | "attention" | "info" | "neutral" | "coordinator"; text: string }>;
+export type SelectableItem = RowView & {
+  /** The row's key when one detail can show twice (a canceled sign-up of the viewer's); the id otherwise. */
+  key?: string;
   /** Why bulk edit cannot change this detail (canceled, declined or started), shown on the row; null when it can. */
   blocked: string | null;
+  /** False for a row that is only listed (the viewer's own canceled sign-up): no checkbox and no note. */
+  selectable?: boolean;
+  /** More chips or controls after the row's chips (the viewer's own Hide vendor, a sign-up's end reason). */
+  extra?: React.ReactNode;
 };
 
-/** The coordinator's detail rows with a checkbox each, and Edit selected for a bulk edit across any vendors. */
+/**
+ * Detail rows in the shared Details look, each with a checkbox for staff, and Edit selected for a bulk edit across
+ * any vendors.
+ */
 export function SelectableDetails({ items, types, defaultTypeId }: Readonly<{ items: SelectableItem[]; types: Array<{ id: string; name: string }>; defaultTypeId: string }>) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
-  const editable = items.filter((i) => !i.blocked);
+  const editable = items.filter((i) => !i.blocked && i.selectable !== false);
   const ids = [...picked].filter((id) => editable.some((i) => i.id === id));
   const all = editable.length > 0 && ids.length === editable.length;
   const toggle = (id: string) =>
@@ -67,33 +68,15 @@ export function SelectableDetails({ items, types, defaultTypeId }: Readonly<{ it
       <Card pad={false} as="div">
         <ul className="m-0 list-none divide-y divide-divider p-0" aria-label="Details">
           {items.map((j) => (
-            <li key={j.id} className="flex gap-3 px-4 py-3.25">
-              {!j.blocked ? (
+            <li key={j.key ?? j.id} className="flex gap-3 px-4 py-3.25">
+              {!j.blocked && j.selectable !== false ? (
                 <label className="-my-2.5 -ml-3 flex size-11 shrink-0 cursor-pointer items-center justify-center">
-                  <input type="checkbox" className="size-4.5 accent-accent" checked={picked.has(j.id)} onChange={() => toggle(j.id)} aria-label={`Select ${j.title}`} />
+                  <input type="checkbox" className="size-4.5 accent-accent" checked={picked.has(j.id)} onChange={() => toggle(j.id)} aria-label={`Select ${j.sub}`} />
                 </label>
               ) : (
                 <span className="-my-2.5 -ml-3 size-11 shrink-0" aria-hidden />
               )}
-              <div className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row md:items-start md:justify-between md:gap-4">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p className="m-0 font-semibold">
-                    <Link href={j.href} className="text-ink hover:text-link">
-                      {j.title}
-                    </Link>
-                  </p>
-                  <div className="text-sm text-muted">{j.meta}</div>
-                  {j.blocked ? <div className="text-xs font-medium text-muted">Not editable: {j.blocked}</div> : null}
-                </div>
-                <div className="flex shrink-0 flex-wrap items-start gap-2">
-                  <PayLabel totalCents={j.pay.totalCents} rateCents={j.pay.rateCents} upTo={{ totalCents: j.pay.maxTotalCents, rateCents: j.pay.maxRateCents }} />
-                  {j.chips.map((c) => (
-                    <Chip key={c.text} tone={c.tone}>
-                      {c.text}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
+              <DetailRowBody row={j} extra={j.extra} note={j.selectable === false ? null : j.blocked} />
             </li>
           ))}
         </ul>

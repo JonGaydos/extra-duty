@@ -171,7 +171,7 @@ export async function submitOpsPlan(actor: Actor, tx: Tx, jobId: string, file: O
       {
         recipients: reviewers,
         type: resubmitted ? "ops_plan.resubmitted" : "ops_plan.submitted",
-        title: `${resubmitted ? "Ops plan resubmitted" : "Ops plan submitted"}: job #${job.number}`,
+        title: `${resubmitted ? "Ops plan resubmitted" : "Ops plan submitted"}: Detail #${job.number}`,
         body: `${job.title} has an ops plan waiting for your review.`,
         link,
       },
@@ -183,7 +183,7 @@ export async function submitOpsPlan(actor: Actor, tx: Tx, jobId: string, file: O
       {
         recipients: await coordinatorAudience(tx),
         type: "ops_plan.no_reviewers",
-        title: `Ops plan needs a reviewer: job #${job.number}`,
+        title: `Ops plan needs a reviewer: Detail #${job.number}`,
         body: `${job.title} has an ops plan, but no one is set to review ops plans. Add a reviewer in settings.`,
         link,
       },
@@ -239,7 +239,7 @@ export async function reviewOpsPlan(
     if (input.decision === "denied") {
       await emit(
         tx,
-        { recipients: people, type: "ops_plan.denied", title: `Ops plan denied: job #${job.number}`, body: `${job.title}: ${comments} Submit a revised plan.`, link },
+        { recipients: people, type: "ops_plan.denied", title: `Ops plan denied: Detail #${job.number}`, body: `${job.title}: ${comments} Submit a revised plan.`, link },
         now,
       );
     } else {
@@ -248,7 +248,7 @@ export async function reviewOpsPlan(
         {
           recipients: [...new Set([...people, ...(await coordinatorAudience(tx))])],
           type: "ops_plan.agreed",
-          title: `Ops plan agreed: job #${job.number}`,
+          title: `Ops plan agreed: Detail #${job.number}`,
           body: `${job.title}: the ops plan was agreed.`,
           link,
         },

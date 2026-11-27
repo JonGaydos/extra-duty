@@ -196,7 +196,7 @@ export async function messageCoordinators(actor: Actor, tx: Tx, input: { jobId: 
       ? await tx.select({ id: jobs.id, number: jobs.number, title: jobs.title }).from(jobs).where(eq(jobs.id, input.jobId))
       : [];
   if (!job) throw new NotFoundError("Job not found.");
-  const prefix = `Question about job #${job.number}: `;
+  const prefix = `Question about Detail #${job.number}: `;
   return sendMessage(actor, tx, {
     audiences: [{ kind: "coordinators" }],
     subject: Array.from(`${prefix}${job.title}`).slice(0, 200).join(""),

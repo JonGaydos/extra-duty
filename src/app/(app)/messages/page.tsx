@@ -46,7 +46,7 @@ export default async function MessagesPage({ searchParams }: Readonly<Props>) {
     const numbers = jobIds.length ? await tx.select({ id: jobs.id, number: jobs.number }).from(jobs).where(inArray(jobs.id, jobIds)) : [];
     return { inbox, sent, unread, numbers: new Map(numbers.map((n) => [n.id, n.number])) };
   });
-  const tag = (jobId: string | null) => (jobId && data.numbers.has(jobId) ? `Job #${data.numbers.get(jobId)}` : null);
+  const tag = (jobId: string | null) => (jobId && data.numbers.has(jobId) ? `Detail #${data.numbers.get(jobId)}` : null);
   const rows: MessageRowView[] =
     tab === "inbox"
       ? data.inbox.map((m) => ({ id: m.messageId, who: m.senderName ?? "Signal 90", initials: initialsOf(m.senderName ?? "Signal 90"), when: when(m.sentAt, now), subject: m.subject, snippet: m.snippet, unread: !m.read, tag: tag(m.jobId) }))

@@ -21,7 +21,7 @@ test("cancel with a late window, reactivate with a reason; history, notices, sig
   const vendor = await session(agency.vendorLogin, { viewport: PHONE });
 
   await test.step("the coordinator cancels for the vendor, inside the late window", async () => {
-    await coordinator.goto(`/coordinate/details/${job.id}`);
+    await coordinator.goto(`/jobs/${job.id}?tab=manage`);
     await coordinator.getByRole("button", { name: "Cancel detail" }).click();
     await coordinator.getByLabel("Reason", { exact: true }).fill(cancelWhy);
     await coordinator.getByLabel(/^The vendor canceled/).check();

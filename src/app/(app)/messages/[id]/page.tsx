@@ -53,8 +53,8 @@ export default async function MessagePage({ params }: Readonly<Props>) {
           {data.job ? (
             <>
               {". About "}
-              <Link href={`/jobs/${data.job.id}`}>
-                job #{data.job.number} {data.job.title}
+              <Link href={`/jobs/${data.job.number}`}>
+                Detail #{data.job.number}, {data.job.title}
               </Link>
             </>
           ) : null}

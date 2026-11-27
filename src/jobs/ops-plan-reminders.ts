@@ -91,7 +91,7 @@ async function dueAlerts(tx: Tx, jobId: string, now: Date): Promise<number> {
     {
       recipients,
       type: alert.type,
-      title: `${alert.title}: job #${job.number}`,
+      title: `${alert.title}: Detail #${job.number}`,
       body: `${job.title}: the ops plan is ${alert.state}${noIc}.`,
       link: `/jobs/${jobId}`,
     },
@@ -121,7 +121,7 @@ async function reviewAlerts(tx: Tx, planId: string, now: Date): Promise<number> 
     {
       recipients: reviewers,
       type: "ops_plan.review_waiting",
-      title: `Ops plan waiting for review: job #${job.number}`,
+      title: `Ops plan waiting for review: Detail #${job.number}`,
       body: `${job.title} has an ops plan that has not been reviewed.`,
       link: `/jobs/${plan.jobId}`,
     },

@@ -30,6 +30,7 @@ async function rows<T>(sql: string, params: unknown[] = []): Promise<T[]> {
 }
 const one = async <T,>(sql: string, params: unknown[] = []) => (await rows<T>(sql, params))[0];
 
+const jobNumber = async (title: string) => (await one<{ number: number }>("select number from jobs where title = $1 order by start_at limit 1", [title])).number;
 const jobId = async (title: string) => (await one<{ id: string }>("select id from jobs where title = $1 order by start_at limit 1", [title])).id;
 const invoiceId = async (title: string) =>
   (await one<{ id: string }>("select i.id from invoices i join assignments a on a.id = i.assignment_id join jobs j on j.id = a.job_id where j.title = $1", [title])).id;
@@ -48,10 +49,12 @@ type Screen = { name: string; path: () => Promise<string>; heading: string | Reg
 const at = (path: string) => () => Promise.resolve(path);
 const SCREENS: Screen[] = [
   { name: "todo", path: at("/coordinate"), heading: /^Good (morning|afternoon|evening), Quinn/ },
-  { name: "details", path: at("/coordinate/details"), heading: "Details" },
-  { name: "new-detail", path: at("/coordinate/details/new"), heading: "New detail" },
-  { name: "detail", path: async () => `/coordinate/details/${await jobId(COORD.opsJob)}`, heading: COORD.opsJob },
-  { name: "request", path: async () => `/coordinate/details/${await jobId(COORD.request)}`, heading: COORD.request },
+  { name: "details", path: at("/jobs"), heading: "Details" },
+  { name: "new-detail", path: at("/jobs/new"), heading: "New detail" },
+  { name: "detail", path: async () => `/jobs/${await jobId(COORD.opsJob)}?tab=manage`, heading: COORD.opsJob },
+  { name: "detail-shared", path: async () => `/jobs/${await jobId(COORD.opsJob)}`, heading: COORD.opsJob },
+  { name: "home", path: at("/home"), heading: /^Hi, Quinn/ },
+  { name: "request", path: async () => `/jobs/${await jobId(COORD.request)}?tab=manage`, heading: COORD.request },
   { name: "vendors", path: at("/coordinate/vendors"), heading: "Vendors" },
   { name: "vendor", path: async () => `/coordinate/vendors/${await vendorId(COORD.vendor)}`, heading: COORD.vendor },
   { name: "payments", path: async () => `/coordinate/payments?open=${await invoiceId(COORD.issueJob)}`, heading: "Payments" },
@@ -115,7 +118,7 @@ test("a coordinator creates a detail on 6 picked dates in one save, as one serie
   const year = december();
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });
   await page.getByLabel("Location", { exact: true }).selectOption({ label: `${COORD.location}, ${COORD.address}` });
   await page.getByLabel("Title", { exact: true }).fill(title);
@@ -146,7 +149,7 @@ test("a coordinator creates a detail for every day of a date range", async ({ pa
   const year = december();
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Start time").fill("18:00");
@@ -168,7 +171,7 @@ test("a failing date is named beside its row, and nothing is created", async ({ 
   const label = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(new Date(`${year}-12-03T12:00:00Z`));
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Start time").fill("09:00");
@@ -198,7 +201,7 @@ test("editing the series rate alerts a signed-up deputy", async ({ page, context
 
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto(`/coordinate/details/${first.id}`);
+  await page.goto(`/jobs/${first.id}?tab=manage`);
   await page.getByRole("button", { name: "Edit detail" }).click();
   const editor = page.getByRole("form", { name: "Edit detail" });
   await editor.getByLabel("Rate per hour").fill("90");
@@ -212,7 +215,7 @@ test("editing the series rate alerts a signed-up deputy", async ({ page, context
   await signInAs(deputy, "riley");
   const p = await deputy.newPage();
   await p.goto("/alerts");
-  await expect(p.getByRole("main")).toContainText(`Detail changed: ${title}`);
+  await expect(p.getByRole("main")).toContainText(new RegExp(`Detail changed: #\\d+ ${title}`));
   await expect(p.getByRole("main")).toContainText("The hourly rate changed");
   await deputy.close();
 });
@@ -385,7 +388,7 @@ test("a coordinator attaches a contract to a detail that has none, and the detai
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
   const id = await jobId(COORD.unfilledJob);
-  await page.goto(`/coordinate/details/${id}`);
+  await page.goto(`/jobs/${id}?tab=manage`);
   await expect(page.getByText("No contract", { exact: true })).toBeVisible();
   const form = page.getByRole("form", { name: "Attach contract" });
   await expect(form).toBeVisible();
@@ -410,7 +413,7 @@ test("a coordinator cancels a detail with two deputies, then reactivates it with
   const id = await jobId(COORD.backOnJob);
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto(`/coordinate/details/${id}`);
+  await page.goto(`/jobs/${id}?tab=manage`);
   await page.getByRole("button", { name: "Cancel detail" }).click();
   await page.getByLabel("Reason", { exact: true }).fill(cancelWhy);
   // For the vendor, inside the window: both deputies are owed late-cancel pay.
@@ -568,4 +571,123 @@ test("staff see how and when an invoice goes to the vendor, and where approving 
   await expect(page.getByRole("main")).toContainText("Invoices go");
   await expect(page.getByRole("main")).toContainText("Weekly");
   await expect(page.getByRole("main")).toContainText("Email approved invoices");
+});
+
+/**
+ * Same screens for everyone (owner decision 2026-11-27): the staff Details list and detail page are gone, and every
+ * control they had is on the shared Details pages. Each line below is one staff capability from those screens.
+ */
+test.describe("staff capabilities on the shared Details pages", () => {
+  test.use({ viewport: DESKTOP });
+
+  test("the Details list: New detail, the staff views and filters, staff chips, and bulk edit", async ({ page, context }) => {
+    await signInAs(context, "coordinator");
+    await page.goto("/jobs");
+    await expect(page.getByRole("heading", { level: 1, name: "Details" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Details views" }).getByRole("link", { name: "List" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("link", { name: "New detail" })).toHaveAttribute("href", "/jobs/new");
+    const views = page.getByRole("navigation", { name: "Which details" });
+    await expect(views.getByRole("link")).toHaveText(["Upcoming", "Requests", "Canceled", "Past"]);
+    // Every status (vendor requests included), every person, and the deputy filters.
+    const filters = page.getByRole("complementary", { name: "Filters" });
+    await expect(filters.getByRole("checkbox", { name: "Vendor requests" })).toBeVisible();
+    await expect(filters.getByRole("checkbox", { name: "Open spots only" })).toBeVisible();
+    await expect(filters.getByLabel("Person signed up")).toBeVisible();
+    // A checkbox per row that can change, and Edit selected for a bulk edit.
+    await expect(page.getByRole("checkbox", { name: "Select all shown that can change" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit selected" })).toBeDisabled();
+    await page.getByRole("checkbox", { name: /^Select #\d+ / }).first().check();
+    await page.getByRole("button", { name: "Edit selected" }).click();
+    await expect(page.getByRole("heading", { name: "Edit 1 detail" })).toBeVisible();
+    // Staff rows carry the detail number.
+    await expect(page.getByRole("list", { name: "Details" }).getByText(/^#\d+ /).first()).toBeVisible();
+
+    await views.getByRole("link", { name: "Requests" }).click();
+    await expect(page).toHaveURL(/view=requests/);
+    // Other tests decide some requests; any one still waiting will do.
+    const waiting = await one<{ title: string }>("select title from jobs where state = 'requested' and start_at > now() order by start_at limit 1");
+    const request = page.getByRole("listitem").filter({ hasText: waiting.title });
+    await expect(request.getByText("Vendor request", { exact: true })).toBeVisible();
+    await views.getByRole("link", { name: "Canceled" }).click();
+    await expect(page).toHaveURL(/view=canceled/);
+    await views.getByRole("link", { name: "Past" }).click();
+    await expect(page).toHaveURL(/view=past/);
+    await expectNoSeriousA11yIssues(page);
+  });
+
+  test("the detail page: the deputy view first, and Manage this detail with every staff control", async ({ page, context }) => {
+    await signInAs(context, "coordinator");
+    const id = await jobId(COORD.opsJob);
+    await page.goto(`/jobs/${id}`);
+    const tabs = page.getByRole("navigation", { name: "Detail sections" });
+    await expect(tabs.getByRole("link", { name: "Detail", exact: true })).toHaveAttribute("aria-current", "page");
+    // What a deputy sees: facts, sign-up, roster.
+    await expect(page.getByRole("heading", { level: 1, name: COORD.opsJob })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^(Sign up|Your sign-up)$/ })).toBeVisible();
+    await expect(page.getByRole("table", { name: "Roster" })).toBeVisible();
+
+    await tabs.getByRole("link", { name: "Manage this detail" }).click();
+    await expect(page).toHaveURL(new RegExp(`/jobs/\\d+\\?tab=manage$`));
+    const manage = page.getByTestId("manage-detail");
+    for (const heading of ["Quick edit", "Manage", "Officer safety", "Staffing", "Ops plan", "Attachments", "Deputy notes", "Activity", "Copy to other dates", "Repeat this detail"]) {
+      await expect(manage.getByRole("heading", { name: heading, exact: true }), heading).toBeVisible();
+    }
+    // Edit, hold and release, cancel, assign, safety, contract, copy and repeat.
+    for (const name of [/^Edit detail$/, /^(Hold|Release|Release now)$/, /^Cancel detail$/, /^Assign someone$/, /^(Add|Edit) officer safety$/, /^Attach contract$/, /^Make copy$/, /^Add to series$/]) {
+      await expect(manage.getByRole("button", { name }).first(), String(name)).toBeVisible();
+    }
+    await expect(manage.getByRole("link", { name: "Copy and change details" })).toHaveAttribute("href", `/jobs/new?from=${id}`);
+    await expectNoSeriousA11yIssues(page);
+  });
+
+  test("a vendor request opens on Manage, with Approve and Decline", async ({ page, context }) => {
+    await signInAs(context, "coordinator");
+    const waiting = await one<{ id: string }>("select id from jobs where state = 'requested' and start_at > now() order by start_at limit 1");
+    await page.goto(`/jobs/${waiting.id}`);
+    await expect(page.getByRole("navigation", { name: "Detail sections" }).getByRole("link", { name: "Manage this detail" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: "Approve request" })).toBeVisible();
+    await page.getByRole("button", { name: "Decline", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Decline request" })).toBeVisible();
+  });
+
+  test("old staff links still open, with their query string", async ({ page, context }) => {
+    await signInAs(context, "coordinator");
+    const id = await jobId(COORD.opsJob);
+    await page.goto(`/coordinate/details/${id}?from=email#attachments`);
+    const url = new URL(page.url());
+    expect([url.pathname, url.searchParams.get("tab"), url.searchParams.get("from"), url.hash]).toEqual([`/jobs/${await jobNumber(COORD.opsJob)}`, "manage", "email", "#attachments"]);
+    await expect(page.getByTestId("manage-detail")).toBeVisible();
+    await page.goto("/coordinate/details?view=past&f=1");
+    await expect(page).toHaveURL(/\/jobs\?view=past&f=1$/);
+    await page.goto("/coordinate/details/new");
+    await expect(page).toHaveURL(/\/jobs\/new$/);
+    await expect(page.getByRole("heading", { level: 1, name: "New detail" })).toBeVisible();
+  });
+
+  test("Home heads with the To-do card, which opens the To-do tab", async ({ page, context }) => {
+    await signInAs(context, "coordinator");
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/home$/);
+    const card = page.getByTestId("home-todo");
+    await expect(card.getByRole("heading", { name: /^To-do \d+ items?$/ })).toBeVisible();
+    await expect(card.getByRole("listitem").first()).toBeVisible();
+    await expect(page.getByText(/needs you/i)).toHaveCount(0);
+    await card.getByRole("link", { name: "Open To-do" }).click();
+    await expect(page).toHaveURL(/\/coordinate$/);
+    await expect(page.locator('[data-shell="top-nav"]').getByRole("link", { name: "To-do", exact: true })).toHaveAttribute("aria-current", "page");
+  });
+
+  test("deputies see the same pages without the staff controls", async ({ page, context }) => {
+    await signInAs(context, "deputy");
+    const id = await jobId(COORD.opsJob);
+    await page.goto(`/jobs/${id}?tab=manage`);
+    await expect(page.getByRole("heading", { level: 1, name: COORD.opsJob })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Detail sections" })).toHaveCount(0);
+    await expect(page.getByTestId("manage-detail")).toHaveCount(0);
+    await page.goto("/jobs?view=requests");
+    await expect(page.getByRole("navigation", { name: "Which details" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "New detail" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit selected" })).toHaveCount(0);
+    await expect(page.getByTestId("home-todo")).toHaveCount(0);
+  });
 });

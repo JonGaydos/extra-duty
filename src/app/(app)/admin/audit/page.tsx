@@ -106,6 +106,7 @@ export default async function AuditPage({ searchParams }: Readonly<Props>) {
             render: (r) => (
               <span className="flex flex-col">
                 <span>{r.entityType}</span>
+                {r.detailNumber === null ? null : <Link href={`/jobs/${r.detailNumber}`}>Detail #{r.detailNumber}</Link>}
                 {r.entityId ? (
                   <Link href={`/admin/audit?type=${encodeURIComponent(r.entityType)}&id=${encodeURIComponent(r.entityId)}`} className="text-xs break-all" aria-label={`History of ${r.entityType} ${r.entityId}`}>
                     {r.entityId}

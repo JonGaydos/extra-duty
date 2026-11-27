@@ -12,7 +12,7 @@ test("time edit that double-books the assigned deputy: the conflict shows and th
   const reason = "Drew leaves the gate early; the lot starts late";
 
   const coordinator = await session(agency.coordinator, { viewport: PHONE });
-  await coordinator.goto(`/coordinate/details/${first.id}`);
+  await coordinator.goto(`/jobs/${first.id}?tab=manage`);
   const form = coordinator.getByRole("form", { name: "Quick edit" });
   await form.getByLabel("End time").fill("22:30");
   await form.getByRole("button", { name: "Save changes" }).click();
@@ -20,7 +20,7 @@ test("time edit that double-books the assigned deputy: the conflict shows and th
   await test.step("the conflict is listed and nothing is saved", async () => {
     const conflicts = coordinator.getByTestId("quick-conflicts");
     await expect(conflicts).toContainText(`${agency.deputy.name} on #${first.number}`);
-    await expect(conflicts).toContainText(`Overlaps job #${second.number}`);
+    await expect(conflicts).toContainText(`Overlaps Detail #${second.number}`);
     expect((await one<{ end: string }>("select to_char(end_at at time zone 'America/Chicago', 'HH24:MI') as end from jobs where id = $1", [first.id])).end).toBe("21:00");
   });
 
@@ -37,6 +37,6 @@ test("time edit that double-books the assigned deputy: the conflict shows and th
   await test.step("the deputy is told the detail changed", async () => {
     const deputy = await session(agency.deputy, { viewport: DESKTOP });
     await deputy.goto("/alerts");
-    await expect(deputy.getByRole("main")).toContainText(`Detail changed: ${first.title}`);
+    await expect(deputy.getByRole("main")).toContainText(`Detail changed: #${first.number} ${first.title}`);
   });
 });

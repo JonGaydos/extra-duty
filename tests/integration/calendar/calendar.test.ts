@@ -173,6 +173,28 @@ describe("agency calendar", () => {
     expect(resolveFilters({}, await f.run((tx) => getFilterPrefs(p, tx)), { personal: true })).toEqual(saved);
   });
 
+  test("the Calendar and Map apply the For you filters like the List: one filter set for every view", async () => {
+    const f = await setupFixture(get().db, "cal9");
+    const flexOpen = await f.mkJob({ count: 1 });
+    const plain = await f.mkJob({ count: 1 });
+    const full = await f.mkJob({ count: 1 });
+    await get().db.update(jobs).set({ flexEarliestStartAt: new Date(flexOpen.job.startAt.getTime() - HOUR), flexLatestEndAt: new Date(flexOpen.job.endAt.getTime() + HOUR) }).where(eq(jobs.id, flexOpen.job.id));
+    const p = await f.person();
+    const other = await f.person();
+    await f.run((tx) => signUp(other, tx, full.positionId, { warningVersion: 1 }));
+    const base = { ...NO_FILTERS, vendorIds: [f.vendorId] };
+    const both = async (filters: Partial<typeof NO_FILTERS>) => {
+      const list = (await f.run((tx) => detailCards(p, tx, range, { ...base, ...filters }, NOW))).cards.map((c) => c.id).sort((a, b) => a.localeCompare(b));
+      const cal = (await f.run((tx) => calendarEntries(p, tx, range, { ...base, ...filters }, NOW))).entries.map((e) => e.id).sort((a, b) => a.localeCompare(b));
+      return { list, cal };
+    };
+    const sorted = (...ids: string[]) => ids.toSorted((a, b) => a.localeCompare(b));
+    expect(await both({ openOnly: true })).toEqual({ list: sorted(flexOpen.job.id, plain.job.id), cal: sorted(flexOpen.job.id, plain.job.id) });
+    expect(await both({ flex: true })).toEqual({ list: [flexOpen.job.id], cal: [flexOpen.job.id] });
+    expect(await both({ week: true })).toEqual({ list: [], cal: [] });
+    expect(await both({ workable: true })).toEqual({ list: sorted(flexOpen.job.id, plain.job.id, full.job.id), cal: sorted(flexOpen.job.id, plain.job.id, full.job.id) });
+  });
+
   test("My details only on the Details list also lists the person's canceled sign-ups with the reason", async () => {
     const f = await setupFixture(get().db, "cal8");
     const a = await f.mkJob({ count: 2 });

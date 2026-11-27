@@ -17,12 +17,12 @@ export type InvoiceEmailFields = {
 export function invoiceEmail(f: InvoiceEmailFields): OutgoingEmail {
   const revised = (f.revision ?? 0) > 0;
   const paragraphs = [
-    `${f.agencyName} is sending ${revised ? "revised " : ""}invoice ${f.invoiceNumber} for job #${f.jobNumber}, worked by ${f.payeeName}.`,
+    `${f.agencyName} is sending ${revised ? "revised " : ""}invoice ${f.invoiceNumber} for Detail #${f.jobNumber}, worked by ${f.payeeName}.`,
     ...(revised ? [`This is revision ${f.revision} and replaces any earlier copy.`] : []),
     `Amount due: ${f.total}. The invoice is attached as a PDF.`,
     ...(f.withW9 ? [`${f.payeeName}'s W-9 is attached.`] : []),
     `Reply to this message with any billing questions.`,
   ];
-  const msg = simpleEmail(f.to[0], `${revised ? "Revised invoice" : "Invoice"} ${f.invoiceNumber} for job #${f.jobNumber}`, paragraphs);
+  const msg = simpleEmail(f.to[0], `${revised ? "Revised invoice" : "Invoice"} ${f.invoiceNumber} for Detail #${f.jobNumber}`, paragraphs);
   return { ...msg, to: f.to, replyTo: f.replyTo };
 }

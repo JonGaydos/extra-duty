@@ -64,7 +64,7 @@ test("a coordinator-created detail this month is open for sign-up without any st
   const key = dayKey(1);
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Start time").fill("17:00");
@@ -93,7 +93,7 @@ test("Hold and Release now on the detail page, at phone size", async ({ page, co
   const id = await makeJob("Hold and release check", 30, { releaseInFuture: true });
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto(`/coordinate/details/${id}`);
+  await page.goto(`/jobs/${id}?tab=manage`);
   await expect(page.getByTestId("release-state")).toContainText("Opens");
   await page.getByRole("button", { name: "Hold", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Held." })).toBeVisible();
@@ -115,7 +115,7 @@ test("the new detail summary prices each date on its own times and adds position
   const year = agencyDateParts(new Date()).month === 12 ? agencyDateParts(new Date()).year + 1 : agencyDateParts(new Date()).year;
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });
   await page.getByLabel("Title", { exact: true }).fill("Summary per date check");
   await page.getByLabel("Start time").fill("09:00");
@@ -171,7 +171,7 @@ test("quick edit changes rate and times in place at phone size", async ({ page, 
   const id = await makeJob("Quick edit check", 12);
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto(`/coordinate/details/${id}`);
+  await page.goto(`/jobs/${id}?tab=manage`);
   const form = page.getByRole("form", { name: "Quick edit" });
   await form.getByLabel("Rate per hour").fill("75");
   await form.getByLabel("End time").fill("22:00");
@@ -195,7 +195,7 @@ test("bulk edit across two vendors with a preview, at phone size", async ({ page
   const [na, nb] = await Promise.all([a, b].map(async (id) => (await one<{ number: number }>("select number from jobs where id = $1", [id])).number));
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto("/coordinate/details?f=1&q=Bulk%20edit");
+  await page.goto("/jobs?f=1&q=Bulk%20edit");
   await page.getByRole("checkbox", { name: `Select #${na} Bulk edit first` }).check();
   await page.getByRole("checkbox", { name: `Select #${nb} Bulk edit second` }).check();
   await page.getByRole("button", { name: "Edit selected" }).click();
@@ -303,7 +303,7 @@ test("quick edit is closed on a detail that has started, and bulk edit flags it"
   await rows("update jobs set start_at = $2, end_at = $3 where id = $1", [id, new Date(start), new Date(now + 3 * 3_600_000)]);
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto(`/coordinate/details/${id}`);
+  await page.goto(`/jobs/${id}?tab=manage`);
   await expect(page.getByTestId("quick-edit-closed")).toHaveText("This detail has started. Quick edit is for details that have not started.");
   await expect(page.getByRole("form", { name: "Quick edit" })).toHaveCount(0);
   await page.goto("/calendar?view=list&f=1&q=Started%20quick");
@@ -325,13 +325,13 @@ test("a time edit that double-books a deputy lists the conflict and saves only w
   const secondNumber = (await one<{ number: number }>("select number from jobs where id = $1", [second])).number;
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto(`/coordinate/details/${first}`);
+  await page.goto(`/jobs/${first}?tab=manage`);
   const form = page.getByRole("form", { name: "Quick edit" });
   await form.getByLabel("End time").fill("22:30");
   await form.getByRole("button", { name: "Save changes" }).click();
   const conflicts = page.getByTestId("quick-conflicts");
   await expect(conflicts).toContainText(`${COORD.signed.name} on #`);
-  await expect(conflicts).toContainText(`Overlaps job #${secondNumber}`);
+  await expect(conflicts).toContainText(`Overlaps Detail #${secondNumber}`);
   expect((await one<{ end: string }>("select to_char(end_at at time zone 'America/Chicago', 'HH24:MI') as end from jobs where id = $1", [first])).end).toBe("21:00");
   // Changing the edit after confirming drops the override and hides the old list until the next save.
   await form.getByLabel("Save anyway: I confirm these deputies stay on with the conflicts above").check();
@@ -341,7 +341,7 @@ test("a time edit that double-books a deputy lists the conflict and saves only w
   await expect(form.getByRole("button", { name: "Save changes" })).toBeEnabled();
   await form.getByLabel("End time").fill("22:30");
   await form.getByRole("button", { name: "Save changes" }).click();
-  await expect(conflicts).toContainText(`Overlaps job #${secondNumber}`);
+  await expect(conflicts).toContainText(`Overlaps Detail #${secondNumber}`);
   await form.getByLabel("Save anyway: I confirm these deputies stay on with the conflicts above").check();
   await expect(form.getByRole("button", { name: "Save changes" })).toBeDisabled();
   await form.getByLabel("Reason for the override").fill("Riley leaves early; second detail starts late");
@@ -365,12 +365,12 @@ test("Edit detail offers the same conflict override for a date move", async ({ p
   }
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto(`/coordinate/details/${first}`);
+  await page.goto(`/jobs/${first}?tab=manage`);
   await page.getByRole("button", { name: "Edit detail" }).click();
   const editor = page.getByRole("form", { name: "Edit detail" });
   await editor.getByLabel("Date").fill(dayKey(12));
   await editor.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByTestId("edit-conflicts")).toContainText("Overlaps job #");
+  await expect(page.getByTestId("edit-conflicts")).toContainText("Overlaps Detail #");
   await editor.getByLabel("Save anyway: I confirm these deputies stay on with the conflicts above").check();
   await editor.getByLabel("Reason for the override").fill("Two halves of one event");
   await expectNoSeriousA11yIssues(page);
@@ -387,7 +387,7 @@ test("a bulk save refused after the preview drops the stale preview and asks for
   const [na, nb] = await Promise.all([a, b].map(async (id) => (await one<{ number: number }>("select number from jobs where id = $1", [id])).number));
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto("/coordinate/details?f=1&q=Stale%20preview");
+  await page.goto("/jobs?f=1&q=Stale%20preview");
   await page.getByRole("checkbox", { name: `Select #${na} Stale preview first` }).check();
   await page.getByRole("checkbox", { name: `Select #${nb} Stale preview second` }).check();
   await page.getByRole("button", { name: "Edit selected" }).click();

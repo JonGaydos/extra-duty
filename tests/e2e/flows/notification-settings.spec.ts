@@ -22,7 +22,7 @@ test("vendor email off for Detail canceled: no vendor email on a staff cancel, t
     await expect(vendorSwitch).toHaveAttribute("aria-checked", "false");
     await expect(admin.getByRole("switch", { name: "Email to deputies and personnel: Detail canceled" })).toHaveAttribute("aria-checked", "true");
 
-    await coordinator.goto(`/coordinate/details/${job.id}`);
+    await coordinator.goto(`/jobs/${job.id}?tab=manage`);
     await coordinator.getByRole("button", { name: "Cancel detail" }).click();
     await coordinator.getByLabel("Reason", { exact: true }).fill("Lot closed for paving");
     const since = mail.mark();

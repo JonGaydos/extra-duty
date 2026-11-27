@@ -41,7 +41,7 @@ export function FactsCard({ d, staff, showWatch }: Readonly<{ d: JobPageData; st
             {c.text}
           </Chip>
         ))}
-        <Chip>#{card.number}</Chip>
+        <Chip>Detail #{card.number}</Chip>
       </div>
       <div className="flex flex-col gap-1">
         <h1 className="m-0 text-2xl font-bold md:text-3xl">{job.title}</h1>

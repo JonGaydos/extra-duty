@@ -12,28 +12,29 @@ export type NavItem = {
 export type ShellNav = {
   /** Where "/" sends this role. */
   home: string;
-  /** Desktop top nav: every section of the role's own work. */
+  /** Desktop top nav: the role's sections. Deputies, coordinators and admins share the same list. */
   desktop: NavItem[];
   /**
-   * Coordinators and admins only: their own work as a deputy (home, sign-ups, billing, profile), grouped apart at the
-   * right of the desktop bar. Empty for roles whose sections are already their own work.
+   * Coordinators and admins only: their staff sections, after the shared ones and set apart by a separator on the
+   * desktop bar, and in their own group on More. Empty for every other role.
    */
-  personal: NavItem[];
+  staff: NavItem[];
   /** Phone tab bar: at most five, the last is More when sections do not fit. */
   phone: NavItem[];
-  /** Listed on the More page. */
+  /** Listed on the More page (the staff sections follow in their own group). */
   more: NavItem[];
 };
 
 const PROFILE: NavItem = { label: "Profile", href: "/profile", icon: "user" };
 const MORE: NavItem = { label: "More", href: "/more", icon: "more" };
-/** The user manuals (/help): on the More page for roles that have one; deputies reach it from Profile. */
+/** The user manuals (/help), on the More page. */
 const HELP: NavItem = { label: "Help", href: "/help", icon: "help" };
 
 const MAP: NavItem = { label: "Map", href: "/map", icon: "map" };
 const MESSAGES: NavItem = { label: "Messages", href: "/messages", icon: "mail" };
 
-const PERSONNEL: NavItem[] = [
+/** The tabs everyone but vendors shares, in this order. */
+const SHARED: NavItem[] = [
   { label: "Home", href: "/home", icon: "home" },
   { label: "Details", href: "/jobs", icon: "details" },
   { label: "Calendar", href: "/calendar", icon: "calendar" },
@@ -41,23 +42,16 @@ const PERSONNEL: NavItem[] = [
   MESSAGES,
   PROFILE,
 ];
+/** The shared phone tabs; More holds the rest. */
+const SHARED_PHONE: NavItem[] = [...SHARED.filter((i) => i !== MESSAGES && i !== PROFILE), MORE];
+const SHARED_MORE: NavItem[] = [MAP, MESSAGES, PROFILE, HELP];
 
-/** A coordinator's or admin's own work as a deputy: everything a deputy has, so staff never miss a deputy screen. */
-const PERSONAL: NavItem[] = [
-  { label: "My work", href: "/home", icon: "home" },
-  { label: "Open details", href: "/jobs", icon: "details" },
-  { label: "My billing", href: "/billing", icon: "receipt" },
-  PROFILE,
-];
-
-const COORDINATOR: NavItem[] = [
+/** What coordinators and admins have on top of the shared tabs. */
+const STAFF: NavItem[] = [
   { label: "To-do", href: "/coordinate", icon: "todo" },
-  { label: "Details", href: "/coordinate/details", icon: "details" },
-  { label: "Calendar", href: "/calendar", icon: "calendar" },
-  { label: "Vendors", href: "/coordinate/vendors", icon: "building" },
   { label: "Payments", href: "/coordinate/payments", icon: "receipt" },
+  { label: "Vendors", href: "/coordinate/vendors", icon: "building" },
   { label: "Reports", href: "/coordinate/reports", icon: "chart" },
-  MESSAGES,
   { label: "Management", href: "/admin", icon: "sliders" },
 ];
 
@@ -72,15 +66,7 @@ const VENDOR: NavItem[] = [
 function build(desktop: NavItem[], phoneLabels: string[]): ShellNav {
   const phone = desktop.filter((i) => phoneLabels.includes(i.label));
   const more = [...desktop.filter((i) => !phone.includes(i)), PROFILE, HELP];
-  return { home: desktop[0].href, desktop, personal: [], phone: [...phone, MORE], more };
-}
-
-/** Staff: their own sections, then their personal items (and Map, which deputies reach from More) on More. */
-function buildStaff(desktop: NavItem[]): ShellNav {
-  const phone = desktop.filter((i) => ["To-do", "Details", "Calendar", "Messages"].includes(i.label));
-  const personalOnMore = PERSONAL.filter((i) => i !== PROFILE);
-  const more = [...desktop.filter((i) => !phone.includes(i)), ...personalOnMore, MAP, PROFILE, HELP];
-  return { home: desktop[0].href, desktop, personal: PERSONAL, phone: [...phone, MORE], more };
+  return { home: desktop[0].href, desktop, staff: [], phone: [...phone, MORE], more };
 }
 
 /** Staff see the Outbox where email is kept instead of sent (training mode and staging). */
@@ -89,16 +75,10 @@ const OUTBOX: NavItem = { label: "Outbox", href: "/coordinate/outbox", icon: "ma
 export function navFor(role: Role, opts: { outbox?: boolean } = {}): ShellNav {
   switch (role) {
     case "personnel":
-      return {
-        home: "/home",
-        desktop: PERSONNEL,
-        personal: [],
-        phone: [...PERSONNEL.filter((i) => i !== MESSAGES && i !== PROFILE), MORE],
-        more: [MAP, MESSAGES, PROFILE, HELP],
-      };
+      return { home: "/home", desktop: SHARED, staff: [], phone: SHARED_PHONE, more: SHARED_MORE };
     case "coordinator":
     case "admin":
-      return buildStaff(opts.outbox ? [...COORDINATOR, OUTBOX] : COORDINATOR);
+      return { home: "/home", desktop: SHARED, staff: opts.outbox ? [...STAFF, OUTBOX] : STAFF, phone: SHARED_PHONE, more: SHARED_MORE };
     case "vendor":
       return build(VENDOR, ["My details", "Request a detail", "Invoices", "Locations"]);
   }
@@ -111,7 +91,7 @@ export function navFor(role: Role, opts: { outbox?: boolean } = {}): ShellNav {
  * bar marks More.
  */
 export function currentTab(nav: ShellNav, pathname: string): string | undefined {
-  const section = activeHref([...nav.desktop, ...nav.more, PROFILE, MORE, HELP], pathname);
+  const section = activeHref([...nav.desktop, ...nav.staff, ...nav.more, PROFILE, MORE, HELP], pathname);
   if (!section) return undefined;
   if (nav.phone.some((i) => i.href === section)) return section;
   return nav.phone.some((i) => i.href === MORE.href) ? MORE.href : undefined;

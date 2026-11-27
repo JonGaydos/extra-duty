@@ -3,7 +3,7 @@ import { withTx } from "@/ui/shell/request";
 import { accessReviewOverview, flagOverview, userDirectory } from "@/domain/admin/views";
 import { listSeasons } from "@/domain/caps/seasons";
 import { listJobTypes, listNotePresets, listPaymentMethods, listPositionTypes, listVendorTypes } from "@/domain/jobs/job-types";
-import { listRanks } from "@/domain/ranks/ranks";
+import { ladderHighestFirst, listRanks } from "@/domain/ranks/ranks";
 import { getSettings } from "@/domain/settings/settings";
 import { emailConfigProblem } from "@/lib/email/provider";
 import { Chip } from "@/ui/components/Chip";
@@ -66,7 +66,7 @@ export default async function ManagementPage() {
   const { settings: s, users, flags, review, ranks, seasons, counts } = data;
   const active = users.filter((u) => u.active);
   const suspended = active.filter((u) => u.suspended).length;
-  const ladder = ranks.filter((r) => r.active && r.inLadder).map((r) => r.name);
+  const ladder = ladderHighestFirst(ranks).filter((r) => r.active).map((r) => r.name);
   const outside = ranks.filter((r) => r.active && !r.inLadder).map((r) => r.name);
   const reviewers = s.opsPlanReviewerUserIds.length;
   const offSwitches = Object.values(s.notificationChannels).flatMap((g) => Object.values(g ?? {}).flatMap((c) => Object.values(c ?? {}))).filter((on) => on === false).length;

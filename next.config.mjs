@@ -9,6 +9,15 @@ const nextConfig = {
     // forbidden(): System screens and actions answer coordinators with a real 403.
     authInterrupts: true,
   },
+  // Old staff paths, still in emails and alerts already sent, open the shared Details pages. The query string comes
+  // along; the browser keeps the #section.
+  async redirects() {
+    return [
+      { source: "/coordinate/details", destination: "/jobs", permanent: false },
+      { source: "/coordinate/details/new", destination: "/jobs/new", permanent: false },
+      { source: "/coordinate/details/:id", destination: "/jobs/:id?tab=manage", permanent: false },
+    ];
+  },
   // On every response: no other site may frame the app (one-click actions would be open to clickjacking), no
   // content sniffing, and only the origin (never the full URL) in the Referer to other sites. Map tile servers require
   // that origin, so the Referer is not dropped altogether. HSTS comes from Caddy's HTTPS site only,

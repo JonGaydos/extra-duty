@@ -22,7 +22,7 @@ test("an unbilled detail blocks sign-up until it is billed", async ({ agency, se
     await clock.tick("unbilled-reminders");
     await clock.deliver();
     const reminder = await mail.waitFor({ to: casey.email, subject: "1 item needs your attention", since });
-    expect(reminder.text).toContain(`Bill job #${worked.number}, ${workedTitle}`);
+    expect(reminder.text).toContain(`Bill Detail #${worked.number}, ${workedTitle}`);
   });
 
   await test.step("the deputy cannot sign up for another detail", async () => {

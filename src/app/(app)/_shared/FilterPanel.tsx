@@ -44,10 +44,6 @@ function Group({ legend, name, options, picked }: Readonly<{ legend: string; nam
   );
 }
 
-/**
- * The shared filter panel for the Calendar and the Details list: a left column on desktop, a Filters sheet on
- * phones. Apply and Reset change only the viewer's own view; Remember keeps the filters for them alone.
- */
 const SORTS: Array<[DetailFilters["sort"], string]> = [
   ["date", "Date"],
   ["total_pay", "Total pay"],
@@ -55,7 +51,12 @@ const SORTS: Array<[DetailFilters["sort"], string]> = [
   ["vendor", "Vendor"],
 ];
 
-export function FilterPanel({ path, keep, filters, options, remember, active, staff, personal }: Readonly<{ path: string; keep: Record<string, string>; filters: DetailFilters; options: FilterOptions; remember: boolean; active: number; staff: boolean; personal?: { scheduleNote: string } }>) {
+/**
+ * The one filter panel for the Details List, Calendar and Map: a left column on desktop, a Filters sheet on phones.
+ * Every view shows the same filters and they travel in the address between views; Sort by applies to the List only.
+ * Apply and Reset change only the viewer's own view; Remember keeps one set for them alone, for every view.
+ */
+export function FilterPanel({ path, keep, filters, options, remember, active, staff, scheduleNote, sort = false }: Readonly<{ path: string; keep: Record<string, string>; filters: DetailFilters; options: FilterOptions; remember: boolean; active: number; staff: boolean; scheduleNote: string; sort?: boolean }>) {
   const [open, setOpen] = useState(false);
   return (
     <aside aria-label="Filters" className="flex flex-col gap-2">
@@ -70,48 +71,51 @@ export function FilterPanel({ path, keep, filters, options, remember, active, st
           <form action={applyFiltersAction} className="flex flex-col gap-3">
             <h2 className="m-0 text-title font-semibold md:text-base">Filters</h2>
             <input type="hidden" name="path" value={path} />
-            {personal ? <input type="hidden" name="personal" value="1" /> : null}
+            <input type="hidden" name="personal" value="1" />
             {Object.entries(keep).map(([k, v]) => (
               <input key={k} type="hidden" name={`keep_${k}`} value={v} />
             ))}
             <FormField label="Search">
               <Input name="q" defaultValue={filters.q} placeholder="Title, vendor or place" maxLength={100} />
             </FormField>
-            <FormField label="Job number">
+            <FormField label="Detail number">
               <Input name="num" defaultValue={filters.jobNumber ?? ""} inputMode="numeric" placeholder="1234" />
             </FormField>
             <label className="flex min-h-11 items-center gap-2 text-sm font-medium">
               <input type="checkbox" name="mine" value="1" defaultChecked={filters.mine} className={box} />My details only
             </label>
-            {personal ? (
-              <fieldset className="m-0 flex flex-col border-0 p-0">
-                <legend className="mb-1 text-sm font-medium text-muted">For you</legend>
-                <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="open" value="1" defaultChecked={filters.openOnly} className={box} />Open spots only
-                </label>
-                <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="week" value="1" defaultChecked={filters.week} className={box} />This week
-                </label>
-                <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="flex" value="1" defaultChecked={filters.flex} className={box} />Flexible times
-                </label>
-                <label className="flex min-h-10 items-start gap-2 py-1.5 text-sm pointer-coarse:min-h-11">
-                  <input type="checkbox" name="workable" value="1" defaultChecked={filters.workable} className={`${box} mt-0.5`} />
-                  <span className="flex flex-col">
-                    Only details I can work<span className="text-xs text-muted">{personal.scheduleNote}</span>
-                  </span>
-                </label>
-                <FormField label="Sort by">
-                  <Select name="sort" defaultValue={filters.sort}>
-                    {SORTS.map(([v, label]) => (
-                      <option key={v} value={v}>
-                        {label}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
+            <fieldset className="m-0 flex flex-col border-0 p-0">
+              <legend className="mb-1 text-sm font-medium text-muted">For you</legend>
+              <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
+                <input type="checkbox" name="open" value="1" defaultChecked={filters.openOnly} className={box} />Open spots only
+              </label>
+              <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
+                <input type="checkbox" name="week" value="1" defaultChecked={filters.week} className={box} />This week
+              </label>
+              <label className="flex min-h-10 items-center gap-2 text-sm pointer-coarse:min-h-11">
+                <input type="checkbox" name="flex" value="1" defaultChecked={filters.flex} className={box} />Flexible times
+              </label>
+              <label className="flex min-h-10 items-start gap-2 py-1.5 text-sm pointer-coarse:min-h-11">
+                <input type="checkbox" name="workable" value="1" defaultChecked={filters.workable} className={`${box} mt-0.5`} />
+                <span className="flex flex-col">
+                  Only details I can work<span className="text-xs text-muted">{scheduleNote}</span>
+                </span>
+              </label>
               </fieldset>
-            ) : null}
+            {sort ? (
+              <FormField label="Sort by">
+                <Select name="sort" defaultValue={filters.sort}>
+                  {SORTS.map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            ) : (
+              // Sort by belongs to the List; the other views keep it for when the person goes back there.
+              <input type="hidden" name="sort" value={filters.sort} />
+            )}
             <fieldset className="m-0 flex flex-col border-0 p-0">
               <legend className="mb-1 text-sm font-medium text-muted">Status</legend>
               <div className="grid grid-cols-2 gap-x-2">

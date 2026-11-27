@@ -25,15 +25,15 @@ import {
   saveSafetyAction,
   updateDetailAction,
   waiveLateCancelAction,
-} from "../../_coordinator/actions";
-import { DatesStep } from "../../_coordinator/DatesStep";
-import { SafetyAddressFields, safetyRows, safetyWire, type SafetyAddressWire } from "../../_coordinator/DetailFields";
-import type { DetailWire } from "../../_coordinator/detail-input";
-import { RateRangeNotice, typedCents } from "../../_coordinator/RateRangeNotice";
-import { useCoordAction } from "../../_coordinator/status";
-import { SiteContactFields } from "../../_coordinator/SiteContactFields";
-import { ConflictOverride, PositionsEditor } from "../../_coordinator/EditPanel";
-import { clearsConflicts, useConflictGuard } from "../../_coordinator/conflict-guard";
+} from "../../../coordinate/_coordinator/actions";
+import { DatesStep } from "../../../coordinate/_coordinator/DatesStep";
+import { SafetyAddressFields, safetyRows, safetyWire, type SafetyAddressWire } from "../../../coordinate/_coordinator/DetailFields";
+import type { DetailWire } from "../../../coordinate/_coordinator/detail-input";
+import { RateRangeNotice, typedCents } from "../../../coordinate/_coordinator/RateRangeNotice";
+import { useCoordAction } from "../../../coordinate/_coordinator/status";
+import { SiteContactFields } from "../../../coordinate/_coordinator/SiteContactFields";
+import { ConflictOverride, PositionsEditor } from "../../../coordinate/_coordinator/EditPanel";
+import { clearsConflicts, useConflictGuard } from "../../../coordinate/_coordinator/conflict-guard";
 
 const check = "size-4.5 accent-accent";
 
@@ -448,7 +448,7 @@ export function CopyDetail({ jobId, today, weekStartsOn }: Readonly<{ jobId: str
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => copyDetailAction({ jobId, dates }), (r) => r.value && router.push(`/coordinate/details/${r.value}`), { refresh: false });
+        run(() => copyDetailAction({ jobId, dates }), (r) => r.value && router.push(`/jobs/${r.value}?tab=manage`), { refresh: false });
       }}
     >
       <DatesStep today={today} weekStartsOn={weekStartsOn} onDates={setDates} modes={["pick", "range"]} initial="pick" minDate={today} />
@@ -460,7 +460,7 @@ export function CopyDetail({ jobId, today, weekStartsOn }: Readonly<{ jobId: str
         <Button type="submit" busy={busy} disabled={dates.length === 0}>
           {dates.length > 1 ? `Make ${dates.length} copies` : "Make copy"}
         </Button>
-        <ButtonLink href={`/coordinate/details/new?from=${jobId}`} variant="secondary">
+        <ButtonLink href={`/jobs/new?from=${jobId}`} variant="secondary">
           Copy and change details
         </ButtonLink>
       </div>

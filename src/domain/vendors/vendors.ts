@@ -198,7 +198,7 @@ export async function listVendors(actor: Actor, tx: Tx, filter: VendorFilter = {
 async function alertLockChange(tx: Tx, vendor: Vendor, type: "job.locked" | "job.unlocked", title: string, body: string, startAfter: Date = new Date()): Promise<void> {
   // Sequential: alert writes in this transaction.
   for (const job of await currentJobsOf(tx, vendor.id, startAfter, new Date())) {
-    await emit(tx, { recipients: await jobAudience(tx, job), type, title: `${title}: ${job.title}`, body, link: `/jobs/${job.id}` });
+    await emit(tx, { recipients: await jobAudience(tx, job), type, title: `${title}: #${job.number} ${job.title}`, body, link: `/jobs/${job.id}` });
   }
 }
 

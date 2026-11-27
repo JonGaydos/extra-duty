@@ -105,7 +105,7 @@ test("a safety address pin can be dragged, and the stored point overrides the lo
   const [job] = await rows<{ id: string }>("select id from jobs where title = $1 order by start_at limit 1", [COORD.opsJob]);
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
-  await page.goto(`/coordinate/details/${job.id}`);
+  await page.goto(`/jobs/${job.id}?tab=manage`);
   await page.getByRole("button", { name: /(Add|Edit) officer safety/ }).click();
   const form = page.getByRole("form", { name: "Officer safety" });
   await form.getByRole("button", { name: /Add (an|another) address/ }).click();
@@ -134,4 +134,45 @@ test("a safety address pin can be dragged, and the stored point overrides the lo
   // Strictly below and above the looked-up point, so the pin moved.
   expect(saved.lat).toBeLessThan(29.4987);
   expect(saved.lng).toBeGreaterThan(-82.1361);
+});
+
+test("an embedded map zooms with Ctrl + wheel, and with a plain wheel only after a click into it", async ({ page, context }) => {
+  await signInAs(context, "vendor");
+  // Short, so the page has room to scroll past the form.
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await newLocation(page, "Wheel test lot", "12615 US-1 Pine Harbor");
+  await page.getByRole("button", { name: "Use suggested" }).click();
+  const map = page.getByTestId("pin-map");
+  await expect(map).toHaveAttribute("data-zoom", /\d+/);
+  const height = (await map.boundingBox())!.height;
+  expect(height, "the map is tall enough to place a pin").toBeGreaterThanOrEqual(360);
+  await map.scrollIntoViewIfNeeded();
+  const box = (await map.boundingBox())!;
+  // Near the top edge, clear of the pin.
+  await page.mouse.move(box.x + 40, box.y + 40);
+  const zoom = async () => Number(await map.getAttribute("data-zoom"));
+  const start = await zoom();
+
+  // A plain wheel scrolls the page, not the map, and shows the hint.
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 200);
+  await expect(page.getByTestId("wheel-hint")).toHaveAttribute("data-visible", "true");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
+  expect(await zoom()).toBe(start);
+
+  // Ctrl + wheel zooms the map.
+  const at = (await map.boundingBox())!;
+  await page.mouse.move(at.x + 40, at.y + 40);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -200);
+  await page.keyboard.up("Control");
+  await expect.poll(zoom).toBeGreaterThan(start);
+
+  // After a click into the map (here on the pin, which leaves it where it is), a plain wheel zooms too.
+  const settled = await zoom();
+  await map.locator(".ed-pin-label").click();
+  expect(await zoom()).toBe(settled);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(zoom).toBeLessThan(settled);
+  await expectNoSeriousA11yIssues(page);
 });

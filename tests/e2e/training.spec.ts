@@ -58,7 +58,7 @@ test("a coordinator practices as a deputy: every page shows the banner, invoice 
   expect(text).toContain("TRAINING");
 
   await backToLive(page);
-  await expect(page).toHaveURL(/\/coordinate$/);
+  await expect(page).toHaveURL(/\/home$/);
   // The training invoice does not exist in live.
   expect((await page.request.get(`/api/v1/invoices/${invoiceId}/pdf`)).status()).toBe(404);
 });
@@ -68,7 +68,7 @@ test("practicing as a coordinator: every staff page shows the banner, and the Ou
   await startTraining(page, "Coordinator");
   await everyPageHasBanner(
     page,
-    ["/coordinate", "/coordinate/details", "/calendar", "/coordinate/vendors", "/coordinate/payments", "/coordinate/reports", "/coordinate/ops-plans", "/coordinate/send-invoices", "/messages", "/admin", "/coordinate/outbox"],
+    ["/home", "/coordinate", "/jobs", "/jobs/new", "/calendar", "/coordinate/vendors", "/coordinate/payments", "/coordinate/reports", "/coordinate/ops-plans", "/coordinate/send-invoices", "/messages", "/admin", "/coordinate/outbox"],
     "Coordinator",
   );
   await expect(page.getByRole("heading", { name: "Outbox", level: 1 })).toBeVisible();

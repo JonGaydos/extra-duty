@@ -82,7 +82,7 @@ function LeftOpenWork({ rec }: Readonly<{ rec: UserRec }>) {
               <Row
                 key={b.assignmentId}
                 title={`#${b.jobNumber} ${b.vendorName}`}
-                href={`/coordinate/details/${b.jobId}`}
+                href={`/jobs/${b.jobId}?tab=manage`}
                 meta={`${dayLabel(b.startAt)}${b.lateCancel ? ". Late cancel pay" : ""}`}
                 actions={
                   <>

@@ -3,6 +3,7 @@ import type { JobCard } from "@/domain/personnel/views";
 import { Chip } from "@/ui/components/Chip";
 import { MapsLink } from "@/ui/components/MapsLink";
 import { PayLabel } from "@/ui/components/PayLabel";
+import { detailTitle } from "@/domain/jobs/detail-name";
 import { dateTime, hoursText, plural, whenText } from "./format";
 
 /** The status words for a job card, each with its tone. Color always comes with words. */
@@ -32,39 +33,83 @@ function openText(c: JobCard): string {
   return `${plural(c.openSpots, "spot")} left`;
 }
 
+export type RowChip = { tone: "success" | "warning" | "danger" | "attention" | "info" | "neutral" | "coordinator"; text: string };
+
+/** What a detail row shows, worked out on the server so the same row draws in server and client lists. */
+export type RowView = {
+  id: string;
+  href: string;
+  /** The vendor, as the row's linked title. */
+  heading: string;
+  /** The detail's title (staff also see its number). */
+  sub: string;
+  /** When, how long and where, in words. */
+  when: string;
+  pay: { totalCents: number; rateCents: number; maxTotalCents: number; maxRateCents: number };
+  chips: RowChip[];
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+/** A job card as a row, named "#9 Title" for everyone. */
+export function cardRow(card: JobCard, now: Date): RowView {
+  const where = card.locationName ? `, ${card.locationName}` : "";
+  const opens = card.availability === "not_released" && card.releaseAt ? `, opens ${dateTime(card.releaseAt)}` : "";
+  return {
+    id: card.id,
+    href: `/jobs/${card.number}`,
+    heading: card.vendorName,
+    sub: detailTitle(card),
+    when: `${whenText(card.startAt, card.endAt, now)}, ${hoursText(card.minutes)}${where}${opens}`,
+    pay: { totalCents: card.totalCents, rateCents: card.rateCents, maxTotalCents: card.maxTotalCents, maxRateCents: card.maxRateCents },
+    chips: jobChips(card),
+    address: card.address,
+    lat: card.lat,
+    lng: card.lng,
+  };
+}
+
 /**
- * One detail in a list: vendor, when and where, pay, and its status in words. The whole row is the link to
- * the detail page.
+ * One detail in a list: vendor, when and where, pay, and its status in words. The whole row is the link to the
+ * detail page. `note` is a muted line under the when (staff: why bulk edit cannot change it).
  */
-export function JobRow({ card, now, extra }: Readonly<{ card: JobCard; now: Date; extra?: React.ReactNode }>) {
-  const chips = jobChips(card);
+export function DetailRowBody({ row, extra, note }: Readonly<{ row: RowView; extra?: React.ReactNode; note?: string | null }>) {
   return (
-    <div className="flex flex-col gap-2 px-4 py-3.25">
-      <Link href={`/jobs/${card.id}`} data-card-link className="group flex flex-col gap-1.5 text-ink no-underline hover:text-ink">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <Link href={row.href} data-card-link className="group flex flex-col gap-1.5 text-ink no-underline hover:text-ink">
         <span className="flex items-start justify-between gap-3">
           <span className="flex min-w-0 flex-col">
-            <span className="font-semibold underline decoration-current/50 decoration-1 underline-offset-3 group-hover:decoration-current group-hover:decoration-2">{card.vendorName}</span>
-            <span className="text-sm text-muted">{card.title}</span>
+            <span className="font-semibold underline decoration-current/50 decoration-1 underline-offset-3 group-hover:decoration-current group-hover:decoration-2">{row.heading}</span>
+            <span className="text-sm text-muted">{row.sub}</span>
           </span>
-          <PayLabel totalCents={card.totalCents} rateCents={card.rateCents} upTo={{ totalCents: card.maxTotalCents, rateCents: card.maxRateCents }} />
+          <PayLabel totalCents={row.pay.totalCents} rateCents={row.pay.rateCents} upTo={{ totalCents: row.pay.maxTotalCents, rateCents: row.pay.maxRateCents }} />
         </span>
         <span className="text-sm text-muted" data-numeric>
-          {whenText(card.startAt, card.endAt, now)}, {hoursText(card.minutes)}
-          {card.locationName ? `, ${card.locationName}` : ""}
-          {card.availability === "not_released" && card.releaseAt ? `, opens ${dateTime(card.releaseAt)}` : ""}
+          {row.when}
         </span>
+        {note ? <span className="text-xs font-medium text-muted">Not editable: {note}</span> : null}
       </Link>
-      {chips.length > 0 || extra || card.address ? (
+      {row.chips.length > 0 || extra || row.address ? (
         <span className="flex flex-wrap items-center gap-1.5">
-          {chips.map((c) => (
+          {row.chips.map((c) => (
             <Chip key={c.text} tone={c.tone}>
               {c.text}
             </Chip>
           ))}
           {extra}
-          {card.address ? <MapsLink address={card.address} lat={card.lat} lng={card.lng} className="ml-auto" /> : null}
+          {row.address ? <MapsLink address={row.address} lat={row.lat} lng={row.lng} className="ml-auto" /> : null}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+/** A job card in a list, as everyone sees it. */
+export function JobRow({ card, now, extra }: Readonly<{ card: JobCard; now: Date; extra?: React.ReactNode }>) {
+  return (
+    <div className="flex px-4 py-3.25">
+      <DetailRowBody row={cardRow(card, now)} extra={extra} />
     </div>
   );
 }

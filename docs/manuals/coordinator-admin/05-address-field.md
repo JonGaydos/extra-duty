@@ -10,4 +10,5 @@ Addresses are checked against OpenStreetMap when you leave the field. The check 
 
    ![An address field with its map](../images/coordinator-admin/05-address-field-1-desktop.webp)
 
-3. For a location or an officer safety address, a small map shows the pin. Drag the pin, tap the map, or use the arrow keys to put it exactly on the spot. A pin placed by hand is used instead of the lookup.
+3. For a location or an officer safety address, a map shows the pin. Drag the pin, tap the map, or use the arrow keys to put it exactly on the spot. A pin placed by hand is used instead of the lookup.
+4. To zoom the map, use its + and - buttons, pinch on a phone, or hold Ctrl (Cmd on a Mac) while you scroll. A plain scroll keeps moving the page until you click into the map.

@@ -545,7 +545,7 @@ async function shortTimeProblems(
 async function declineShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect, reason: string, now: Date): Promise<void> {
   const [after] = await tx.update(assignments).set({ status: "canceled", removalReason: reason, updatedAt: now }).where(eq(assignments.id, a.id)).returning();
   await recordAudit(tx, { actor: "system", action: "assignment.short_declined", entityType: "assignment", entityId: a.id, before: a, after, reason });
-  await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: ${job.title}`, body: reason, link: `/jobs/${job.id}` });
+  await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: #${job.number} ${job.title}`, body: reason, link: `/jobs/${job.id}` });
 }
 
 async function confirmShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect, now: Date): Promise<void> {
@@ -553,7 +553,7 @@ async function confirmShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect
   await recordAudit(tx, { actor: "system", action: "assignment.short_confirmed", entityType: "assignment", entityId: a.id, before: a, after });
   await emit(tx, { recipients: [a.userId],
     type: "signup.short_confirmed",
-    title: `Shorter shift confirmed: ${job.title}`,
+    title: `Shorter shift confirmed: #${job.number} ${job.title}`,
     body: "Your shorter shift is confirmed.",
     link: `/jobs/${job.id}`,
   });

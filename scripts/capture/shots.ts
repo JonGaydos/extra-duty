@@ -155,7 +155,8 @@ deputy("08-calendar", 2, B, visit("/calendar"), { target: (page) => main(page).g
 deputy("09-map", 1, B, visit("/map"));
 deputy("09-map", 2, B, async (page) => {
   await page.goto("/map");
-  await main(page).getByRole("region", { name: "Map of details" }).getByRole("button").first().click();
+  // A pin, not a zoom button; Leaflet listens for the click on the pin itself, wherever the map placed it.
+  await main(page).getByRole("region", { name: "Map of details" }).locator(".leaflet-marker-icon").first().dispatchEvent("click");
 });
 
 deputy("10-open-in-maps", 1, B, async (page) => {
@@ -342,28 +343,29 @@ vendor("08-downloading-contracts-and-invoices", 1, B, visit("/vendor/contracts")
 
 const signedUpDetail = (page: Page, ctx: ShotCtx) =>
   one<{ id: string }>(ctx, "select j.id from jobs j where j.start_at > now() + interval '1 day' and j.state = 'scheduled' and exists (select 1 from assignments a where a.job_id = j.id and a.status = 'signed_up') order by j.start_at limit 1").then((r) =>
-    page.goto(`/coordinate/details/${r.id}`),
+    page.goto(`/jobs/${r.id}?tab=manage`),
   );
 
 coord("01-to-do", 1, D, visit("/coordinate"));
-coord("01-to-do", 2, P, visit("/coordinate"));
+coord("01-to-do", 2, P, visit("/more"));
+coord("01-to-do", 3, D, visit("/home"));
 
-coord("02-creating-details", 1, D, visit("/coordinate/details/new"));
+coord("02-creating-details", 1, D, visit("/jobs/new"));
 coord("02-creating-details", 2, D, async (page) => {
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await main(page).getByRole("tab", { name: "Pick dates" }).click();
   await main(page).getByLabel("Flexible times").check();
 }, { target: card("When") });
 coord("02-creating-details", 3, D, async (page) => {
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await main(page).getByRole("tab", { name: "Repeat" }).click();
 }, { target: card("When") });
-coord("02-creating-details", 4, D, visit("/coordinate/details/new"), { target: card("Positions") });
+coord("02-creating-details", 4, D, visit("/jobs/new"), { target: card("Positions") });
 coord("02-creating-details", 5, D, async (page) => {
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   await main(page).getByRole("button", { name: "Add an address" }).click();
 }, { target: card("Officer safety (optional)") });
-coord("02-creating-details", 6, D, visit("/coordinate/details/new"), { target: card("Ops plan and release") });
+coord("02-creating-details", 6, D, visit("/jobs/new"), { target: card("Ops plan and release") });
 coord("02-creating-details", 7, D, async (page, ctx) => {
   await signedUpDetail(page, ctx);
   await top(main(page).getByRole("button", { name: /^Make (copy|\d+ copies)$/ }).locator("xpath=ancestor::form[1]"));
@@ -392,7 +394,7 @@ coord("05-address-field", 1, D, async (page) => {
 
 coord("06-site-contacts", 1, D, (page) => first(page, "/coordinate/vendors", "/coordinate/vendors/0"), { target: region(/^Site contacts/) });
 coord("06-site-contacts", 2, D, async (page) => {
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   const vendorSelect = main(page).getByLabel("Vendor");
   await vendorSelect.selectOption({ index: 1 });
   // The vendor's contacts are offered once a vendor is chosen.
@@ -412,7 +414,7 @@ coord("08-quick-and-bulk-edit", 3, D, async (page, ctx) => {
   await top(main(page).getByRole("heading", { name: "Edit detail" }));
 }, { stagingOnly: true });
 coord("08-quick-and-bulk-edit", 2, D, async (page) => {
-  await page.goto("/coordinate/details");
+  await page.goto("/jobs");
   const boxes = main(page).getByRole("checkbox", { name: /^Select (?!all)/ });
   await boxes.nth(0).check();
   await boxes.nth(1).check();
@@ -422,10 +424,10 @@ coord("08-quick-and-bulk-edit", 2, D, async (page) => {
 
 coord("10-hold-and-release", 1, D, async (page, ctx) => {
   const row = await one<{ id: string }>(ctx, "select id from jobs where held and start_at > now() order by start_at limit 1");
-  await page.goto(`/coordinate/details/${row.id}`);
+  await page.goto(`/jobs/${row.id}?tab=manage`);
 }, { stagingOnly: true, target: card("Manage") });
 
-coord("11-canceling-and-reactivating", 1, D, visit("/coordinate/details?view=canceled&f=1"));
+coord("11-canceling-and-reactivating", 1, D, visit("/jobs?view=canceled&f=1"));
 /** A scheduled detail well ahead (no late-cancel pay), with nobody on it; `n` picks a different one. */
 const quietDetail = (ctx: ShotCtx, n: number) =>
   one<{ id: string }>(ctx, `select j.id from jobs j where j.state = 'scheduled' and j.start_at > now() + interval '5 days' and not j.held and not exists (select 1 from assignments a where a.job_id = j.id and a.status in ('signed_up','pending_short','backup')) order by j.start_at offset ${n} limit 1`);
@@ -434,20 +436,20 @@ async function openCancel(page: Page) {
   await main(page).getByLabel("Reason", { exact: true }).filter({ visible: true }).first().fill("Vendor postponed the event");
 }
 coord("11-canceling-and-reactivating", 2, D, async (page, ctx) => {
-  await page.goto(`/coordinate/details/${(await quietDetail(ctx, 0)).id}`);
+  await page.goto(`/jobs/${(await quietDetail(ctx, 0)).id}?tab=manage`);
   await openCancel(page);
   await top(main(page).getByLabel("Reason", { exact: true }).filter({ visible: true }).first());
 }, { stagingOnly: true });
 coord("11-canceling-and-reactivating", 3, D, async (page, ctx) => {
-  await page.goto(`/coordinate/details/${(await quietDetail(ctx, 1)).id}`);
+  await page.goto(`/jobs/${(await quietDetail(ctx, 1)).id}?tab=manage`);
   await openCancel(page);
   await main(page).getByRole("button", { name: "Cancel detail" }).last().click();
   await main(page).getByRole("button", { name: "Reactivate detail" }).click();
   await top(main(page).getByTestId("reactivate-confirm"));
 }, { stagingOnly: true });
 
-coord("12-vendor-requests", 1, D, visit("/coordinate/details?view=requests&f=1"));
-coord("12-vendor-requests", 2, D, (page) => first(page, "/coordinate/details?view=requests&f=1", "/coordinate/details/0"));
+coord("12-vendor-requests", 1, D, visit("/jobs?view=requests&f=1"));
+coord("12-vendor-requests", 2, D, (page) => first(page, "/jobs?view=requests&f=1", "/jobs/"));
 
 coord("13-assigning-and-removing", 1, D, async (page, ctx) => {
   await signedUpDetail(page, ctx);
@@ -455,13 +457,13 @@ coord("13-assigning-and-removing", 1, D, async (page, ctx) => {
 
 coord("14-sign-up-history", 1, D, async (page, ctx) => {
   const row = await one<{ id: string }>(ctx, "select entity_id as id from audit_log where action = 'job.reactivate' order by at desc limit 1");
-  await page.goto(`/coordinate/details/${row.id}`);
+  await page.goto(`/jobs/${row.id}?tab=manage`);
   await top(main(page).getByText("Sign-up history, oldest first"));
 }, { stagingOnly: true });
 
 coord("15-no-shows-and-suspensions", 1, D, async (page, ctx) => {
   const row = await one<{ id: string }>(ctx, "select j.id from jobs j where j.end_at < now() and j.end_at > now() - interval '20 days' and j.state <> 'canceled' and exists (select 1 from assignments a where a.job_id = j.id and a.status in ('signed_up','billed')) order by j.end_at desc limit 1");
-  await page.goto(`/coordinate/details/${row.id}`);
+  await page.goto(`/jobs/${row.id}?tab=manage`);
 }, { stagingOnly: true, target: card("Staffing") });
 coord("15-no-shows-and-suspensions", 2, D, async (page, ctx) => {
   const row = await one<{ id: string }>(ctx, "select id from users where suspension_reason is not null limit 1");

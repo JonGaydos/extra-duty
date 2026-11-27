@@ -2,7 +2,7 @@
 
 A held detail stays unreleased: deputies can see it is coming but cannot sign up.
 
-1. Open the detail. Under **Manage**, one button holds or releases it: **Hold** on a released detail, **Release** on a held one. A held detail is off the open lists and takes no new sign-ups. People already on it keep their spots.
+1. Open the detail and choose **Manage this detail**. Under **Manage**, one button holds or releases it: **Hold** on a released detail, **Release** on a held one. A held detail is off the open lists and takes no new sign-ups. People already on it keep their spots.
 2. On a series, choose whether it applies to this detail only or to this and the later ones.
 3. If the detail's normal release time is still ahead, you choose: **Release at the normal time** waits for the agency's usual release day and time, and **Release now** opens it for sign-up straight away.
 

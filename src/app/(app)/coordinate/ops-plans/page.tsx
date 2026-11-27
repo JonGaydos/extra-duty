@@ -13,7 +13,7 @@ import { PageTitle } from "../../_personnel/TabLinks";
 import { dateLabel, dateTime, prefixed } from "../../_personnel/format";
 import { coordinatorActor } from "../_coordinator/session";
 import { CountSection, Row, Rows } from "../_coordinator/ui";
-import { OpsPlanReview } from "../details/[id]/DetailActions";
+import { OpsPlanReview } from "../../jobs/[id]/_manage/DetailActions";
 
 export const metadata: Metadata = { title: "Ops plans" };
 
@@ -62,7 +62,7 @@ export default async function OpsPlansPage({ searchParams }: Readonly<Props>) {
               <Row
                 key={o.jobId}
                 title={o.title}
-                href={`/coordinate/details/${o.jobId}#ops-plan`}
+                href={`/jobs/${o.jobId}?tab=manage#ops-plan`}
                 meta={`${o.vendorName}, starts ${dateTime(o.startAt)}. ${icSentence(o.icName)}`}
                 actions={<Chip tone="danger">Due {o.dueAt ? dateTime(o.dueAt) : "before the start"}</Chip>}
               />
@@ -82,7 +82,7 @@ export default async function OpsPlansPage({ searchParams }: Readonly<Props>) {
               <Row
                 key={o.jobId}
                 title={`${o.title}, version ${o.version}`}
-                href={`/coordinate/details/${o.jobId}#ops-plan`}
+                href={`/jobs/${o.jobId}?tab=manage#ops-plan`}
                 meta={`${o.vendorName}. Submitted ${o.waitingSince ? dateTime(o.waitingSince) : ""}${prefixed(" by IC ", o.icName)}.`}
                 actions={o.canReview && o.opsPlanId && o.versionId ? <OpsPlanReview opsPlanId={o.opsPlanId} versionId={o.versionId} /> : <Chip>Another reviewer</Chip>}
               />
@@ -126,7 +126,7 @@ export default async function OpsPlansPage({ searchParams }: Readonly<Props>) {
               <Row
                 key={r.opsPlanId}
                 title={r.jobTitle}
-                href={`/coordinate/details/${r.jobId}#ops-plan`}
+                href={`/jobs/${r.jobId}?tab=manage#ops-plan`}
                 meta={`${r.vendorName}${prefixed(", ", r.location)}. ${dateLabel(r.startAt)}${prefixed(". IC ", r.icName)}.`}
                 actions={
                   <a href={`/api/v1/ops-plans/versions/${r.versionId}/file`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold" aria-label={`Download ${r.filename}`} download>

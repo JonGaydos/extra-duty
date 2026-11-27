@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -6,27 +7,110 @@ import { Chip } from "@/ui/components/Chip";
 import { Table } from "@/ui/components/Table";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
+import { withTx } from "@/ui/shell/request";
+import { jobs } from "@/db/schema";
 import { timeRange } from "../../_personnel/format";
 import { HideVendorButton } from "../../_personnel/HideVendorButton";
 import { personnelActor } from "../../_personnel/session";
+import { TabLinks } from "../../_personnel/TabLinks";
+import { parseDetailNumber, visibleJobIdByNumber, visibleJobNumber } from "@/domain/jobs/detail-number";
 import { loadJobPage } from "./load";
+import { ManageDetail } from "./_manage/ManageDetail";
 import { ActivityCard, AboutCard, FactsCard, NotesCard, OpsPlanCard, SafetyCard, StaffingCard } from "./sections";
 import { flexChoices, positionChoices } from "./sign-up-input";
 import { SignUpPanel } from "./SignUpPanel";
 
 export const metadata: Metadata = { title: "Detail" };
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-/** One detail: facts, officer safety, about, staffing and roster, notes, sign-up and activity. */
-export default async function JobPage({ params }: Readonly<Props>) {
-  const { id } = await params;
+type Tab = "detail" | "manage";
+
+/** The page's query string again, for a redirect that keeps it. */
+function queryOf(sp: Record<string, string | string[] | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(sp)) for (const x of [v].flat()) if (x !== undefined) q.append(k, x);
+  return q.toString();
+}
+
+/**
+ * Staff open a detail on Detail (what deputies see), except a vendor request or a declined request, which opens on
+ * Manage. `?tab=` picks one.
+ */
+async function staffTab(id: string, asked: string | string[] | undefined): Promise<Tab | null> {
+  if (asked === "detail" || asked === "manage") return asked;
+  const [row] = await withTx((tx) => tx.select({ state: jobs.state }).from(jobs).where(eq(jobs.id, id)));
+  if (!row) return null;
+  return row.state === "requested" || row.state === "declined" ? "manage" : "detail";
+}
+
+/** Detail and Manage this detail, for coordinators and admins. */
+function StaffTabs({ number, current }: Readonly<{ number: number; current: Tab }>) {
+  return (
+    <TabLinks
+      label="Detail sections"
+      current={current}
+      items={[
+        { key: "detail", label: "Detail", href: `/jobs/${number}?tab=detail` },
+        { key: "manage", label: "Manage this detail", href: `/jobs/${number}?tab=manage` },
+      ]}
+    />
+  );
+}
+
+const BackLink = () => (
+  <Link href="/jobs" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
+    <Icon name="chevronLeft" size={18} />
+    Back to details
+  </Link>
+);
+
+/**
+ * One detail, the same page for everyone: facts, officer safety, about, staffing and roster, notes, sign-up and
+ * activity. Coordinators and admins also get a Manage this detail tab with every staff control on the detail.
+ */
+export default async function JobPage({ params, searchParams }: Readonly<Props>) {
+  const { id: ref } = await params;
+  const sp = await searchParams;
+  const number = parseDetailNumber(ref);
+  const shell = await loadShell();
   // Alerts link vendors here too; their view of a detail is in the portal.
-  if ((await loadShell())?.actor.role === "vendor") redirect(`/vendor/details/${id}`);
+  if (shell?.actor.role === "vendor") {
+    const vendorJob = number === null ? ref : await withTx((tx) => visibleJobIdByNumber(shell.actor, tx, number));
+    if (!vendorJob) notFound();
+    redirect(`/vendor/details/${vendorJob}`);
+  }
   const actor = await personnelActor();
+  // The address is the detail's number (/jobs/9). An old id address moves to it, with its query; a detail the person
+  // may not see is not found either way.
+  if (number === null) {
+    const n = await withTx((tx) => visibleJobNumber(actor, tx, ref));
+    if (n === null) notFound();
+    const q = queryOf(sp);
+    redirect(q ? `/jobs/${n}?${q}` : `/jobs/${n}`);
+  }
+  const id = await withTx((tx) => visibleJobIdByNumber(actor, tx, number));
+  if (!id) notFound();
+  const staff = actor.role === "coordinator" || actor.role === "admin";
   const now = new Date();
+  const tab = staff ? await staffTab(id, sp.tab) : "detail";
+  if (!tab) notFound();
+  if (tab === "manage") {
+    return (
+      <div className="flex flex-col gap-4.5">
+        <BackLink />
+        <StaffTabs number={number} current="manage" />
+        <ManageDetail actor={actor} id={id} now={now} />
+      </div>
+    );
+  }
   const data = await loadJobPage(actor, id, now);
   if (!data) notFound();
+  return <DetailView data={data} staff={staff} userId={actor.userId} now={now} />;
+}
+
+/** The Detail tab: what everyone sees. */
+function DetailView({ data, staff, userId, now }: Readonly<{ data: NonNullable<Awaited<ReturnType<typeof loadJobPage>>>; staff: boolean; userId: string; now: Date }>) {
   const { job, card, settings, mine, roster } = data;
 
   const started = now.getTime() >= job.startAt.getTime();
@@ -38,15 +122,13 @@ export default async function JobPage({ params }: Readonly<Props>) {
 
   return (
     <div className="flex flex-col gap-4.5">
-      <Link href="/jobs" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
-        <Icon name="chevronLeft" size={18} />
-        Back to details
-      </Link>
+      <BackLink />
+      {staff ? <StaffTabs number={job.number} current="detail" /> : null}
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:items-start md:gap-6">
         {/* Phone order follows the mockup: facts, safety, then sign-up; on desktop sign-up stays beside them. */}
         <div className="flex flex-col gap-4.5 md:col-start-1 md:row-start-1">
-          <FactsCard d={data} staff={actor.role === "coordinator" || actor.role === "admin"} showWatch={showWatch} />
+          <FactsCard d={data} staff={staff} showWatch={showWatch} />
 
           {safety ? <SafetyCard safety={safety} tileUrl={settings.mapTileUrl} attribution={settings.mapAttribution} /> : null}
         </div>
@@ -86,7 +168,7 @@ export default async function JobPage({ params }: Readonly<Props>) {
             empty="Nobody has signed up yet."
           />
 
-          {data.ops ? <OpsPlanCard ops={data.ops} job={job} userId={actor.userId} /> : null}
+          {data.ops ? <OpsPlanCard ops={data.ops} job={job} userId={userId} /> : null}
           <NotesCard d={data} canNote={canNote} />
 
           <ActivityCard activity={data.activity} />

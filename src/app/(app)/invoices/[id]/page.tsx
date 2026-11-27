@@ -132,7 +132,7 @@ export default async function InvoicePage({ params }: Readonly<Props>) {
           <div className="flex flex-col gap-0.5">
             <dt className="text-xs font-semibold text-muted">Detail</dt>
             <dd className="m-0">
-              <Link href={`/jobs/${inv.jobId}`}>
+              <Link href={`/jobs/${inv.jobNumber}`}>
                 #{inv.jobNumber} {inv.jobTitle}
               </Link>
               , {dayLabel(inv.jobStartAt)}

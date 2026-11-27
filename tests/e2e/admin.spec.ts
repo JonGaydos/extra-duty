@@ -153,7 +153,7 @@ test("changing the release day moves a scheduled detail's release date", async (
     await signInAs(context, "coordinator");
     await page.setViewportSize(DESKTOP);
     const job = await one<{ id: string }>("select id from jobs where title = $1", [ADMIN.releaseJob]);
-    await page.goto(`/coordinate/details/${job.id}`);
+    await page.goto(`/jobs/${job.id}?tab=manage`);
     await expect(page.getByTestId("release-state")).toHaveText(/Opens \w+ 15, \d{4} at 4:00 PM/);
 
     await page.goto("/admin/settings/release");
@@ -165,7 +165,7 @@ test("changing the release day moves a scheduled detail's release date", async (
     await page.getByLabel("Release day of month").fill("20");
     await page.getByRole("button", { name: "Save release settings" }).click();
     await expect(page.getByRole("status")).toContainText(/Saved\. \d+ details? now opens? on the new release date\./);
-    await page.goto(`/coordinate/details/${job.id}`);
+    await page.goto(`/jobs/${job.id}?tab=manage`);
     await expect(page.getByTestId("release-state")).toHaveText(/Opens \w+ 20, \d{4} at 4:00 PM/);
   } finally {
     for (const s of saved) await rows("update jobs set release_at = $2 where id = $1", [s.id, s.release_at]);
@@ -424,7 +424,7 @@ test("a coordinator sets the agency rate range, and one detail outside it needs 
     await page.getByRole("button", { name: "Save billing settings" }).click();
     await expect(page.getByRole("status")).toContainText("Billing settings saved.");
 
-    await page.goto(`/coordinate/details/${job.id}`);
+    await page.goto(`/jobs/${job.id}?tab=manage`);
     await page.getByRole("button", { name: "Edit detail" }).click();
     const editor = page.getByRole("form", { name: "Edit detail" });
     await editor.getByLabel("Rate per hour").fill("95");
@@ -582,7 +582,7 @@ test("a deputy leaves: the checklist, the spots reopen, the unbilled detail stay
   );
   expect(upcoming).toEqual([{ status: "removed", open: 0 }, { status: "removed", open: 0 }]);
   const firstJob = (await one<{ id: string }>("select id from jobs where title = $1", [ADMIN.leaverJobs[0]])).id;
-  await page.goto(`/coordinate/details/${firstJob}`);
+  await page.goto(`/jobs/${firstJob}?tab=manage`);
   await expect(page.getByRole("listitem").filter({ hasText: ADMIN.leaver.name }).first()).toContainText("Left the agency");
 
   await page.goto("/coordinate");
@@ -631,7 +631,7 @@ test("vendor email off for Detail canceled: staff cancel the vendor's detail, th
 
   // A coordinator cancels the vendor's detail.
   const job = await one<{ id: string; number: number }>("select id, number from jobs where title = $1", [ADMIN.notifyJob]);
-  await page.goto(`/coordinate/details/${job.id}`);
+  await page.goto(`/jobs/${job.id}?tab=manage`);
   await page.getByRole("button", { name: "Cancel detail" }).click();
   await page.getByLabel("Reason", { exact: true }).fill("Lot closed for paving");
   await page.getByRole("button", { name: "Cancel detail" }).click();

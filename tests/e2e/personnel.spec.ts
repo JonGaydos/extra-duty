@@ -252,9 +252,9 @@ test("the deputy-only filters sit in the shared panel and are remembered for tha
   // A plain visit uses this deputy's remembered filters.
   await page.goto("/jobs");
   await expect(page.getByRole("link", { name: new RegExp(FIXTURE.openJob) })).toHaveCount(0);
-  // The Calendar does not show or count the deputy-only filters.
+  // The Calendar shares the one remembered set: Flexible times is on there too (Sort by stays with the List).
   await page.goto("/calendar");
-  await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Filters \(\d+ on\)$/ })).toBeVisible();
   await page.goto("/jobs");
   await page.getByRole("complementary", { name: "Filters" }).getByRole("button", { name: /^Filters/ }).click();
   await page.getByRole("complementary", { name: "Filters" }).getByRole("button", { name: "Reset" }).click();
@@ -288,16 +288,14 @@ test("a deputy cannot open another deputy's invoice, bill or invoice PDF", async
   expect((await page.request.get(`/api/v1/me/w9`)).status()).toBe(404);
 });
 
-test("a sign-up a suspension removed reads as a plain Canceled on Home and in My details", async ({ page, context }) => {
+test("a sign-up a suspension removed leaves Home's Up next and reads as a plain Canceled in My details", async ({ page, context }) => {
   await signInAs(context, "suspensionRemoved");
   for (const [size, viewport] of [["phone", PHONE], ["desktop", DESKTOP]] as const) {
     await page.setViewportSize(viewport);
     await page.goto("/home");
-    // In Up next it carries the Canceled chip, not a plain upcoming row. (The open spot may also be offered elsewhere on Home.)
-    const row = page.getByRole("region", { name: "Up next" }).getByRole("listitem").filter({ hasText: FIXTURE.suspensionRemovedJob });
-    await expect(row).toHaveCount(1);
-    await expect(row.getByText("Canceled", { exact: true })).toBeVisible();
-    await expect(row.getByText("Your sign-up was canceled.")).toBeVisible();
+    // Up next lists only what the person still works, so the canceled sign-up is not there (owner rule 2026-11-27);
+    // its history is in My details. (The open spot may still be offered under Open for you.)
+    await expect(page.getByRole("list", { name: "Up next" }).getByText(FIXTURE.suspensionRemovedJob)).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText(/suspen/i);
     await page.screenshot({ path: `${E2E.screenshotDir}/personnel-suspension-removed-home-${size}.png`, fullPage: true });
 

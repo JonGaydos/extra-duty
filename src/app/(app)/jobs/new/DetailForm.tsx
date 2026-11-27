@@ -9,15 +9,15 @@ import { Card, CardTitle } from "@/ui/components/Card";
 import { FormField, Input, Select, TextArea } from "@/ui/components/FormField";
 import { Notice } from "@/ui/components/Notice";
 import { PayLabel, dollars } from "@/ui/components/PayLabel";
-import { createDetailsAction, suggestPlanAction } from "../../_coordinator/actions";
-import { DatesStep, keyLabel } from "../../_coordinator/DatesStep";
-import { FlexFields, PreviewRow, SafetyAddressFields, safetyRows, safetyWire, type TimeOverride as Override } from "../../_coordinator/DetailFields";
-import type { DetailWire } from "../../_coordinator/detail-input";
-import { useCoordAction } from "../../_coordinator/status";
-import { AddPositionRow } from "../../_coordinator/EditPanel";
-import { RateRangeNotice } from "../../_coordinator/RateRangeNotice";
-import { SiteContactFields } from "../../_coordinator/SiteContactFields";
-import { addPosition, changePositionType, detailSummary, spanMinutes } from "../../_coordinator/detail-summary";
+import { createDetailsAction, suggestPlanAction } from "../../coordinate/_coordinator/actions";
+import { DatesStep, keyLabel } from "../../coordinate/_coordinator/DatesStep";
+import { FlexFields, PreviewRow, SafetyAddressFields, safetyRows, safetyWire, type TimeOverride as Override } from "../../coordinate/_coordinator/DetailFields";
+import type { DetailWire } from "../../coordinate/_coordinator/detail-input";
+import { useCoordAction } from "../../coordinate/_coordinator/status";
+import { AddPositionRow } from "../../coordinate/_coordinator/EditPanel";
+import { RateRangeNotice } from "../../coordinate/_coordinator/RateRangeNotice";
+import { SiteContactFields } from "../../coordinate/_coordinator/SiteContactFields";
+import { addPosition, changePositionType, detailSummary, spanMinutes } from "../../coordinate/_coordinator/detail-summary";
 import { useRowKeys } from "@/ui/use-row-keys";
 
 const minutesOf = (t: string) => (/^\d{2}:\d{2}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : null);
@@ -172,7 +172,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Re
         requestAnimationFrame(() => document.getElementById(`preview-${m[1]}`)?.scrollIntoView({ block: "nearest" }));
         return { ok: false, error: `${keyLabel(m[1])}: ${m[2]} Nothing was created.` };
       },
-      (r) => router.push(`/coordinate/details/${r.value}`),
+      (r) => router.push(`/jobs/${r.value}?tab=manage`),
       { refresh: false },
     );
   };

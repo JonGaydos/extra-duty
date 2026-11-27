@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { conflictGuard } from "@/app/(app)/coordinate/_coordinator/conflict-guard";
 
-const refused = { ok: false as const, error: "x", checks: [{ check: "overlap", message: "Riley on #12, Tue, Dec 8: Overlaps job #13" }, { check: "rank", message: "Requires the CSO rank" }], fields: { j1: "abcd" } };
+const refused = { ok: false as const, error: "x", checks: [{ check: "overlap", message: "Riley on #12, Tue, Dec 8: Overlaps Detail #13" }, { check: "rank", message: "Requires the CSO rank" }], fields: { j1: "abcd" } };
 
 describe("conflictGuard", () => {
   test("shows only the schedule conflicts of the last refusal, with their fingerprints", () => {
     const g = conflictGuard({ result: refused, dirty: false, confirmed: true, reason: "Agreed" });
-    expect(g.conflicts).toEqual(["Riley on #12, Tue, Dec 8: Overlaps job #13"]);
+    expect(g.conflicts).toEqual(["Riley on #12, Tue, Dec 8: Overlaps Detail #13"]);
     expect(g.override).toEqual({ reason: "Agreed", fingerprints: { j1: "abcd" } });
   });
   test("any change to the edit hides the old conflicts and drops the override", () => {

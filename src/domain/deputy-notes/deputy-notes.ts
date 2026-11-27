@@ -70,7 +70,7 @@ export async function submitDeputyNote(
     {
       recipients: (await coordinatorAudience(tx)).filter((id) => id !== actor.userId),
       type: "deputyNote.submitted",
-      title: `Deputy note to review: job #${job.number}`,
+      title: `Deputy note to review: Detail #${job.number}`,
       body: `${author?.name ?? "A deputy"} submitted a note from ${job.title}.`,
       link: `/jobs/${job.id}`,
     },

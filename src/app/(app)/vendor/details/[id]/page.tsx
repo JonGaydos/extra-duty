@@ -77,7 +77,7 @@ function DetailCard({ view, job, controls, status }: Readonly<Loaded & { status:
     <Card>
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusChip status={status} />
-        <Chip>#{view.number}</Chip>
+        <Chip>Detail #{view.number}</Chip>
       </div>
       <h1 className="m-0 text-2xl font-bold md:text-3xl">{view.title}</h1>
       <DetailNotices view={view} job={job} controls={controls} />

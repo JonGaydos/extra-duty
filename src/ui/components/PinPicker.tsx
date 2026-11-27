@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import type { Map as LeafletMap, Marker } from "leaflet";
 import type { MapConfig } from "./MapConfig";
+import { guardWheelZoom, markZoom, useWheelHint, WheelHint } from "./wheel-zoom";
 
 type Point = { lat: number; lng: number };
 
@@ -24,14 +25,19 @@ export function PinPicker({ config, point, onMove, label }: Readonly<{ config: M
   const lat = point?.lat ?? null;
   const lng = point?.lng ?? null;
   const hasPoint = lat !== null && lng !== null;
+  const hint = useWheelHint();
+  const showHint = hint.show;
 
   // The map is built once per config; the pin follows `point` below without rebuilding it.
   useEffect(() => {
     let alive = true;
+    let unguard = () => {};
     void import("leaflet").then((L) => {
       if (!alive || !box.current) return;
       const m = L.map(box.current, { scrollWheelZoom: false, attributionControl: true });
       map.current = m;
+      unguard = guardWheelZoom(m, box.current, showHint);
+      markZoom(m, box.current);
       m.attributionControl.setPrefix(false);
       L.tileLayer(config.tileUrl, { attribution: config.attribution, maxZoom: 19 }).addTo(m);
       m.setView([config.center.lat, config.center.lng], config.center.zoom);
@@ -48,11 +54,12 @@ export function PinPicker({ config, point, onMove, label }: Readonly<{ config: M
     });
     return () => {
       alive = false;
+      unguard();
       map.current?.remove();
       map.current = null;
       marker.current = null;
     };
-  }, [config.tileUrl, config.attribution, config.center.lat, config.center.lng, config.center.zoom, label]);
+  }, [config.tileUrl, config.attribution, config.center.lat, config.center.lng, config.center.zoom, label, showHint]);
 
   useEffect(() => {
     const place = () => {
@@ -91,7 +98,10 @@ export function PinPicker({ config, point, onMove, label }: Readonly<{ config: M
 
   return (
     <div className="flex flex-col gap-1.5">
-      <section ref={box} aria-label={`Map: ${label}`} data-testid="pin-map" className="ed-map relative z-0 h-48 w-full overflow-hidden rounded-md border border-line" />
+      <div className="relative z-0 overflow-hidden rounded-md">
+        <section ref={box} aria-label={`Map: ${label}`} data-testid="pin-map" className="ed-map relative z-0 h-70 w-full overflow-hidden rounded-md border border-line md:h-96" />
+        <WheelHint visible={hint.visible} />
+      </div>
       <p className="m-0 text-xs text-muted">{hasPoint ? "Drag the pin, or tap the map, to put it exactly on the spot." : "Tap the map to place the pin."}</p>
     </div>
   );

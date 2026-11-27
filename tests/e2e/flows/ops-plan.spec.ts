@@ -26,7 +26,7 @@ test("ops plan required, IC submits, reviewer denies, IC resubmits, reviewer agr
     await expect(ic.getByRole("status").filter({ hasText: "Ops plan submitted for review." })).toBeVisible();
     await expect(ic.getByText("Submitted, waiting for review.", { exact: false })).toBeVisible();
     await clock.deliver();
-    await mail.waitFor({ to: agency.admin.email, subject: `Ops plan submitted: job #${job.number}`, since });
+    await mail.waitFor({ to: agency.admin.email, subject: `Ops plan submitted: Detail #${job.number}`, since });
   });
 
   await test.step("the reviewer denies it with comments", async () => {
@@ -49,7 +49,7 @@ test("ops plan required, IC submits, reviewer denies, IC resubmits, reviewer agr
   });
 
   await test.step("the reviewer agrees", async () => {
-    await admin.goto(`/coordinate/details/${job.id}`);
+    await admin.goto(`/jobs/${job.id}?tab=manage`);
     await admin.getByRole("button", { name: "Agree" }).click();
     await expect(admin.getByRole("status").filter({ hasText: "Ops plan agreed." })).toBeVisible();
     await ic.reload();

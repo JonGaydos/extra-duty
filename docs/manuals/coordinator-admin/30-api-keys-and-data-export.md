@@ -9,7 +9,7 @@ Keys let other systems, such as payroll, read and change Signal 90 data through 
    ![API access](../images/coordinator-admin/30-api-keys-and-data-export-1-desktop.webp)
 
 4. **Keys** lists each key with its last use. Turn a key off when it is no longer needed.
-5. **API reference** lists every route. **Download the OpenAPI document** for developers.
+5. **API reference** lists every route. **Download the OpenAPI document** for developers. A detail can be read by its number as well as its id, for example `GET /api/v1/jobs/9`.
 
 ## Data export
 

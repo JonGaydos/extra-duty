@@ -76,7 +76,7 @@ async function jobOfPosition(tx: Tx, positionId: string): Promise<Job> {
 }
 
 async function alertBackups(tx: Tx, job: Job, rows: Assignment[], type: NotificationType, body: string): Promise<void> {
-  await emit(tx, { recipients: rows.map((b) => b.userId), type, title: `Spot available: ${job.title}`, body, link: `/jobs/${job.id}` });
+  await emit(tx, { recipients: rows.map((b) => b.userId), type, title: `Spot available: #${job.number} ${job.title}`, body, link: `/jobs/${job.id}` });
 }
 
 /**
@@ -106,7 +106,7 @@ async function alertWatchersOpened(tx: Tx, job: Job, position: PositionInfo, now
     await endWatchAlerted(tx, w, now);
     await emit(tx, { recipients: [w.userId],
       type: "job.watch_opened",
-      title: `A spot opened: ${job.title}`,
+      title: `A spot opened: #${job.number} ${job.title}`,
       body: `A spot is open for ${position.name}. First come, first served.`,
       link: `/jobs/${job.id}`,
     });

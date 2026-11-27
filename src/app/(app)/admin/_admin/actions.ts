@@ -14,6 +14,7 @@ import {
   createPaymentMethod,
   createPositionType,
   createVendorType,
+  deletePositionType,
   NOTE_PRESET_CONTEXTS,
   setJobTypeActive,
   setNotePresetActive,
@@ -38,7 +39,7 @@ import {
 } from "@/domain/jobs/qualifications";
 import { saveAgencyNotifications } from "@/domain/notifications/agency";
 import { CATALOG, GROUP_LABEL, type RecipientGroup } from "@/domain/notifications/catalog";
-import { createRank, deactivateRank, listRanks, reorderRanks } from "@/domain/ranks/ranks";
+import { applyRankChange, deleteRank, previewRankChange, renameRank, setRankActive, type RankChange } from "@/domain/ranks/ranks";
 import { removeAgencyLogo } from "@/domain/settings/logo";
 import { agencyDateOnly } from "@/domain/time/agency-time";
 import { decideAccessReviewItem, startAccessReview, type ReviewDecision } from "@/domain/users/access-review";
@@ -198,31 +199,46 @@ export async function flagActiveAction(input: { id: string; active: boolean }): 
 
 // Ranks
 
-export async function createRankAction(name: string): Promise<ActionResult> {
+/** One rewritten position type, as the Ranks page's confirm step shows it. */
+export type RankChangeEffect = { name: string; added: string[]; removed: string[]; upcomingDetails: number };
+
+/** What a ladder change would do to who can fill each position type; `value` is the list as JSON. */
+export async function previewRankChangeAction(change: RankChange): Promise<ActionResult> {
   return act(async (actor, tx) => {
-    const all = await listRanks(tx);
-    await createRank(actor, tx, { name, sortOrder: Math.max(0, ...all.map((r) => r.sortOrder)) + 1 });
-    return { ok: true, message: "Rank added at the top. Move it to its place." };
+    const effects: RankChangeEffect[] = (await previewRankChange(actor, tx, change)).map(({ name, added, removed, upcomingDetails }) => ({ name, added, removed, upcomingDetails }));
+    return { ok: true, value: JSON.stringify(effects) };
   });
 }
 
-export async function moveRankAction(input: { id: string; by: -1 | 1 }): Promise<ActionResult> {
+const RANK_DONE: Record<RankChange["kind"], string> = { move: "Order saved.", ladder: "Ladder saved.", create: "Rank added." };
+
+export async function applyRankChangeAction(change: RankChange): Promise<ActionResult> {
   return act(async (actor, tx) => {
-    const ids = (await listRanks(tx)).map((r) => r.id);
-    const i = ids.indexOf(input.id);
-    const j = i + input.by;
-    if (i === -1 || j < 0 || j >= ids.length) return { ok: true };
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    await reorderRanks(actor, tx, ids);
-    return { ok: true, message: "Order saved." };
+    const { positions } = await applyRankChange(actor, tx, change);
+    const updated = positions.length ? ` ${plural(positions.length, "position type")} updated.` : "";
+    return { ok: true, message: `${RANK_DONE[change.kind]}${updated}` };
   });
 }
 
-export async function deactivateRankAction(id: string): Promise<ActionResult> {
+export async function renameRankAction(input: { id: string; name: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const r = await renameRank(actor, tx, input.id, input.name);
+    return { ok: true, message: `Renamed to ${r.name}.` };
+  });
+}
+
+export async function rankActiveAction(input: { id: string; active: boolean }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const r = await setRankActive(actor, tx, input.id, input.active);
+    return { ok: true, message: `${r.name} turned ${input.active ? "on" : "off"}.` };
+  });
+}
+
+export async function deleteRankAction(id: string): Promise<ActionResult> {
   return act(async (actor, tx) => {
     const [r] = await tx.select({ name: ranksTable.name }).from(ranksTable).where(eq(ranksTable.id, id));
-    await deactivateRank(actor, tx, id);
-    return { ok: true, message: `${r?.name ?? "Rank"} turned off.` };
+    await deleteRank(actor, tx, id);
+    return { ok: true, message: `${r?.name ?? "Rank"} deleted.` };
   });
 }
 
@@ -339,6 +355,13 @@ export async function savePositionTypeAction(input: Omit<PositionTypeInput, "rat
     if (input.id) await updatePositionType(actor, tx, input.id, v);
     else await createPositionType(actor, tx, v);
     return { ok: true, message: input.id ? "Position type saved." : "Position type added." };
+  });
+}
+
+export async function deletePositionTypeAction(id: string): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await deletePositionType(actor, tx, id);
+    return { ok: true, message: "Position type deleted." };
   });
 }
 

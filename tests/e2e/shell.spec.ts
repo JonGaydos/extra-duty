@@ -69,7 +69,7 @@ for (const theme of THEMES) {
       await page.goto("/coordinate");
       await expect(topNav(page)).toBeVisible();
       await expect(tabBar(page)).toBeHidden();
-      await expect(topNav(page).getByRole("link", { name: "To-do" })).toHaveAttribute("aria-current", "page");
+      await expect(topNav(page).getByRole("link", { name: "To-do", exact: true })).toHaveAttribute("aria-current", "page");
       expect(await canvas(page)).toBe(theme.canvas);
       await page.screenshot({ path: `${E2E.screenshotDir}/shell-desktop-${theme.name}.png`, fullPage: true });
       await expectNoSeriousA11yIssues(page);
@@ -88,31 +88,15 @@ test("the tab bar switches to the top nav at 768 px", async ({ page, context }) 
   await expect(tabBar(page)).toBeHidden();
 });
 
+const SHARED = ["Home", "Details", "Calendar", "Billing", "Messages", "Profile"];
+const SHARED_PHONE = ["Home", "Details", "Calendar", "Billing", "More"];
+const STAFF = ["To-do", "Payments", "Vendors", "Reports", "Management"];
+
 const NAV = {
-  deputy: {
-    start: "/home",
-    desktop: ["Home", "Details", "Calendar", "Billing", "Messages", "Profile"],
-    personal: [],
-    phone: ["Home", "Details", "Calendar", "Billing", "More"],
-  },
-  coordinator: {
-    start: "/coordinate",
-    desktop: ["To-do", "Details", "Calendar", "Vendors", "Payments", "Reports", "Messages", "Management"],
-    personal: ["My work", "Open details", "My billing", "Profile"],
-    phone: ["To-do", "Details", "Calendar", "Messages", "More"],
-  },
-  admin: {
-    start: "/coordinate",
-    desktop: ["To-do", "Details", "Calendar", "Vendors", "Payments", "Reports", "Messages", "Management"],
-    personal: ["My work", "Open details", "My billing", "Profile"],
-    phone: ["To-do", "Details", "Calendar", "Messages", "More"],
-  },
-  vendor: {
-    start: "/vendor",
-    desktop: ["My details", "Request a detail", "Invoices", "Locations", "Contracts"],
-    personal: [],
-    phone: ["My details", "Request", "Invoices", "Locations", "More"],
-  },
+  deputy: { start: "/home", desktop: SHARED, staff: [], phone: SHARED_PHONE },
+  coordinator: { start: "/home", desktop: SHARED, staff: STAFF, phone: SHARED_PHONE },
+  admin: { start: "/home", desktop: SHARED, staff: STAFF, phone: SHARED_PHONE },
+  vendor: { start: "/vendor", desktop: ["My details", "Request a detail", "Invoices", "Locations", "Contracts"], staff: [], phone: ["My details", "Request", "Invoices", "Locations", "More"] },
 } as const;
 
 for (const [who, nav] of Object.entries(NAV) as [keyof typeof NAV, (typeof NAV)[keyof typeof NAV]][]) {
@@ -122,41 +106,36 @@ for (const [who, nav] of Object.entries(NAV) as [keyof typeof NAV, (typeof NAV)[
     await expect(page).toHaveURL(new RegExp(`${nav.start}$`));
 
     await page.setViewportSize(DESKTOP);
-    const links = topNav(page).getByRole("navigation", { name: "Main" }).getByRole("link");
-    await expect(links).toHaveText([...nav.desktop]);
-    for (const name of nav.desktop) {
-      await topNav(page).getByRole("navigation", { name: "Main" }).getByRole("link", { name, exact: true }).click();
+    const main = topNav(page).getByRole("navigation", { name: "Main" });
+    // The shared tabs, the same for deputies, coordinators and admins, then the staff tabs after a separator.
+    await expect(main.getByRole("link")).toHaveText([...nav.desktop, ...nav.staff]);
+    const staff = main.getByRole("list", { name: "Staff" });
+    if (nav.staff.length) await expect(staff.getByRole("link")).toHaveText([...nav.staff]);
+    else await expect(staff).toHaveCount(0);
+    for (const name of [...nav.desktop, ...nav.staff]) {
+      await main.getByRole("link", { name, exact: true }).click();
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(topNav(page).getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+      await expect(main.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
     }
-    // Coordinators and admins: their own work as a deputy, one click away in its own nav.
-    const mine = topNav(page).getByRole("navigation", { name: "My work" });
-    if (nav.personal.length) {
-      await expect(mine.getByRole("link")).toHaveText(nav.personal.map((n) => new RegExp(`${n}`)));
-      for (const name of nav.personal) {
-        await mine.getByRole("link", { name: new RegExp(`^${name}`) }).click();
-        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-        await expect(mine.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("aria-current", "page");
-      }
-    } else {
-      await expect(mine).toHaveCount(0);
-    }
+    // No second personal row any more.
+    await expect(topNav(page).getByRole("navigation", { name: "My work" })).toHaveCount(0);
 
     await page.setViewportSize(PHONE);
     await expect(tabBar(page).getByRole("link")).toHaveText([...nav.phone]);
   });
 }
 
-test("More lists the sections that do not fit in the tab bar, and the coordinator's own work", async ({ page, context }) => {
+test("More lists Map, Messages, Profile and Help, then a coordinator's staff sections", async ({ page, context }) => {
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
-  await page.goto("/coordinate");
+  await page.goto("/home");
   await tabBar(page).getByRole("link", { name: "More" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "More" })).toBeVisible();
   await expect(tabBar(page).getByRole("link", { name: "More" })).toHaveAttribute("aria-current", "page");
-  for (const name of ["Vendors", "Payments", "Reports", "Management", "My work", "Open details", "My billing", "Map", "Profile", "Help"]) {
-    await expect(page.getByRole("main").getByRole("link", { name, exact: true })).toBeVisible();
-  }
+  const main = page.getByRole("main");
+  await expect(main.getByRole("list").first().getByRole("link")).toHaveText(["Map", "Messages", "Profile", "Help"]);
+  await expect(main.getByRole("heading", { name: "Staff" })).toBeVisible();
+  await expect(main.getByRole("list", { name: "Staff" }).getByRole("link")).toHaveText(STAFF);
   await page.screenshot({ path: `${E2E.screenshotDir}/more-phone-day.png`, fullPage: true });
   await expectNoSeriousA11yIssues(page);
 });
@@ -237,12 +216,16 @@ test.describe("phone current tab", () => {
 
   const current = (page: Page) => tabBar(page).locator('[aria-current="page"]');
 
-  test("a coordinator on Payments sees More as current, not To-do", async ({ page, context }) => {
+  test("a coordinator's staff sections mark More; the shared ones mark their own tab", async ({ page, context }) => {
     await signInAs(context, "coordinator");
     await page.goto("/coordinate/payments");
     await expect(current(page)).toHaveText(["More"]);
     await page.goto("/coordinate");
-    await expect(current(page)).toHaveText(["To-do"]);
+    await expect(current(page)).toHaveText(["More"]);
+    await page.goto("/jobs/new");
+    await expect(current(page)).toHaveText(["Details"]);
+    await page.goto("/home");
+    await expect(current(page)).toHaveText(["Home"]);
   });
 
   test("a vendor on Contracts sees More as current, not My details", async ({ page, context }) => {

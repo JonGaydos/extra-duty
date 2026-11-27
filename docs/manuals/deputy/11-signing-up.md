@@ -21,7 +21,7 @@ Some details let you pick your own hours inside a window.
 
 ## Backups
 
-When a detail is **Full**, choose **Join backup list**. If a spot opens, backups are offered it in order and get the alert **A backup spot is offered to you**. The detail then says **A spot is open for you. Take it before your turn ends.** Accept it before the time runs out.
+When a detail is **Full**, choose **Join backup list**. If a spot opens, backups are offered it in order and get the alert **A backup spot is offered to you**. The detail then says **A spot is open for you. Take it before your turn ends.** Accept it before the time runs out. While you wait, the detail is listed under **On backup** on **Home**, apart from **Up next**.
 
 ![Join backup list on a full detail](../images/deputy/11-signing-up-3-phone.webp)
 

@@ -62,7 +62,7 @@ test("a coordinator keeps a vendor's site contacts, and the detail form fills th
   await page.setViewportSize(DESKTOP);
 
   // The new detail form offers the active contacts only, and fills the phone for this detail.
-  await page.goto("/coordinate/details/new");
+  await page.goto("/jobs/new");
   const picker = page.getByLabel("Site contact", { exact: true });
   await expect(picker).toBeDisabled();
   await page.getByLabel("Vendor", { exact: true }).selectOption({ label: COORD.vendor });

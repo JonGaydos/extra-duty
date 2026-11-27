@@ -41,7 +41,7 @@ const MAX_CONFLICT_REASON = 500;
 
 const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric" });
 
-/** "Riley Signed on #12, Tue, Dec 8: Overlaps job #13": the deputy, the detail and the engine's exact message. */
+/** "Riley Signed on #12, Tue, Dec 8: Overlaps Detail #13": the deputy, the detail and the engine's exact message. */
 const conflictText = (c: ScheduleConflict) => `${c.name} on #${c.jobNumber}, ${DAY.format(c.startAt)}: ${c.message}`;
 
 /**

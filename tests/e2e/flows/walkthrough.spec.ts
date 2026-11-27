@@ -85,7 +85,7 @@ test("walkthrough: request, approval, release on the 15th at 4:00 PM, sign-up, b
     await clock.advanceTo(job.id, "release");
     await clock.tick("watch-release");
     await deputy.goto("/alerts");
-    await deputy.getByRole("link", { name: new RegExp(`Now open for sign-up: ${title}`) }).click();
+    await deputy.getByRole("link", { name: new RegExp(`Now open for sign-up: #\\d+ ${title}`) }).click();
     await expect(deputy.getByRole("heading", { level: 1, name: title })).toBeVisible();
     await deputy.getByRole("button", { name: "Sign up for Deputy Sheriff" }).click();
     await deputy.getByRole("dialog", { name: "Before you sign up" }).getByRole("button", { name: "Accept and sign up" }).click();
@@ -149,7 +149,7 @@ test("walkthrough: request, approval, release on the 15th at 4:00 PM, sign-up, b
 
   await test.step("the detail is Closed for staff", async () => {
     for (const staff of [coordinator, admin]) {
-      await staff.goto(`/coordinate/details/${job.id}`);
+      await staff.goto(`/jobs/${job.id}?tab=manage`);
       await expect(staff.getByRole("main").getByText("Closed", { exact: true })).toBeVisible();
     }
   });

@@ -7,12 +7,15 @@ import { detailFormOptions } from "@/domain/coordinator/views";
 import { editBlockReason } from "@/domain/jobs/bulk-edit";
 import { calendarTokenStatus } from "@/domain/planning/ics-feed";
 import { getSettings } from "@/domain/settings/settings";
+import { getCalendarFeedStatus } from "@/domain/planning/calendar";
+import { getWorkSchedule } from "@/domain/planning/schedule";
 import { agencyDateOnly, agencyDateParts, agencyDayKey, agencyInstant } from "@/domain/time/agency-time";
 import { Card, CardTitle } from "@/ui/components/Card";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { Notice } from "@/ui/components/Notice";
 import { Icon } from "@/ui/icons";
-import { dateLabel, dayLabel, longDay, monthYear, plural } from "../_personnel/format";
+import { dateLabel, dayLabel, longDay, monthYear, plural, timeRange } from "../_personnel/format";
+import { scheduleNoteFor } from "../_personnel/filters";
 import { personnelActor } from "../_personnel/session";
 import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { activeCount, filterParams, resolveFilters } from "../_shared/detail-filters";
@@ -41,7 +44,7 @@ const start = (a: Ymd) => agencyInstant(a.y, a.m, a.d, 0, 0);
 const weekday = (a: Ymd) => new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay();
 const LIST_DAYS = 60;
 
-function DayList({ days, byDay, staff, empty }: Readonly<{ days: Ymd[]; byDay: Map<string, CalEntry[]>; staff: boolean; empty: string }>) {
+function DayList({ days, byDay, empty }: Readonly<{ days: Ymd[]; byDay: Map<string, CalEntry[]>; empty: string }>) {
   const shown = days.filter((day) => byDay.has(key(day)));
   if (shown.length === 0)
     return (
@@ -61,7 +64,7 @@ function DayList({ days, byDay, staff, empty }: Readonly<{ days: Ymd[]; byDay: M
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {list.map((e) => (
                 <li key={e.id}>
-                  <EntryRow e={e} staff={staff} />
+                  <EntryRow e={e} />
                 </li>
               ))}
             </ul>
@@ -121,7 +124,7 @@ function dayNumberClass(isToday: boolean, inMonth: boolean): string {
 }
 
 /** One day of the month grid: on phones the day and its count, on desktop a count and the day's entries. */
-function MonthDay({ day, list, inMonth, isToday, staff, href }: Readonly<{ day: Ymd; list: CalEntry[]; inMonth: boolean; isToday: boolean; staff: boolean; href: Href }>) {
+function MonthDay({ day, list, inMonth, isToday, href }: Readonly<{ day: Ymd; list: CalEntry[]; inMonth: boolean; isToday: boolean; href: Href }>) {
   const dayName = `${longDay(start(day))}${isToday ? ", today" : ""}`;
   return (
     <td className={`h-16 border-l border-divider p-1 align-top first:border-l-0 md:h-36 ${isToday ? "bg-accent-soft" : ""}`} aria-current={isToday ? "date" : undefined}>
@@ -160,7 +163,7 @@ function MonthDay({ day, list, inMonth, isToday, staff, href }: Readonly<{ day: 
           <ul className="m-0 flex max-h-28 list-none flex-col overflow-y-auto p-0" aria-label={`${dayName} details`}>
             {list.map((e) => (
               <li key={e.id}>
-                <CompactEntry e={e} staff={staff} />
+                <CompactEntry e={e} />
               </li>
             ))}
           </ul>
@@ -191,7 +194,7 @@ function MonthGrid({ title, days, byDay, focus, today, staff, href }: Readonly<{
             {Array.from({ length: days.length / 7 }, (_, r) => (
               <tr key={r} className="border-t border-divider">
                 {days.slice(r * 7, r * 7 + 7).map((day) => (
-                  <MonthDay key={key(day)} day={day} list={byDay.get(key(day)) ?? []} inMonth={day.m === focus.m} isToday={key(day) === today} staff={staff} href={href} />
+                  <MonthDay key={key(day)} day={day} list={byDay.get(key(day)) ?? []} inMonth={day.m === focus.m} isToday={key(day) === today} href={href} />
                 ))}
               </tr>
             ))}
@@ -219,10 +222,14 @@ function StaffList({ entries, edit, now }: Readonly<{ entries: CalEntry[]; edit:
       items={entries.map(
         (e): SelectableItem => ({
           id: e.id,
-          href: entryHref(e, true),
-          title: `#${e.number} ${e.title}`,
-          meta: `${withPlace(e.vendorName, e.locationName)}. ${dayLabel(e.startAt)}`,
+          href: entryHref(e),
+          heading: e.vendorName,
+          sub: `#${e.number} ${e.title}`,
+          when: withPlace(`${dayLabel(e.startAt)}, ${timeRange(e.startAt, e.endAt)}`, e.locationName),
           pay: e.pay,
+          address: e.address,
+          lat: e.lat,
+          lng: e.lng,
           chips: [{ tone: TONE[e.status], text: STATUS_TEXT[e.status] }, ...(e.held ? [{ tone: "warning" as const, text: "Held" }] : [])],
           blocked: editBlockReason(e, now),
         }),
@@ -238,7 +245,7 @@ function CountLine({ count, filters, truncated }: Readonly<{ count: number; filt
     <output className="block m-0 text-sm text-muted">
       {plural(count, "detail")}
       {filters.mine ? ", yours only" : ""}
-      {activeCount(filters, false) > mineFilters ? ", filtered" : ""}
+      {activeCount(filters, true) > mineFilters ? ", filtered" : ""}
       {truncated ? ". Only the first 2,000 are shown; narrow the filters." : "."}
     </output>
   );
@@ -260,7 +267,8 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
   const focus = ymd(picked ?? now);
 
   const base = await withTx(async (tx) => ({ settings: await getSettings(tx), prefs: await getFilterPrefs(actor, tx) }));
-  const filters = resolveFilters(sp, base.prefs, { personal: false });
+  // One filter set for every view (List, Calendar and Map), the For you filters included.
+  const filters = resolveFilters(sp, base.prefs, { personal: true });
   const days = viewDays(view, focus, base.settings.weekStartsOn, now);
   const today = agencyDayKey(now);
   const range = viewRange(view, days, today, now);
@@ -270,6 +278,7 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
     options: await filterOptions(actor, tx, range),
     feed: await calendarTokenStatus(actor, tx),
     edit: staff && view === "list" ? await detailFormOptions(actor, tx, now) : null,
+    note: scheduleNoteFor(await getWorkSchedule(actor, tx, actor.userId), (await getCalendarFeedStatus(actor, tx, actor.userId)).connected),
   }));
   const byDay = new Map<string, CalEntry[]>();
   for (const e of data.entries) {
@@ -292,7 +301,7 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
   else
     body = (
       <>
-        <DayList days={days} byDay={byDay} staff={staff} empty={EMPTY_TITLE[view]} />
+        <DayList days={days} byDay={byDay} empty={EMPTY_TITLE[view]} />
         <Legend staff={staff} />
       </>
     );
@@ -301,17 +310,15 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
     <div className="flex flex-col gap-4.5">
       <PageTitle
         action={
-          staff ? undefined : (
-            <TabLinks
-              label="Details views"
-              current="calendar"
-              items={[
-                { key: "list", label: "List", href: "/jobs" },
-                { key: "calendar", label: "Calendar", href: "/calendar" },
-                { key: "map", label: "Map", href: "/map" },
-              ]}
-            />
-          )
+          <TabLinks
+            label="Details views"
+            current="calendar"
+            items={[
+              { key: "list", label: "List", href: `/jobs?${fq}` },
+              { key: "calendar", label: "Calendar", href: `/calendar?${fq}` },
+              { key: "map", label: "Map", href: `/map?${fq}` },
+            ]}
+          />
         }
       >
         Calendar
@@ -319,7 +326,7 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
       {one(sp.filter_error) ? <Notice tone="danger">Your filters were applied but could not be saved. Try again.</Notice> : null}
 
       <div className="grid gap-4.5 md:grid-cols-[272px_minmax(0,1fr)] md:items-start md:gap-6">
-        <FilterPanel path="/calendar" keep={keep} filters={filters} options={data.options} remember={base.prefs.remember} active={activeCount(filters, false)} staff={staff} />
+        <FilterPanel path="/calendar" keep={keep} filters={filters} options={data.options} remember={base.prefs.remember} active={activeCount(filters, true)} staff={staff} scheduleNote={data.note} />
 
         <div className="flex min-w-0 flex-col gap-3">
           <TabLinks label="Calendar range" current={view} items={VIEWS.map((v) => ({ key: v, label: v[0].toUpperCase() + v.slice(1), href: href(v, v === "list" ? undefined : focus) }))} />

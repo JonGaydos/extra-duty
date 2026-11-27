@@ -4,14 +4,19 @@
 
    ![The Details list](../images/deputy/07-finding-and-sorting-details-1-phone.webp)
 
-2. Choose **Filters** to narrow the list. You can search by title, vendor or place, or by **Job number**, and tick **My details only**, **Open spots only**, **This week**, **Flexible times** or **Only details I can work**. Pick **Sort by** Date, Total pay, Rate or Vendor. Choose **Apply**.
+2. Choose **Filters** to narrow the list. You can search by title, vendor or place, or by **Detail number**, tick **My details only**, and under **For you** tick **Open spots only**, **This week**, **Flexible times** or **Only details I can work**. You can also pick a **Status**, **Vendor**, **Vendor type**, **Detail type**, **Location** or a **Person signed up**. Pick **Sort by** Date, Total pay, Rate or Vendor (the list only). Choose **Apply**.
 
    ![The filter panel on a phone](../images/deputy/07-finding-and-sorting-details-2-phone.webp)
 
-3. Tick **Remember my filters** to keep them for next time. **Reset** clears them. Filters change only your own view.
-4. On **Home**, **Open for you** has quick filters: **This week**, **Flexible times** and **Only details I can work**. **See all** opens the full list.
+3. The list, the **Calendar** and the **Map** share the same filters. Switch views with the **List**, **Calendar** and **Map** buttons and your filters come along.
+4. Tick **Remember my filters** to keep them for next time, in all three views. **Reset** clears them. Filters change only your own view.
+5. On **Home**, **Open for you** has quick filters: **This week**, **Flexible times** and **Only details I can work**. **See all** opens the full list.
 
    ![Open for you on Home](../images/deputy/07-finding-and-sorting-details-3-phone.webp)
+
+## Detail numbers
+
+Every detail has a number, shown as **#9** beside its title and as **Detail #9** at the top of its page. Its web address uses the same number, such as /jobs/9, so you can read it out or type it. To open one, type its number in **Go to detail #** on **Details** and choose **Go**. If there is no such detail, or it is not one you can see, the page says "No detail #123 that you can see".
 
 ## What the labels mean
 

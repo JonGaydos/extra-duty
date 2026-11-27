@@ -267,7 +267,7 @@ describe("billing lock, overrides and reminders", () => {
       await billingReadyTick(AFTER);
       const rows = await inbox(p.userId, "billing.ready");
       // only the job that ended 3 days ago: not 8 days ago, not canceled, not locked, not future
-      expect(rows.map((r) => r.title)).toEqual([`Bill job #${recent.job.number}`]);
+      expect(rows.map((r) => r.title)).toEqual([`Bill Detail #${recent.job.number}`]);
       expect(rows[0].link).toBe(`/jobs/${recent.job.id}`);
       expect((await db.select().from(assignments).where(eq(assignments.id, old.a.id)))[0].billReadyAlertedAt).toBeNull();
       await billingReadyTick(new Date(AFTER.getTime() + HOUR));
@@ -285,7 +285,7 @@ describe("billing lock, overrides and reminders", () => {
       await db.update(jobs).set({ state: "canceled", startAt: new Date(AFTER.getTime() - 2 * DAY - 6 * HOUR), endAt: new Date(AFTER.getTime() - 2 * DAY) }).where(eq(jobs.id, late.job.id));
       await billingReadyTick(AFTER);
       const rows = await inbox(p.userId, "billing.ready");
-      expect(rows.map((r) => r.title)).toEqual([`Bill late cancellation pay for job #${late.job.number}`]);
+      expect(rows.map((r) => r.title)).toEqual([`Bill late cancellation pay for Detail #${late.job.number}`]);
       expect(rows[0].link).toBe(`/jobs/${late.job.id}`);
       await billingReadyTick(new Date(AFTER.getTime() + HOUR));
       expect(await inbox(p.userId, "billing.ready")).toHaveLength(1);
@@ -343,7 +343,7 @@ describe("billing lock, overrides and reminders", () => {
       await unbilledRemindersTick(AFTER);
       const first = await inbox(busy.userId, "billing.unbilled_reminder");
       expect(first).toHaveLength(1);
-      expect(first[0].body).toContain("job #");
+      expect(first[0].body).toContain("Detail #");
       expect(await inbox(clear.userId, "billing.unbilled_reminder")).toHaveLength(0);
       const [u] = await get().db.select().from(users).where(eq(users.id, busy.userId));
       expect(u.unbilledReminderSentAt!.getTime()).toBe(AFTER.getTime());

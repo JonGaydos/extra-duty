@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Card } from "@/ui/components/Card";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
-import { navFor } from "@/ui/shell/nav";
+import { navFor, type NavItem } from "@/ui/shell/nav";
 import { appEnvFromProcess } from "@/lib/env";
 import { trainingConfigured } from "@/db/client";
 import { PRACTICE_ROLE_LABELS } from "@/domain/training/mode";
@@ -13,9 +13,29 @@ import { backToLiveAction, switchToTrainingAction } from "@/ui/shell/training-ac
 
 export const metadata: Metadata = { title: "More" };
 
+/** One group of More rows. */
+function Rows({ items, label }: Readonly<{ items: NavItem[]; label?: string }>) {
+  return (
+    <Card pad={false} className="max-w-140">
+      <ul aria-label={label} className="m-0 list-none p-0">
+        {items.map((i) => (
+          <li key={i.href} className="border-t border-divider first:border-t-0">
+            <Link href={i.href} data-nav-item className="flex min-h-13 items-center gap-3.5 px-4 text-title font-medium text-ink no-underline hover:text-ink">
+              <Icon name={i.icon} size={22} className="text-muted" />
+              <span className="flex-1">{i.label}</span>
+              <Icon name="chevronRight" size={18} className="text-muted" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 /**
- * Phone only in practice: the sections that do not fit in the tab bar, and, for coordinators and admins where training
- * is set up, the training switch (the desktop top bar's, which phones do not show). A role with nothing here goes Home.
+ * Phone only in practice: the sections that do not fit in the tab bar, then, for coordinators and admins, their staff
+ * sections in a group of their own and, where training is set up, the training switch (the desktop top bar's, which
+ * phones do not show). A role with nothing here goes Home.
  */
 export default async function MorePage() {
   const shell = await loadShell();
@@ -46,20 +66,14 @@ export default async function MorePage() {
           </Card>
         </section>
       ) : null}
-      {items.length ? (
-        <Card pad={false} className="max-w-140">
-          <ul className="m-0 list-none p-0">
-            {items.map((i) => (
-              <li key={i.href} className="border-t border-divider first:border-t-0">
-                <Link href={i.href} data-nav-item className="flex min-h-13 items-center gap-3.5 px-4 text-title font-medium text-ink no-underline hover:text-ink">
-                  <Icon name={i.icon} size={22} className="text-muted" />
-                  <span className="flex-1">{i.label}</span>
-                  <Icon name="chevronRight" size={18} className="text-muted" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      {items.length ? <Rows items={items} /> : null}
+      {nav.staff.length ? (
+        <section aria-labelledby="more-staff" className="flex max-w-140 flex-col gap-2">
+          <h2 id="more-staff" className="m-0 text-title font-semibold">
+            Staff
+          </h2>
+          <Rows items={nav.staff} label="Staff" />
+        </section>
       ) : null}
     </div>
   );

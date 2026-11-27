@@ -40,7 +40,7 @@ for (const theme of THEMES) {
 
     for (const [who, path] of [
       ["deputy", "/profile"],
-      ["coordinator", "/coordinate/details"],
+      ["coordinator", "/jobs"],
       ["vendor", "/vendor/request"],
     ] as const) {
       test(`${who} on ${path}: flush tab bar, the document stays put and main scrolls`, async ({ page, context, browserName }) => {
@@ -128,7 +128,7 @@ test.describe("links read as links", () => {
 
   test("coordinator pages: every text link in main is underlined", async ({ page, context }) => {
     await signInAs(context, "coordinator");
-    for (const path of ["/coordinate", "/coordinate/details", "/coordinate/vendors", "/coordinate/payments", "/coordinate/reports", "/coordinate/reports/activity", "/calendar", "/more"]) {
+    for (const path of ["/home", "/coordinate", "/jobs", "/jobs?view=requests", "/coordinate/vendors", "/coordinate/payments", "/coordinate/reports", "/coordinate/reports/activity", "/calendar", "/more"]) {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect({ path, bare: await bareLinks(page) }).toEqual({ path, bare: [] });
@@ -204,7 +204,7 @@ test.describe("addresses, maps and the site contact", () => {
       const staff = await browser.newContext({ viewport: PHONE });
       await signInAs(staff, "coordinator");
       const sp = await staff.newPage();
-      await sp.goto(`/coordinate/details/${job.id}`);
+      await sp.goto(`/jobs/${job.id}?tab=manage`);
       await expect(sp.getByRole("main").getByText("Check this number")).toBeVisible();
       await sp.screenshot({ path: `${E2E.screenshotDir}/contact-check-number-phone.png` });
       await staff.close();
@@ -233,7 +233,7 @@ for (const theme of THEMES) {
         await expectNoSeriousA11yIssues(page);
 
         const [job] = await sql<{ id: string }>("select id from jobs where title = $1", [FLEX_JOB]);
-        await page.goto(`/coordinate/details/${job.id}`);
+        await page.goto(`/jobs/${job.id}?tab=manage`);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         await page.screenshot({ path: `${E2E.screenshotDir}/detail-staff-${size}-${theme.name}.png`, fullPage: size === "desktop" });
         await expectNoSeriousA11yIssues(page);

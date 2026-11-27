@@ -6,8 +6,8 @@ import { act } from "../_personnel/result";
 import { filterParams, filtersFromParams } from "./detail-filters";
 import { formText } from "@/lib/form-text";
 
-/** Only these pages take the filter panel; anything else goes to the Calendar. */
-const PATHS = ["/calendar", "/coordinate/details", "/jobs"];
+/** Only these pages take the filter panel (List, Calendar and Map); anything else goes to the Calendar. */
+const PATHS = ["/calendar", "/jobs", "/map"];
 const KEEP = ["view", "date"];
 
 function target(form: FormData): { path: string; keep: URLSearchParams } {

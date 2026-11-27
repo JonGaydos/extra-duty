@@ -321,11 +321,11 @@ describe("ops plans", () => {
       await opsPlanRemindersTick(new Date(DUE.getTime() + HOUR));
       const text = async (type: string, job: typeof withIc) =>
         (await inbox(fx.coord.userId, type, `/jobs/${job.job.id}`)).map((n) => [n.title, n.body]);
-      expect(await text("ops_plan.due_soon", withIc)).toEqual([[`Ops plan due soon: job #${withIc.job.number}`, `${withIc.job.title}: the ops plan is due soon.`]]);
-      expect(await text("ops_plan.overdue", withIc)).toEqual([[`Ops plan overdue: job #${withIc.job.number}`, `${withIc.job.title}: the ops plan is overdue.`]]);
+      expect(await text("ops_plan.due_soon", withIc)).toEqual([[`Ops plan due soon: Detail #${withIc.job.number}`, `${withIc.job.title}: the ops plan is due soon.`]]);
+      expect(await text("ops_plan.overdue", withIc)).toEqual([[`Ops plan overdue: Detail #${withIc.job.number}`, `${withIc.job.title}: the ops plan is overdue.`]]);
       expect(await inbox(ic.userId, "ops_plan.overdue", `/jobs/${withIc.job.id}`)).toHaveLength(1);
-      expect(await text("ops_plan.due_soon", without)).toEqual([[`Ops plan due soon: job #${without.job.number}`, `${without.job.title}: the ops plan is due soon and the detail has no Incident Commander.`]]);
-      expect(await text("ops_plan.overdue", without)).toEqual([[`Ops plan overdue: job #${without.job.number}`, `${without.job.title}: the ops plan is overdue and the detail has no Incident Commander.`]]);
+      expect(await text("ops_plan.due_soon", without)).toEqual([[`Ops plan due soon: Detail #${without.job.number}`, `${without.job.title}: the ops plan is due soon and the detail has no Incident Commander.`]]);
+      expect(await text("ops_plan.overdue", without)).toEqual([[`Ops plan overdue: Detail #${without.job.number}`, `${without.job.title}: the ops plan is overdue and the detail has no Incident Commander.`]]);
     });
 
     test("a submitted plan sends no due alerts", async () => {

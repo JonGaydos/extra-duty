@@ -8,7 +8,7 @@
 type Env = Record<string, string | undefined>;
 
 /** Settings that hold a web address. VAPID_SUBJECT may also be a mailto: address. */
-const URL_SETTINGS = ["APP_URL", "BETTER_AUTH_URL", "S3_ENDPOINT", "VAPID_SUBJECT", "MAP_TILE_URL", "NOMINATIM_URL"];
+const URL_SETTINGS = new Set(["APP_URL", "BETTER_AUTH_URL", "S3_ENDPOINT", "VAPID_SUBJECT", "MAP_TILE_URL", "NOMINATIM_URL"]);
 
 /** Settings the app runs without. Passwords are left out: a real password may start with "#". */
 const OPTIONAL_SETTINGS = [
@@ -53,7 +53,7 @@ export function cleanEnv(env: Env = process.env, warn: (message: string) => void
       delete env[name];
       continue;
     }
-    const isUrl = URL_SETTINGS.includes(name);
+    const isUrl = URL_SETTINGS.has(name);
     if (isUrl ? urlProblem(name, value) : value.startsWith("#")) {
       delete env[name];
       warn(

@@ -5,7 +5,8 @@ import { HOUR, setupFixture } from "../assignments/helpers";
 import type { Actor } from "@/domain/actor";
 import { signUp } from "@/domain/assignments/signup";
 import { cancelJob } from "@/domain/jobs/jobs";
-import { capSummary, listAllJobs, loadJobCards, myDetails } from "@/domain/personnel/views";
+import { capSummary, listAllJobs, loadJobCards, myDetails, upNextAndBackup } from "@/domain/personnel/views";
+import { detailCards, NO_FILTERS } from "@/domain/calendar/calendar";
 import { getJob, JOBS_PAGE_SIZE, listJobs } from "@/domain/jobs/jobs";
 import { eligibilityFor, watchJob } from "@/domain/assignments/signup";
 import { NotFoundError } from "@/domain/errors";
@@ -45,6 +46,35 @@ describe("personnel views", () => {
     const later = new Date(canceled.job.startAt.getTime() + 32 * 24 * HOUR);
     const afterwards = await f.run((tx) => myDetails(me, tx, later));
     expect(afterwards.find((d) => d.job.id === canceled.job.id)).toBeUndefined();
+  });
+
+  test("Home's Up next lists only sign-ups the person still works; backups go under On backup; history stays on Details", async () => {
+    const who = await f.person();
+    const put = async (status: "signed_up" | "pending_short" | "backup" | "canceled" | "removed", removalReason: string | null = null) => {
+      const { job, positionId } = await f.mkJob({ count: 3 });
+      await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: who.userId, status, removalReason, backupPosition: status === "backup" ? 1 : null });
+      return job.id;
+    };
+    const working = await put("signed_up");
+    const shorter = await put("pending_short");
+    const backup = await put("backup");
+    const canceledByMe = await put("canceled");
+    const removed = await put("removed", "Out of uniform");
+    // A sign-up ended by the detail being canceled.
+    const jobGone = await put("signed_up");
+    await f.run((tx) => cancelJob(f.coord, tx, jobGone, "Vendor closed for weather", { now: SIGNUP_AT }));
+
+    const mine = await f.run((tx) => myDetails(who, tx, SIGNUP_AT));
+    const { upNext, onBackup } = upNextAndBackup(mine, SIGNUP_AT, 10);
+    expect(upNext.map((d) => d.job.id).sort((a, b) => a.localeCompare(b))).toEqual([working, shorter].sort((a, b) => a.localeCompare(b)));
+    expect(onBackup.map((d) => d.job.id)).toEqual([backup]);
+    for (const gone of [canceledByMe, removed, jobGone]) expect(upNext.map((d) => d.job.id)).not.toContain(gone);
+
+    // My details with the Canceled filter still lists the history, with the reasons.
+    const range = { from: SIGNUP_AT, to: new Date(SIGNUP_AT.getTime() + 400 * 24 * HOUR), runningAt: SIGNUP_AT };
+    const history = await f.run((tx) => detailCards(who, tx, range, { ...NO_FILTERS, mine: true, statuses: ["canceled"] }, SIGNUP_AT));
+    expect(history.gone.map((g) => g.job.id).sort((a, b) => a.localeCompare(b))).toEqual([canceledByMe, removed, jobGone].sort((a, b) => a.localeCompare(b)));
+    expect(history.gone.find((g) => g.job.id === removed)?.reason).toBe("Out of uniform");
   });
 
   test("a canceled or removed sign-up reads its own reason, or says who ended it", async () => {

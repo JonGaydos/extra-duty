@@ -130,7 +130,7 @@ test("a vendor requests a detail, a coordinator approves it, and a time change w
   const staff = await browser.newContext();
   await signInAs(staff, "coordinator");
   const coord = await staff.newPage();
-  await coord.goto(`/coordinate/details/${id}`);
+  await coord.goto(`/jobs/${id}?tab=manage`);
   await coord.getByRole("button", { name: "Approve request" }).click();
   await expect(coord.getByRole("status").filter({ hasText: "Request approved." })).toBeVisible();
   await staff.close();
@@ -205,7 +205,7 @@ test("a vendor requests three dates with flexible times, a safety address and a 
   const staff = await browser.newContext();
   await signInAs(staff, "coordinator");
   const coord = await staff.newPage();
-  await coord.goto(`/coordinate/details/${ids[1]}`);
+  await coord.goto(`/jobs/${ids[1]}?tab=manage`);
   await coord.getByRole("button", { name: "Approve request" }).click();
   await expect(coord.getByRole("status").filter({ hasText: "Request approved for 3 dates." })).toBeVisible();
   await staff.close();

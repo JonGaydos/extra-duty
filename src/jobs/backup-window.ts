@@ -84,7 +84,7 @@ export async function watchReleaseTick(now: Date, tx?: Tx): Promise<{ alerted: n
         await endWatchAlerted(t, w, now);
         await emit(t, { recipients: [w.userId],
           type: "job.watch_released",
-          title: `Now open for sign-up: ${job.title}`,
+          title: `Now open for sign-up: #${job.number} ${job.title}`,
           body: "A detail you are watching has been released.",
           link: `/jobs/${job.id}`,
         });

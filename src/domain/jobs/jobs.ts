@@ -293,7 +293,7 @@ async function syncPositions(tx: Tx, jobId: string, wanted: Normalized[]): Promi
 }
 
 /** A saved change that the people on a detail are told about; bulk edits gather them into one alert per person. */
-export type JobChange = { jobId: string; title: string; startAt: Date; details: string[]; audience: string[] };
+export type JobChange = { jobId: string; number: number; title: string; startAt: Date; details: string[]; audience: string[] };
 
 /** Positions for quickEdit and bulk edit, checked once for every detail. */
 export async function normalizeForEdit(tx: Tx, positions: PositionInput[] | undefined): Promise<Normalized[] | null> {
@@ -518,10 +518,10 @@ async function auditJobUpdate(actor: Actor, tx: Tx, before: Job, after: Job, pos
 async function alertChange(tx: Tx, before: Job, after: Job, details: string[], collect: ((c: JobChange) => void) | undefined): Promise<void> {
   if (!details.length) return;
   if (collect) {
-    collect({ jobId: before.id, title: after.title, startAt: after.startAt, details, audience: await jobAudience(tx, after) });
+    collect({ jobId: before.id, number: after.number, title: after.title, startAt: after.startAt, details, audience: await jobAudience(tx, after) });
     return;
   }
-  await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: ${after.title}`, body: details.join(" "), link: `/jobs/${before.id}` });
+  await emit(tx, { recipients: await jobAudience(tx, after), type: "job.changed", title: `Detail changed: #${after.number} ${after.title}`, body: details.join(" "), link: `/jobs/${before.id}` });
 }
 
 /** Saves the safety change; when it changed anything, audits it (if people signed up) and alerts the people on the job. */
@@ -534,7 +534,7 @@ async function applySafetyEdit(actor: Actor, tx: Tx, before: Job, after: Job, sa
     await emit(tx, {
       recipients: await jobAudience(tx, after),
       type: "job.safety_changed",
-      title: `Officer safety information changed: ${after.title}`,
+      title: `Officer safety information changed: #${after.number} ${after.title}`,
       body: "Review the officer safety notes and addresses before the detail.",
       link: `/jobs/${before.id}`,
     });
@@ -681,7 +681,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
   // Sequential: writes and alerts in this transaction.
   for (const a of pending) {
     await recordAudit(tx, { actor, action: "assignment.short_declined", entityType: "assignment", entityId: a.id, before: { ...a, status: "pending_short" }, after: a, reason: "Detail canceled" });
-    await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: ${after.title}`, body: "Detail canceled", link: `/jobs/${id}` });
+    await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: #${after.number} ${after.title}`, body: "Detail canceled", link: `/jobs/${id}` });
   }
   const lateRows = late
     ? await tx
@@ -705,11 +705,11 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
     await recordAudit(tx, { actor, action: "assignment.job_canceled", entityType: "assignment", entityId: a.id, before: { ...a, status: a.backupPosition === null ? "signed_up" : "backup" }, after: a, reason: why });
   }
   const paid = new Set(lateRows.map((a) => a.userId));
-  await emit(tx, { recipients: audience.filter((u) => !paid.has(u)), type: "job.canceled", title: `Detail canceled: ${after.title}`, body: why, link: `/jobs/${id}` });
+  await emit(tx, { recipients: audience.filter((u) => !paid.has(u)), type: "job.canceled", title: `Detail canceled: #${after.number} ${after.title}`, body: why, link: `/jobs/${id}` });
   await emit(tx, {
     recipients: [...paid],
     type: "job.canceled",
-    title: `Detail canceled: ${after.title}`,
+    title: `Detail canceled: #${after.number} ${after.title}`,
     body: `${why}. This is a late cancellation: you are paid for it. Bill it from your unbilled details after its scheduled end.`,
     link: `/jobs/${id}`,
   });
@@ -834,8 +834,8 @@ export async function reactivateJob(actor: Actor, tx: Tx, jobId: string, reason:
 
   const on = `Detail #${after.number} on ${dayText(after.startAt)}`;
   const people = await peopleAtCancel(tx, jobId, cancel?.at ?? null);
-  await emit(tx, { recipients: people.map((p) => p.userId), type: "job.reactivated", title: `Detail back on: ${after.title}`, body: `${on} is back on. Sign up again if you still want it.`, link: `/jobs/${jobId}` });
-  await emit(tx, { recipients: await vendorAudience(tx, after.vendorId), type: "job.reactivated", title: `Detail reactivated: ${after.title}`, body: `${on} has been reactivated.`, link: `/jobs/${jobId}` });
+  await emit(tx, { recipients: people.map((p) => p.userId), type: "job.reactivated", title: `Detail back on: #${after.number} ${after.title}`, body: `${on} is back on. Sign up again if you still want it.`, link: `/jobs/${jobId}` });
+  await emit(tx, { recipients: await vendorAudience(tx, after.vendorId), type: "job.reactivated", title: `Detail reactivated: #${after.number} ${after.title}`, body: `${on} has been reactivated.`, link: `/jobs/${jobId}` });
   return after;
 }
 

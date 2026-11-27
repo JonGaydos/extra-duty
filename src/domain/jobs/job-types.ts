@@ -1,10 +1,11 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { jobTypes, notePresets, paymentMethods, positionTypes, qualifications, ranks, vendorTypes } from "@/db/schema";
+import { jobPositions, jobTypes, notePresets, paymentMethods, positionTypes, qualifications, ranks, vendorTypes } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
-import { NotFoundError, ValidationError } from "../errors";
+import { NotFoundError, RuleViolation, ValidationError } from "../errors";
+import { mentionedElsewhere } from "../ranks/ranks";
 
 type JobType = typeof jobTypes.$inferSelect;
 export type PositionType = typeof positionTypes.$inferSelect;
@@ -284,4 +285,24 @@ export async function setNotePresetActive(actor: Actor, tx: Tx, id: string, acti
     after,
   });
   return after;
+}
+
+/** Where a position type is used; `reason` says why it cannot be deleted, in plain words. */
+export async function positionTypeUsage(tx: Tx, id: string): Promise<{ details: number; records: boolean; reason: string | null }> {
+  const [used] = await tx.select({ n: sql<number>`count(distinct ${jobPositions.jobId})::int` }).from(jobPositions).where(eq(jobPositions.positionTypeId, id));
+  const records = await mentionedElsewhere(tx, id, "position_type");
+  let reason: string | null = null;
+  if (used.n > 0) reason = used.n === 1 ? "Used on 1 detail" : `Used on ${used.n} details`;
+  else if (records) reason = "Used in past records";
+  return { details: used.n, records, reason };
+}
+
+/** Deletes a position type added by mistake: one no detail, report, setting or record has used. */
+export async function deletePositionType(actor: Actor, tx: Tx, id: string): Promise<void> {
+  assertCan(actor, "settings.update.rules");
+  const before = await getPositionType(tx, id);
+  const usage = await positionTypeUsage(tx, id);
+  if (usage.reason) throw new RuleViolation([{ check: "position_type.delete.unused", ok: false, message: `${before.name} cannot be deleted: ${usage.reason.toLowerCase()}. Turn it off instead.` }]);
+  await tx.delete(positionTypes).where(eq(positionTypes.id, id));
+  await recordAudit(tx, { actor, action: "position_type.delete", entityType: "position_type", entityId: id, before, after: null });
 }
