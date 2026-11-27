@@ -3,10 +3,10 @@
  *
  *   Staging (APP_ENV=staging, on the demo agency):
  *     CAPTURE_BASE_URL=https://staging.example CAPTURE_DATABASE_URL=<staging database> BETTER_AUTH_SECRET=<staging's> \
- *       npx tsx scripts/capture-screenshots.ts
+ *       npx tsx --tsconfig tsconfig.node.json scripts/capture-screenshots.ts
  *   The live site in training mode (a coordinator's or admin's session cookie value; the capture switches it to
  *   training as each role, and every page must show the training banner):
- *     CAPTURE_BASE_URL=https://details.example CAPTURE_SESSION_COOKIE=<better-auth.session_token> npx tsx scripts/capture-screenshots.ts
+ *     CAPTURE_BASE_URL=https://details.example CAPTURE_SESSION_COOKIE=<better-auth.session_token> npx tsx --tsconfig tsconfig.node.json scripts/capture-screenshots.ts
  *
  * Locally, against the e2e server on the demo agency: scripts/capture-local.sh.
  *

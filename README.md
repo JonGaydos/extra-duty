@@ -57,7 +57,7 @@ logo) under Admin. Every agency-specific value is a setting.
 - [docs/operations.md](docs/operations.md): settings, environment variables, the release path, and the production
   and staging deployments.
 - [docs/manuals](docs/manuals): the user manuals in Markdown, with screenshots. Build the PDFs with
-  `npx tsx scripts/build-manuals.ts` (written to `docs/manuals/pdf/`, which is not committed).
+  `npx tsx --tsconfig tsconfig.node.json scripts/build-manuals.ts` (written to `docs/manuals/pdf/`, which is not committed).
 
 ## Known assumptions
 

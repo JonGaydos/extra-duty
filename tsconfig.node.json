@@ -1,0 +1,8 @@
+{
+  // For processes started with tsx (the worker, the release step, the one-off commands and the scripts): tsconfig.json
+  // keeps JSX for Next, which would make tsx use the classic transform and need a global React.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

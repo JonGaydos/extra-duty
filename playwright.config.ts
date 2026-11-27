@@ -33,7 +33,7 @@ export default defineConfig({
       : []),
   ],
   webServer: {
-    command: "npx tsx tests/e2e/server.ts",
+    command: "npx tsx --tsconfig tsconfig.node.json tests/e2e/server.ts",
     url: `${E2E.baseURL}/sign-in`,
     reuseExistingServer: false,
     timeout: 600_000,

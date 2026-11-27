@@ -1,7 +1,7 @@
 /**
  * Builds the three user manuals as PDFs from docs/manuals (the same Markdown the in-app Help pages render at /help):
  *
- *   npx tsx scripts/build-manuals.ts [--out docs/manuals/pdf]
+ *   npx tsx --tsconfig tsconfig.node.json scripts/build-manuals.ts [--out docs/manuals/pdf]
  *
  * Each PDF opens with the agency header (name, Sheriff, contact lines and logo) from the agency settings when
  * DATABASE_URL is set, else the built-in defaults. Screenshots are embedded as JPEG. The PDFs are not committed
@@ -10,7 +10,6 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import React from "react";
 import sharp from "sharp";
 import { createDb } from "../src/db/client";
 import { loadAgencyHeader } from "../src/domain/invoices/invoices";
@@ -19,10 +18,6 @@ import { MANUALS, loadChapters, manualsRoot } from "../src/domain/manuals/manual
 import { DEFAULT_SETTINGS } from "../src/domain/settings/defaults";
 import type { AgencyHeaderData } from "../src/lib/pdf/invoice-pdf";
 import { renderManualPdf, type PdfImage } from "../src/lib/pdf/manual-pdf";
-
-// tsx compiles the PDF components with the classic JSX transform (the tsconfig keeps JSX for Next), which calls
-// React.createElement at render time.
-Object.assign(globalThis, { React });
 
 const args = process.argv.slice(2);
 const outIndex = args.indexOf("--out");

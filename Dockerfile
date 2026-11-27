@@ -28,7 +28,7 @@ ENV NODE_ENV=production \
     NODE_OPTIONS=--max-old-space-size=768
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/.next ./.next
-COPY --chown=node:node package.json next.config.mjs tsconfig.json ./
+COPY --chown=node:node package.json next.config.mjs tsconfig.json tsconfig.node.json ./
 COPY --chown=node:node public ./public
 COPY --chown=node:node src ./src
 # The user manuals and their screenshots, read by the in-app Help pages.

@@ -75,7 +75,7 @@ test.describe("capture-screenshots", () => {
   test("refuses to run against live data", () => {
     // The e2e site is APP_ENV=production with live accounts. Even with its database and secret at hand, nothing is taken.
     const outDir = mkdtempSync(join(tmpdir(), "capture-"));
-    const out = spawnSync("npx", ["tsx", "scripts/capture-screenshots.ts"], {
+    const out = spawnSync("npx", ["tsx", "--tsconfig", "tsconfig.node.json", "scripts/capture-screenshots.ts"], {
       env: {
         ...process.env,
         CAPTURE_BASE_URL: E2E.baseURL,
@@ -94,7 +94,7 @@ test.describe("capture-screenshots", () => {
 
 test("the build produces three PDFs with the agency header", () => {
   const dir = mkdtempSync(join(tmpdir(), "manuals-"));
-  const out = spawnSync("npx", ["tsx", "scripts/build-manuals.ts", "--out", dir], {
+  const out = spawnSync("npx", ["tsx", "--tsconfig", "tsconfig.node.json", "scripts/build-manuals.ts", "--out", dir], {
     env: { ...process.env, DATABASE_URL: E2E.databaseURL },
     encoding: "utf8",
     timeout: 300_000,

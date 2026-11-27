@@ -86,7 +86,7 @@ cmd_start() {
   ensure_db
   npm run --silent db:migrate >"$P/logs/migrate.log" 2>&1 || { echo "migrate failed; see $P/logs/migrate.log"; exit 1; }
   npm run --silent db:seed >"$P/logs/seed.log" 2>&1 || { echo "seed failed; see $P/logs/seed.log"; exit 1; }
-  "$ROOT/node_modules/.bin/tsx" scripts/preview-demo.ts >"$P/logs/demo.log" 2>&1 || { echo "demo data failed; see $P/logs/demo.log"; exit 1; }
+  "$ROOT/node_modules/.bin/tsx" --tsconfig tsconfig.node.json scripts/preview-demo.ts >"$P/logs/demo.log" 2>&1 || { echo "demo data failed; see $P/logs/demo.log"; exit 1; }
   echo "db: migrated, seeded, demo data present"
   if app_running; then echo "app: already running (use restart to rebuild)"; return; fi
   "$ROOT/node_modules/.bin/next" build >"$P/logs/build.log" 2>&1 || { echo "build failed; see $P/logs/build.log"; exit 1; }

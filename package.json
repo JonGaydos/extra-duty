@@ -14,9 +14,9 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:e2e": "playwright test",
-    "worker": "tsx src/jobs/worker.ts",
-    "db:migrate": "tsx --env-file-if-exists=.env.local src/db/migrate.ts",
-    "db:seed": "tsx --env-file-if-exists=.env.local src/db/seed.ts",
+    "worker": "tsx --tsconfig tsconfig.node.json src/jobs/worker.ts",
+    "db:migrate": "tsx --tsconfig tsconfig.node.json --env-file-if-exists=.env.local src/db/migrate.ts",
+    "db:seed": "tsx --tsconfig tsconfig.node.json --env-file-if-exists=.env.local src/db/seed.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

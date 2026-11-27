@@ -31,11 +31,11 @@ if [ "${STORAGE_DRIVER:-local}" = local ]; then
 fi
 
 case "${ROLE:-web}" in
-  migrate) exec node_modules/.bin/tsx src/db/release.ts ;;
-  web) exec node_modules/.bin/tsx src/server.ts ;;
-  worker) exec node_modules/.bin/tsx src/jobs/worker.ts ;;
-  setup-email) exec node_modules/.bin/tsx src/db/setup-email.ts "$@" ;;
-  rotate-file-key) exec node_modules/.bin/tsx src/db/rotate-file-key.ts ;;
+  migrate) exec node_modules/.bin/tsx --tsconfig tsconfig.node.json src/db/release.ts ;;
+  web) exec node_modules/.bin/tsx --tsconfig tsconfig.node.json src/server.ts ;;
+  worker) exec node_modules/.bin/tsx --tsconfig tsconfig.node.json src/jobs/worker.ts ;;
+  setup-email) exec node_modules/.bin/tsx --tsconfig tsconfig.node.json src/db/setup-email.ts "$@" ;;
+  rotate-file-key) exec node_modules/.bin/tsx --tsconfig tsconfig.node.json src/db/rotate-file-key.ts ;;
   *)
     echo "ROLE must be migrate, web, worker, setup-email or rotate-file-key (got \"${ROLE}\")." >&2
     exit 64

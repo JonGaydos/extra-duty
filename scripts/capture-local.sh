@@ -10,7 +10,7 @@ tsx="$PWD/node_modules/.bin/tsx"
 export E2E_DEMO=staging
 url="http://localhost:${E2E_PORT}"
 
-"$tsx" tests/e2e/server.ts &
+"$tsx" --tsconfig tsconfig.node.json tests/e2e/server.ts &
 server=$!
 stop() { kill -TERM "$server" 2>/dev/null || true; wait "$server" 2>/dev/null || true; }
 trap stop EXIT
@@ -27,4 +27,4 @@ e2e_value() { "$tsx" -e "import { E2E } from './tests/e2e/env.ts'; process.stdou
 CAPTURE_DATABASE_URL="$(e2e_value E2E.databaseURL)"
 BETTER_AUTH_SECRET="$(e2e_value E2E.appEnv.BETTER_AUTH_SECRET)"
 export CAPTURE_DATABASE_URL BETTER_AUTH_SECRET
-if [[ "$#" -gt 0 ]]; then "$@"; else "$tsx" scripts/capture-screenshots.ts; fi
+if [[ "$#" -gt 0 ]]; then "$@"; else "$tsx" --tsconfig tsconfig.node.json scripts/capture-screenshots.ts; fi
