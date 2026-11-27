@@ -1,4 +1,5 @@
-# Extra Duty on one Linux machine: Caddy (HTTPS) in front of one web container, the worker, PostgreSQL and MinIO.
+# Extra Duty on one Linux machine: Caddy (HTTPS) in front of one web container, the worker and PostgreSQL. Files
+# (W-9s, contracts, ops plans, logos) are kept on disk in the files volume, shared by web, the worker and migrate.
 # Settings: .env holds Compose's own secrets (copy .env.example); app.env holds the app's settings (copy
 # app.env.example). Guide: docs/self-hosting.md.
 #
@@ -12,26 +13,29 @@ name: extra-duty
 x-app: &app
   image: extra-duty:${EXTRA_DUTY_TAG:-latest}
   build: .
-  # The app's own settings only. Compose reads .env (database owner and MinIO root passwords) for interpolation;
-  # those never reach web or the worker.
-  env_file: app.env
+  # The app's own settings. Later files win: docker/storage.env sets disk storage under /data, and app.env may
+  # override any of it (STORAGE_DRIVER=s3 and the S3_* settings for S3 storage). Compose reads .env (database
+  # passwords) for interpolation only; it never reaches web or the worker.
+  env_file:
+    - docker/storage.env
+    - app.env
+  # The same folder in every app container: the worker attaches W-9s and invoice PDFs, and migrate writes the demo
+  # files. FILES_PATH in .env makes it a folder on the host (a bind mount); unset, it is the named volume "files".
+  volumes:
+    - ${FILES_PATH:-files}:/data
   restart: unless-stopped
   depends_on:
     migrate:
       condition: service_completed_successfully
 
-# What web and the worker see besides app.env: the app's database role (rows only, never the owner) and the app's
-# own MinIO account (the two app buckets only, never the root login).
+# What web and the worker see besides the env files: the app's database role (rows only, never the owner). These
+# win over app.env. Storage settings are deliberately not here, so app.env can choose S3 instead of disk.
 x-app-env: &app-env
   DATABASE_URL: postgres://extra_duty_app:${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}@postgres:5432/extra_duty
   TRAINING_DATABASE_URL: postgres://extra_duty_app:${APP_DB_PASSWORD}@postgres:5432/extra_duty_training
-  STORAGE_DRIVER: s3
-  S3_ENDPOINT: http://minio:9000
-  S3_REGION: us-east-1
-  S3_BUCKET: extra-duty
-  TRAINING_BUCKET: extra-duty-training
-  S3_ACCESS_KEY_ID: extra-duty-app
-  S3_SECRET_ACCESS_KEY: ${MINIO_APP_PASSWORD:?Set MINIO_APP_PASSWORD in .env}
+  # The mount point above. With disk storage, the entry point refuses to start if a storage folder is outside it
+  # (files there would be lost when the container is recreated).
+  FILES_MOUNT: /data
 
 services:
   postgres:
@@ -53,39 +57,6 @@ services:
       retries: 20
     networks: [backend]
 
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    restart: unless-stopped
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-    volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks: [backend]
-
-  # Creates the live and training buckets and the app's limited MinIO account, then exits. The only user of the
-  # MinIO root login besides MinIO itself.
-  buckets:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
-    restart: "no"
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD}
-    volumes:
-      - ./docker/minio/init.sh:/init.sh:ro
-    entrypoint: ["/bin/sh", "/init.sh"]
-    networks: [backend]
-
   # The release step: exactly once per deploy, before web and the worker serve.
   migrate:
     <<: *app
@@ -93,10 +64,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      buckets:
-        condition: service_completed_successfully
-    # The one app container with the owner role: the release step changes the schema. It still uses the app's
-    # MinIO account.
+    # The one app container with the owner role: the release step changes the schema.
     environment:
       <<: *app-env
       ROLE: migrate
@@ -164,6 +132,7 @@ networks:
 
 volumes:
   postgres-data: {}
-  minio-data: {}
+  # Uploaded files: live in /data/live, training in /data/training. Back it up with the database.
+  files: {}
   caddy-data: {}
   caddy-config: {}

@@ -15,3 +15,5 @@ var/
 .local-preview/
 # Built by scripts/build-manuals.ts; not committed.
 docs/manuals/pdf/
+# Local Compose changes (for example the Unraid Caddy ports in docs/self-hosting.md).
+docker-compose.override.yml

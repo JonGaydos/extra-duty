@@ -9,7 +9,7 @@ export type S3Config = {
   secretAccessKey: string;
 };
 
-/** Any S3-compatible service (AWS S3, DigitalOcean Spaces, MinIO). No host-specific code. */
+/** Any S3-compatible service (such as AWS S3 or DigitalOcean Spaces). No host-specific code. */
 export function createS3Storage(cfg: S3Config): Storage {
   const client = new S3Client({
     endpoint: cfg.endpoint || undefined,

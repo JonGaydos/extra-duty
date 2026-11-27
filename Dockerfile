@@ -34,8 +34,10 @@ COPY --chown=node:node src ./src
 # The user manuals and their screenshots, read by the in-app Help pages.
 COPY --chown=node:node docs/manuals ./docs/manuals
 COPY --chmod=0755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-# Local file storage (STORAGE_DRIVER=local) writes here; mount a volume if you use it.
-RUN mkdir -p /app/var && chown node:node /app/var
+# File storage on disk. Docker Compose mounts the files volume at /data; a new named volume copies this folder's
+# owner, so the app user (node, uid 1000) can write it. A host folder (bind mount) must be given to uid 1000 itself.
+# /app/var is the default folder when STORAGE_LOCAL_DIR is unset.
+RUN mkdir -p /data /app/var && chown node:node /data /app/var
 USER node
 EXPOSE 3000
 ENTRYPOINT ["docker-entrypoint.sh"]

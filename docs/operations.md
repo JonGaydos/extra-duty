@@ -14,8 +14,8 @@ Every release is one container image. The same image runs in two deployments, wh
 
 **Production** is the live site. It carries **training mode** with it: coordinators and admins can switch to
 training (top bar, "Switch to training") and practice as a deputy, coordinator, admin or vendor. Training has its
-own database (`TRAINING_DATABASE_URL`) and its own file storage (`TRAINING_BUCKET`, or `TRAINING_STORAGE_LOCAL_DIR`
-for local files), filled with made-up demo data. Nothing done in training reaches live data, and no email leaves
+own database (`TRAINING_DATABASE_URL`) and its own file storage (`TRAINING_STORAGE_LOCAL_DIR` on disk, or
+`TRAINING_BUCKET` with S3), filled with made-up demo data. Nothing done in training reaches live data, and no email leaves
 training: every message is kept in the Outbox (an "Outbox" item in the staff menu while in training). Every page and
 every PDF in training shows "TRAINING". Each new sign-in starts in live. Training is reset to the starting demo
 data every night at 2:00 AM agency time (a setting under Reminders and locks), and a coordinator can reset it at
@@ -87,19 +87,28 @@ Compose's own secrets go in `.env` (copy `.env.example`). Never put real secrets
 | `SEED_ADMIN_EMAIL` | First run | The release step creates this admin account if it does not exist. |
 | `TRUSTED_PROXY` | Behind a proxy | Addresses or CIDR ranges of the reverse proxy. Only from these is `X-Forwarded-For` believed; sign-in throttling keys on the client address. Empty trusts no one and uses the connection's address. |
 | `PORT`, `HOST` | No | Where the web app listens (default `3000`, `0.0.0.0`). |
-| `STORAGE_DRIVER` | Yes in production | `s3` (MinIO, DigitalOcean Spaces, AWS) or `local`. Production refuses to start without it. |
+| `STORAGE_DRIVER` | Yes in production | `local` (a folder on disk; the Docker Compose default) or `s3` (any S3-compatible service, such as DigitalOcean Spaces or AWS). Production refuses to start without it. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | For `s3` | The bucket for live files. `S3_ENDPOINT` is blank for AWS. |
 | `TRAINING_BUCKET` | For training with `s3` | The training bucket. Never the live bucket. |
-| `STORAGE_LOCAL_DIR`, `TRAINING_STORAGE_LOCAL_DIR` | For `local` | Folders for live and training files (default `./var/storage`, `./var/training-storage`). |
+| `STORAGE_LOCAL_DIR`, `TRAINING_STORAGE_LOCAL_DIR` | For `local` | Folders for live and training files (default `./var/storage`, `./var/training-storage`; under Docker Compose `/data/live` and `/data/training`). The container entry point creates them and stops if it cannot write them. |
 | `STAGING_EMAIL_ALLOWLIST` | On staging | Comma-separated addresses that receive sign-in codes, invitations and password reset links on staging. Everything else stays in the outbox. Ignored in production; training mode never sends anything. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web push. Without them push is skipped. |
 | `DEMO_PASSWORD` | No | Local development only: the password of the local preview's demo accounts and the screenshot capture's practice deputy. Unset: random for each run, printed once. Never set it on a live site. |
 | `NODE_OPTIONS` | No | The image sets `--max-old-space-size=768` (heap per process). Raise it with the container's memory. |
 
-Docker Compose's `.env` holds `SITE_DOMAIN`, `POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `MINIO_ROOT_USER`,
-`MINIO_ROOT_PASSWORD` and `MINIO_APP_PASSWORD`. Compose builds the database and storage settings from them; web and
-the worker receive only the app role's database URL and the app's storage account (`extra-duty-app`, limited to the
-two app buckets), never the owner password or the storage administrator login (see self-hosting.md).
+Docker Compose's `.env` holds `SITE_DOMAIN`, `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` and, optionally, `FILES_PATH`
+(a host folder for the files instead of the `files` volume). Compose builds the database settings from them; web and
+the worker receive only the app role's database URL, never the owner password (see self-hosting.md).
+
+**File storage under Docker Compose.** Each app container reads, in this order, `docker/storage.env` (disk storage:
+`STORAGE_DRIVER=local`, `STORAGE_LOCAL_DIR=/data/live`, `TRAINING_STORAGE_LOCAL_DIR=/data/training`), then
+`app.env`, then the `environment` block in `docker-compose.yml`; a later one wins. The storage settings are only in
+the first two, so `app.env` decides: leave its storage lines commented out for disk storage, or set
+`STORAGE_DRIVER=s3` with the `S3_*` and `TRAINING_BUCKET` settings there for S3 storage. The database URLs are in
+the `environment` block, so `app.env` cannot change them. Web, the worker and the release step all mount the same
+files folder at `/data` (the worker attaches W-9s and invoice PDFs; the release step writes the demo files). With
+disk storage, a container stops at start if a storage folder is outside `/data`, since files there would be lost
+when the container is recreated.
 
 The email server (SMTP or a provider) is set inside the app by an admin (Management, System, Email), not here.
 
@@ -108,11 +117,12 @@ The email server (SMTP or a provider) is set inside the app by an admin (Managem
 Back up three things, every night, and keep copies off the machine:
 
 1. **The live database**: `pg_dump --format=custom` of `DATABASE_URL`'s database.
-2. **The live file storage**: every object in the live bucket (or `STORAGE_LOCAL_DIR`). W-9s in it are encrypted.
+2. **The live file storage**: the `STORAGE_LOCAL_DIR` folder (under Docker Compose, `live` in the files folder;
+   copy it or `tar` it), or every object in the live bucket with S3. W-9s in it are encrypted.
 3. **The `.env` and `app.env` files** (or `.env.local`), kept separately and securely. It holds `FILE_MASTER_KEY` and `SECRETS_KEY`; a backup
    cannot be read without them.
 
-The training database and bucket need no backup: the release step and the nightly reset rebuild them.
+The training database and files need no backup: the release step and the nightly reset rebuild them.
 
 Test a restore at least twice a year on a spare machine.
 
@@ -121,7 +131,8 @@ Test a restore at least twice a year on a spare machine.
 1. Stop the web app and the worker.
 2. Restore the database dump into an empty database: `pg_restore --clean --if-exists --no-owner --role=<owner role>`
    (or create a fresh database and restore into it).
-3. Copy the files back into the live bucket or folder, with the same names.
+3. Put the files back with the same names: unpack or copy the backed-up folder into `STORAGE_LOCAL_DIR` (owned by
+   the app's user), or copy the objects into the live bucket.
 4. Put the `.env` and `app.env` from the same date in place. `FILE_MASTER_KEY` and `SECRETS_KEY` must be the ones the backup was
    made with.
 5. Run the release step (it applies any newer migrations), then start the web app and the worker.
@@ -140,8 +151,9 @@ re-wraps those keys with the new master key, so the files themselves are not re-
 4. Run the image with `ROLE=rotate-file-key`, `FILE_MASTER_KEY_OLD` set to the old key and `FILE_MASTER_KEY` to the
    new one. It handles live and training, goes through the files in a fixed order, and prints how many moved, how
    many were already on the new key and which could not be read. Every file records which master key wraps it, so if
-   the run stops part way, running it again skips the files already moved. On local storage a file is replaced in
-   one step (written beside it, then renamed), so an interruption never leaves a truncated file. Files it cannot
+   the run stops part way, running it again skips the files already moved. It works with disk storage and S3. On
+   disk a file is replaced in one step (written beside it, then renamed), so an interruption never leaves a
+   truncated file; under Docker Compose run it through the `migrate` service, which mounts the files folder. Files it cannot
    read are listed and skipped, and the run ends with an error; restore them from the backup and run it again.
 5. Put the new key in `app.env` as `FILE_MASTER_KEY` and remove the old one from the machine. Keep the old key with the
    backups made before the rotation; they still need it.

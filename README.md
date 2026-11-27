@@ -76,7 +76,8 @@ Requires Node 24 or newer.
 The rebuild step links the embedded Postgres binaries after a fresh install (use the platform package for your
 system).
 
-Copy `app.env.example` to `.env.local` and fill in values, including the database and storage lines at its end.
+Copy `app.env.example` to `.env.local` and fill in values, including the database lines at its end, and uncomment
+`STORAGE_DRIVER=local` and the two storage folder lines (or the S3 lines).
 
     npm run dev          # development server on http://localhost:3000
     npm run build        # production build
