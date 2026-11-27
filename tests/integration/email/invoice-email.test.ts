@@ -183,6 +183,11 @@ describe("invoice email delivery", () => {
     expect((await jobRows(INVOICE_EMAIL_QUEUE)).filter((r) => r.state === "created")).toHaveLength(0);
     const staff = await staffIds();
     expect((await unreadAlerts()).map((n) => n.userId).sort(byText)).toEqual(staff.toSorted(byText));
+    // Coordinators and admins can both set it, on the billing settings page.
+    for (const n of await unreadAlerts()) {
+      expect(n.link).toBe("/admin/settings/billing");
+      expect(n.body).toBe("Set the billing reply-to address in Management, Settings, Billing and invoices before sending invoices.");
+    }
     // A second failure does not stack another unread alert.
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toBeInstanceOf(ValidationError);
     expect(await unreadAlerts()).toHaveLength(staff.length);
@@ -197,7 +202,19 @@ describe("invoice email delivery", () => {
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toThrow(msgText);
     const alerts = await unreadAlerts();
     expect(alerts.map((n) => n.userId).sort(byText)).toEqual((await staffIds()).sort(byText));
-    expect(alerts[0].body).toBe(msgText);
+    // Admins go to the email server page; coordinators cannot open it, so they are sent to write to an admin.
+    const roles = new Map((await get().db.select({ id: users.id, role: users.role }).from(users)).map((u) => [u.id, u.role]));
+    for (const n of alerts) {
+      if (roles.get(n.userId) === "admin") {
+        expect(n.link).toBe("/admin/system/email");
+        expect(n.body).toBe("Set the email provider API key in Management, System, Email before sending invoices.");
+      } else {
+        expect(n.link).toBe("/messages/new");
+        expect(n.body).toBe("Ask an admin to set the email provider API key in Management, System, Email before sending invoices.");
+      }
+    }
+    expect(alerts.some((n) => roles.get(n.userId) === "admin")).toBe(true);
+    expect(alerts.some((n) => roles.get(n.userId) === "coordinator")).toBe(true);
     await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "smtp", from: "" } }));
     await expect(db.transaction((tx) => queueInvoiceEmail(tx, inv.id))).rejects.toThrow(
       "Ask an admin to set the sender address for outgoing email in Settings before sending invoices.",

@@ -1,6 +1,6 @@
 # Getting directions with Open in Maps
 
-Every address in Extra Duty has an **Open in Maps** link.
+Every address in Signal 90 has an **Open in Maps** link.
 
 1. On a detail, choose **Open in Maps**.
 2. Pick **Google Maps**, **Apple Maps** or **OpenStreetMap**. The map opens in a new tab, at the pinned spot when the detail has one.

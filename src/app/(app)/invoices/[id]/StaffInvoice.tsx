@@ -113,8 +113,8 @@ function InvoiceNotices({ inv }: Readonly<{ inv: Invoice }>) {
   );
 }
 
-export function turnChip(status: string, party: string | null, overdue: boolean): { tone: ChipTone; text: string } {
-  if (status === "paid") return { tone: "success", text: "Paid" };
+export function turnChip(status: string, party: string | null, overdue: boolean, paidText?: string | null): { tone: ChipTone; text: string } {
+  if (status === "paid") return { tone: "success", text: paidText ?? "Paid" };
   if (status === "written_off") return { tone: "danger", text: "Written off" };
   if (status === "pending_review") return { tone: "coordinator", text: "Waiting for review" };
   if (status === "ready_to_send") return { tone: "info", text: "Ready to send" };
@@ -125,7 +125,7 @@ export function turnChip(status: string, party: string | null, overdue: boolean)
 
 /** Coordinators and admins: the whole timeline (names included), the issue's notes and every action. */
 export function StaffInvoice({ inv, issue, payeeActions }: Readonly<{ inv: Invoice; issue: PaymentIssueView | null; /** The actor's own invoice: their payee actions (mark received, report non-payment). */ payeeActions?: React.ReactNode }>) {
-  const chip = turnChip(inv.status, inv.party, inv.overdue);
+  const chip = turnChip(inv.status, inv.party, inv.overdue, inv.paidText);
   return (
     <StatusProvider>
       <div className="mx-auto flex w-full max-w-180 flex-col gap-4.5">
@@ -139,6 +139,9 @@ export function StaffInvoice({ inv, issue, payeeActions }: Readonly<{ inv: Invoi
             {inv.kind === "late_cancel" ? <Chip tone="warning">Late cancellation</Chip> : null}
             {inv.revision > 0 ? <Chip>Revision {inv.revision}</Chip> : null}
             {inv.vendorOnHold ? <Chip tone="danger">Vendor on payment hold</Chip> : null}
+            <span className="text-sm text-muted" data-testid="send-line">
+              {inv.sendLine}
+            </span>
           </div>
           <h1 className="m-0 text-2xl font-bold md:text-3xl">Invoice {inv.number}</h1>
           <InvoiceFacts inv={inv} />
@@ -162,6 +165,7 @@ export function StaffInvoice({ inv, issue, payeeActions }: Readonly<{ inv: Invoi
             vendorName={inv.vendorName}
             attachW9={inv.attachW9}
             payeeHasW9={inv.payeeHasW9}
+            approveLine={inv.approveLine}
           />
           {payeeActions ? (
             <div className="flex flex-col gap-2 border-t border-divider pt-3">

@@ -31,8 +31,8 @@ export async function sendTestEmail(
   const problem = emailConfigProblem(s.email);
   if (problem) throw new ValidationError(`Set ${problem.what} and save before sending a test.`);
   const route = s.email.provider === "smtp" ? `the email server ${s.email.smtp.host}` : `the ${s.email.provider} provider`;
-  const msg = simpleEmail(me.email, "Extra Duty test email", [
-    `This test was sent by ${me.name} from Extra Duty.`,
+  const msg = simpleEmail(me.email, "Signal 90 test email", [
+    `This test was sent by ${me.name} from Signal 90.`,
     `Email for ${s.agency.name} goes out through ${route}. If you can read this, it works.`,
   ]);
   try {

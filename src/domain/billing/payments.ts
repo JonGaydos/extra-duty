@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { assignments, invoiceEvents, invoices, paymentIssues, paymentMethods } from "@/db/schema";
 import { emit } from "@/domain/notifications/notify";
@@ -119,11 +119,17 @@ async function validatePayment(tx: Tx, input: PaymentInput, now: Date): Promise<
   if (!m?.active) throw new ValidationError("Choose a valid payment method.");
 }
 
-/** Marks the invoice paid in full once both sides have marked; closes open issues as paid. */
-async function settleIfBothMarked(tx: Tx, id: string, now: Date, actor: Actor): Promise<void> {
-  const [inv] = await tx.select().from(invoices).where(eq(invoices.id, id));
-  if (inv.status !== "sent" || !inv.deputyPaidAt || !inv.vendorPaidAt) return;
-  await closeInvoice(tx, inv, "paid", now, actor);
+/**
+ * "Paid (confirmed by deputy)" for an invoice the payee's confirmation closed while the vendor has not marked it;
+ * "Paid" otherwise. Owner decision 2026-11-26: the deputy's confirmation alone closes the invoice.
+ */
+export function paidLabel(inv: Pick<Invoice, "closedByDeputy" | "vendorPaidAt">): string {
+  return inv.closedByDeputy && !inv.vendorPaidAt ? "Paid (confirmed by deputy)" : "Paid";
+}
+
+/** Deputy-confirmed and paid, but the vendor never added its own mark: the informational "Vendor not confirmed". */
+export function vendorNotConfirmed(inv: Pick<Invoice, "status" | "closedByDeputy" | "vendorPaidAt">): boolean {
+  return inv.status === "paid" && inv.closedByDeputy && !inv.vendorPaidAt;
 }
 
 const ISSUE_OUTCOME = { paid: "Paid", resolved: "Resolved", written_off: "Written off" } as const;
@@ -166,7 +172,7 @@ export async function finishIssue(
   );
 }
 
-async function closeInvoice(tx: Tx, inv: Invoice, outcome: "paid" | "written_off", now: Date, actor: Actor, reason?: string): Promise<void> {
+async function closeInvoice(tx: Tx, inv: Invoice, outcome: "paid" | "written_off", now: Date, actor: Actor | "system", reason?: string): Promise<void> {
   // A closed invoice never sent leaves any queue for good; sending its paid version later queues it explicitly.
   const unqueue = inv.sentAt ? {} : { readyAt: null, paidSendQueued: false };
   await tx.update(invoices).set({ status: outcome, closedReason: reason ?? inv.closedReason, ...unqueue }).where(eq(invoices.id, inv.id));
@@ -223,21 +229,27 @@ export async function markPaid(actor: Actor, tx: Tx, invoiceId: string, input: P
     .where(eq(invoices.id, invoiceId));
   const note = input.note?.trim() || null;
   await tx.insert(invoiceEvents).values({ invoiceId, actorUserId: actor.userId, event: "deputy_paid", party: "deputy", note, vendorVisible: vendorEvent("deputy_paid"), at: now });
-  // Approved but never sent: the deputy's payment closes it; it never goes to the vendor.
-  if (inv.status === "approved_unsent") await closeInvoice(tx, inv, "paid", now, actor);
-  await settleIfBothMarked(tx, invoiceId, now, actor);
+  // The payee's confirmation closes the invoice: approved but never sent (it never goes to the vendor), or sent, with
+  // or without the vendor's own mark. Nobody's clock runs after it; the vendor may still add its mark for its records.
+  if (inv.status === "sent") await tx.update(invoices).set({ closedByDeputy: true }).where(eq(invoices.id, invoiceId));
+  await closeInvoice(tx, inv, "paid", now, actor);
   await applyResponsibility(tx, invoiceId, now, actor);
   const [updated] = await tx.select().from(invoices).where(eq(invoices.id, invoiceId));
   await recordAudit(tx, { actor, action: "invoice.markPaid", entityType: "invoice", entityId: invoiceId, before: snap(inv), after: snap(updated) });
   return updated;
 }
 
-/** The invoice's vendor records payment on their side; the payee is alerted and still confirms. */
+/**
+ * The invoice's vendor records payment on their side. On a sent invoice the payee is alerted and confirms, which
+ * closes it. On one the payee already confirmed it is optional, for the vendor's records: it goes on the timeline and
+ * alerts no one.
+ */
 export async function vendorMarkPaid(actor: Actor, tx: Tx, invoiceId: string, input: PaymentInput, now: Date = new Date()): Promise<Invoice> {
   const inv = await lockInvoice(tx, invoiceId);
   assertCan(actor, "invoice.vendorMarkPaid", { vendorId: inv.vendorId });
-  if (inv.status !== "sent") throw violation("not_sent", "Only a sent invoice can be marked paid.");
   if (inv.vendorPaidAt) throw violation("already_marked", "You already marked this paid");
+  const afterDeputy = vendorNotConfirmed(inv);
+  if (inv.status !== "sent" && !afterDeputy) throw violation("not_sent", "Only a sent invoice can be marked paid.");
   await validatePayment(tx, input, now);
 
   await tx
@@ -246,10 +258,10 @@ export async function vendorMarkPaid(actor: Actor, tx: Tx, invoiceId: string, in
     .where(eq(invoices.id, invoiceId));
   const note = input.note?.trim() || null;
   await tx.insert(invoiceEvents).values({ invoiceId, actorUserId: actor.userId, event: "vendor_paid", party: "vendor", note, vendorVisible: vendorEvent("vendor_paid"), at: now });
-  await settleIfBothMarked(tx, invoiceId, now, actor);
   await applyResponsibility(tx, invoiceId, now, actor);
   const [updated] = await tx.select().from(invoices).where(eq(invoices.id, invoiceId));
   await recordAudit(tx, { actor, action: "invoice.vendorMarkPaid", entityType: "invoice", entityId: invoiceId, before: snap(inv), after: snap(updated) });
+  if (afterDeputy) return updated;
   const { invoiceNumberPrefix } = await getSettings(tx);
   const [a] = await tx.select({ jobId: assignments.jobId }).from(assignments).where(eq(assignments.id, inv.assignmentId));
   await emit(tx, { recipients: [inv.payeeUserId],
@@ -259,6 +271,31 @@ export async function vendorMarkPaid(actor: Actor, tx: Tx, invoiceId: string, in
     link: `/jobs/${a.jobId}`,
   });
   return updated;
+}
+
+const BACKFILL_REASON = "Owner decision 2026-11-26: the deputy's payment confirmation closes the invoice.";
+
+/**
+ * Release step, once per database: closes as paid every invoice the payee confirmed under the old two-sided rule
+ * while the vendor never marked it (still sent, the vendor's turn or an open issue). Each is closed as the deputy's
+ * confirmation now closes one, with a system audit entry. Safe to run again: it then finds nothing. Returns the count.
+ */
+export async function closeDeputyConfirmedInvoices(tx: Tx, now: Date = new Date()): Promise<number> {
+  const open = await tx
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.status, "sent"), isNotNull(invoices.deputyPaidAt)))
+    .orderBy(asc(invoices.number))
+    .for("update");
+  // Sequential: each close writes the invoice, its issues, its timeline and an audit row in this transaction.
+  for (const inv of open) {
+    await tx.update(invoices).set({ closedByDeputy: true }).where(eq(invoices.id, inv.id));
+    await closeInvoice(tx, inv, "paid", now, "system");
+    await applyResponsibility(tx, inv.id, now, "system");
+    const [after] = await tx.select().from(invoices).where(eq(invoices.id, inv.id));
+    await recordAudit(tx, { actor: "system", action: "invoice.close", entityType: "invoice", entityId: inv.id, before: snap(inv), after: snap(after), reason: BACKFILL_REASON });
+  }
+  return open.length;
 }
 
 /** A coordinator closes a sent invoice as Paid or Written off when one side never responds, or an approved, unsent one without sending it. */

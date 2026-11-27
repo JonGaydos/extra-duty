@@ -71,8 +71,8 @@ export async function vendorMarkPaidAction(input: { invoiceId: string; paidDate:
     const paidAt = agencyDateOnly(input.paidDate);
     if (!paidAt) throw new ValidationError("Enter the date you paid.");
     if (!input.methodId) throw new ValidationError("Choose how you paid.");
-    await vendorMarkPaid(actor, tx, input.invoiceId, { paidAt, paymentMethodId: input.methodId, reference: input.reference, note: input.note });
-    return { ok: true, message: "Marked paid. The deputy confirms when the money arrives." };
+    const inv = await vendorMarkPaid(actor, tx, input.invoiceId, { paidAt, paymentMethodId: input.methodId, reference: input.reference, note: input.note });
+    return { ok: true, message: inv.status === "paid" ? "Marked paid for your records." : "Marked paid. The deputy confirms when the money arrives." };
   });
 }
 

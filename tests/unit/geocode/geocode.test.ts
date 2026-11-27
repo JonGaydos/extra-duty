@@ -34,7 +34,7 @@ describe("geocoder", () => {
     expect(url.startsWith("http://nominatim.test/search?")).toBe(true);
     expect(url).toContain("addressdetails=1");
     expect(url).toContain("countrycodes=us");
-    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("ExtraDuty/1.0");
+    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("Signal90/1.0");
   });
 
   test("lookups across callers start at least one second apart", async () => {

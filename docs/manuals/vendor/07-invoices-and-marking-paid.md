@@ -13,7 +13,7 @@ Deputies bill you directly after each detail. The agency never handles the money
 3. Every invoice stays on the page, so you have a record. Each card has a label:
    - **To pay**: not paid yet.
    - **You marked paid**: you recorded payment and the deputy has not confirmed it yet.
-   - **Paid**: settled. The card says when the deputy confirmed payment. An invoice the deputy was paid for on the spot arrives already marked **Paid**, with $0.00 due.
+   - **Paid**: settled. The card says when the deputy confirmed payment. Once the deputy confirms, nothing more is needed from you; you may still choose **Mark paid** for your own records. An invoice the deputy was paid for on the spot arrives already marked **Paid**, with $0.00 due.
    - **Closed**: the agency closed it without payment.
 
    ![Paid invoices](../images/vendor/07-invoices-and-marking-paid-3-phone.webp)

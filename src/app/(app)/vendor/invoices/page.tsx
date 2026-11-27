@@ -73,14 +73,18 @@ function InvoiceCard({ i, methods, today }: Readonly<{ i: VendorInvoiceRow; meth
         </div>
       </dl>
       {paid ? <p className="m-0 text-sm">{paid} The deputy confirms when the money arrives.</p> : null}
-      {i.status === "paid" && i.deputyPaidAt ? <p className="m-0 text-sm">The deputy confirmed payment on {monthDay(i.deputyPaidAt)}.</p> : null}
+      {i.status === "paid" && i.deputyPaidAt ? (
+        <p className="m-0 text-sm">
+          The deputy confirmed payment on {monthDay(i.deputyPaidAt)}.{i.canMarkPaid ? " Nothing more is needed. You may still mark it paid for your own records." : ""}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-4 border-t border-divider pt-1">
         <a href={`/api/v1/invoices/${i.id}/pdf`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold">
           Download PDF<span className="sr-only">, invoice {i.number}</span>
           <Icon name="download" size={16} />
         </a>
       </div>
-      {i.status === "sent" ? <MarkPaid invoiceId={i.id} number={i.number} methods={methods} today={today} canMark={!i.vendorPaid} /> : null}
+      {i.status === "sent" || i.canMarkPaid ? <MarkPaid invoiceId={i.id} number={i.number} methods={methods} today={today} canMark={i.canMarkPaid} /> : null}
     </Card>
   );
 }

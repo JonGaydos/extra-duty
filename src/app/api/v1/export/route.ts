@@ -25,7 +25,7 @@ export const GET = apiHandler(routes["GET /export"], ({ actor, query, run }) => 
     new Response(body, {
       headers: {
         "content-type": "application/zip",
-        "content-disposition": `attachment; filename="extra-duty-export-${day}-${query.format}.zip"`,
+        "content-disposition": `attachment; filename="signal-90-export-${day}-${query.format}.zip"`,
         "x-content-type-options": "nosniff",
         "cache-control": "no-store",
       },

@@ -1,3 +1,5 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
 import { Document, Image, Link, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Block, Inline } from "@/domain/manuals/markdown";
 import { AgencyHeader, type AgencyHeaderData } from "./invoice-pdf";
@@ -147,7 +149,7 @@ export async function renderManualPdf(d: ManualPdfData): Promise<Buffer> {
       <Page size="LETTER" style={s.page}>
         <AgencyHeader agency={d.agency} />
         <Text style={s.coverTitle}>{d.title}</Text>
-        <Text style={s.coverSub}>{`Extra Duty. ${d.summary}`}</Text>
+        <Text style={s.coverSub}>{`Signal 90 · Extra Duty. ${d.summary}`}</Text>
         <Text style={s.coverSub}>{`Updated ${d.dated}`}</Text>
         <Text style={s.contentsHead}>Contents</Text>
         {d.chapters.map((c) => (

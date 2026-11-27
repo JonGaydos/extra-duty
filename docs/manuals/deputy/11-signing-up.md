@@ -1,8 +1,8 @@
 # Signing up for a detail
 
-Sign-up is first come, first served. Extra Duty checks every rule for you and shows the result before you sign up.
+Sign-up is first come, first served. Signal 90 checks every rule for you and shows the result before you sign up.
 
-1. Open the detail from **Home**, **Details** or **Map**. The **Sign up** card shows each rule with a check mark or a cross: the hour caps (any 24 hours, the week and the month), your rank, billing and more. Choose the line such as **All checks passed (12)** or **8 other checks passed** to see them all.
+1. Open the detail from **Home**, **Details**, **Calendar** or **Map**. The **Sign up** card shows each rule with a check mark or a cross: the hour caps (any 24 hours, the week and the month), your rank, billing and more. Choose the line such as **All checks passed (12)** or **8 other checks passed** to see them all.
 2. If the detail has more than one position, pick yours under **Position**. You can fill a position at your rank or below.
 3. Choose **Sign up for** and the position, such as **Sign up for Deputy Sheriff**.
 

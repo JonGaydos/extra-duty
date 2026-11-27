@@ -4,15 +4,17 @@ import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { setupFixture } from "../assignments/helpers";
 import { makeUser } from "../users/helpers";
-import { assignments, invoiceEvents, invoices, notifications, paymentIssues, paymentMethods } from "@/db/schema";
+import { assignments, auditLog, invoiceEvents, invoices, notifications, paymentIssues, paymentMethods } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
 import { exportBillingCsv, billingHistory } from "@/domain/billing/history";
 import {
   applyResponsibility,
+  closeDeputyConfirmedInvoices,
   coordinatorCloseInvoice,
   invoiceTimeline,
   isOverdue,
   markPaid,
+  paidLabel,
   paymentResponsibility,
   responsibleDueAt,
   vendorMarkPaid,
@@ -123,16 +125,67 @@ describe("payment tracking", () => {
     expect(ev.find((e) => e.event === "vendor_paid")?.note).toBeNull();
   });
 
-  test("a deputy-only mark leaves it sent and vendor; responsibleSince does not move when the party is unchanged", async () => {
-    const { inv, person } = await mk();
-    const since = inv.responsibleSince!.getTime();
-    const before = (await events(inv.id)).length;
-    await tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, new Date(NOW.getTime() + DAY)));
+  test("the deputy's confirmation closes the invoice as paid; no clock, overdue or reminder follows", async () => {
+    const { inv, person, a } = await mk();
+    expect(inv.responsibleParty).toBe("vendor");
+    await tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW));
     const cur = await reload(inv.id);
-    expect(cur.status).toBe("sent");
-    expect(cur.responsibleParty).toBe("vendor");
-    expect(cur.responsibleSince!.getTime()).toBe(since);
-    expect(await events(inv.id)).toHaveLength(before + 1);
+    expect(cur.status).toBe("paid");
+    expect(cur.closedByDeputy).toBe(true);
+    expect(cur.vendorPaidAt).toBeNull();
+    expect(cur.responsibleParty).toBeNull();
+    expect(cur.responsibleSince).toBeNull();
+    expect(paidLabel(cur)).toBe("Paid (confirmed by deputy)");
+    expect((await get().db.select().from(assignments).where(eq(assignments.id, a.id)))[0].status).toBe("paid");
+    // Nobody's turn, so it is never overdue and the daily tick has nothing to remind anyone of.
+    expect(isOverdue(cur, new Date(NOW.getTime() + 90 * DAY), { responseDays: { vendor: 30, deputy: 30, coordinator: 7 } })).toBe(false);
+    const ev = await events(inv.id);
+    expect(ev.filter((e) => e.event === "responsibility").at(-1)?.party).toBeNull();
+  });
+
+  test("the vendor may still mark it paid later, for their records; it is on the timeline and alerts no one", async () => {
+    const { inv, person } = await mk();
+    await tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW));
+    const later = new Date(NOW.getTime() + 3 * DAY);
+    await tx((t) => vendorMarkPaid(vendor, t, inv.id, { ...pay, paymentMethodId: method, reference: "chk 88" }, later));
+    const cur = await reload(inv.id);
+    expect(cur.status).toBe("paid");
+    expect(cur.vendorPaidReference).toBe("chk 88");
+    expect(paidLabel(cur)).toBe("Paid");
+    const vendorView = await tx((t) => invoiceTimeline(vendor, t, inv.id));
+    expect(vendorView.map((e) => e.event)).toEqual(expect.arrayContaining(["deputy_paid", "vendor_paid"]));
+    const alerts = await get().db.select().from(notifications).where(and(eq(notifications.userId, person.userId), eq(notifications.title, "Vendor reports paid")));
+    expect(alerts).toHaveLength(0);
+    await expect(tx((t) => vendorMarkPaid(vendor, t, inv.id, { ...pay, paymentMethodId: method }, later))).rejects.toThrow("You already marked this paid");
+  });
+
+  test("an invoice the coordinator closed as paid is not the vendor's to mark", async () => {
+    const { inv } = await mk();
+    await tx((t) => coordinatorCloseInvoice(coord, t, inv.id, { outcome: "paid", reason: "Paid at the office" }, NOW));
+    await expect(tx((t) => vendorMarkPaid(vendor, t, inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toBeInstanceOf(RuleViolation);
+  });
+
+  test("the release step closes invoices the deputy confirmed under the old rule, once, with a system audit entry", async () => {
+    const { db } = get();
+    const old = await mk();
+    // The old two-sided rule: deputy confirmed, vendor never did, still sent and the vendor's turn.
+    await db.update(invoices).set({ deputyPaidAt: PAID, deputyMethodId: method }).where(eq(invoices.id, old.inv.id));
+    await db.insert(paymentIssues).values({ invoiceId: old.inv.id, openedBy: old.person.userId, waitingOn: "vendor" });
+    const untouched = await mk();
+    const closed = await tx((t) => closeDeputyConfirmedInvoices(t, NOW));
+    expect(closed).toBeGreaterThanOrEqual(1);
+    const cur = await reload(old.inv.id);
+    expect(cur).toMatchObject({ status: "paid", closedByDeputy: true, responsibleParty: null });
+    expect((await db.select().from(assignments).where(eq(assignments.id, old.a.id)))[0].status).toBe("paid");
+    expect((await db.select().from(paymentIssues).where(eq(paymentIssues.invoiceId, old.inv.id)))[0].status).toBe("paid");
+    const audit = await db.select().from(auditLog).where(and(eq(auditLog.entityId, old.inv.id), eq(auditLog.action, "invoice.close")));
+    expect(audit).toHaveLength(1);
+    expect(audit[0].actorUserId).toBeNull();
+    expect(audit[0].reason).toMatch(/deputy's payment confirmation closes the invoice/);
+    expect((await reload(untouched.inv.id)).status).toBe("sent");
+    // Running it again changes nothing.
+    expect(await tx((t) => closeDeputyConfirmedInvoices(t, NOW))).toBe(0);
+    expect(await db.select().from(auditLog).where(and(eq(auditLog.entityId, old.inv.id), eq(auditLog.action, "invoice.close")))).toHaveLength(1);
   });
 
   test("applyResponsibility writes one event only when the party changes", async () => {
@@ -150,10 +203,10 @@ describe("payment tracking", () => {
     await expect(tx((t) => markPaid(other, t, inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method, paidAt: new Date(NOW.getTime() + DAY) }, NOW))).rejects.toBeInstanceOf(ValidationError);
     await expect(tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: "nope" }, NOW))).rejects.toBeInstanceOf(ValidationError);
-    await tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW));
-    await expect(tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toThrow("You already marked this paid");
     await tx((t) => vendorMarkPaid(vendor, t, inv.id, { ...pay, paymentMethodId: method }, NOW));
     await expect(tx((t) => vendorMarkPaid(vendor, t, inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toBeInstanceOf(RuleViolation);
+    await tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW));
+    await expect(tx((t) => markPaid(person, t, inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toBeInstanceOf(RuleViolation);
 
     const spot = await mk({ spot: true });
     await expect(tx((t) => markPaid(spot.person, t, spot.inv.id, { ...pay, paymentMethodId: method }, NOW))).rejects.toBeInstanceOf(RuleViolation);

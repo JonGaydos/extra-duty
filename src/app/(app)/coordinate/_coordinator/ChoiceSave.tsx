@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SCHEDULE_LABEL, type SendSchedule } from "@/domain/invoices/send-schedule";
 import { Button } from "@/ui/components/Button";
 import { FormField, Select } from "@/ui/components/FormField";
 import type { ActionResult } from "../../_personnel/result";
@@ -53,8 +54,8 @@ function ChoiceSave({
   );
 }
 
-const SEND_LABEL = { immediate: "Right away", weekly: "Weekly", every_2_weeks: "Every two weeks", monthly: "Monthly" } as const;
-type Schedule = keyof typeof SEND_LABEL;
+const SEND_LABEL = SCHEDULE_LABEL;
+type Schedule = SendSchedule;
 
 /** A vendor's own invoice send schedule, or the agency's. */
 export function VendorSendSchedule({ vendorId, current, agency }: Readonly<{ vendorId: string; current: Schedule | null; agency: Schedule }>) {

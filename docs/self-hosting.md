@@ -1,6 +1,6 @@
 # Self-Hosting Guide
 
-Running Extra Duty on one Linux machine with Docker Compose. Written for county IT staff. Every setting is
+Running Signal 90 on one Linux machine with Docker Compose. Written for county IT staff. Every setting is
 explained in [operations.md](operations.md); this guide is the step-by-step version.
 
 ## What you get
@@ -10,7 +10,7 @@ One `docker compose up` starts these containers on one machine:
 | Container | What it does |
 | --------- | ------------ |
 | `caddy` | The front door on ports 80 and 443. With a domain name it gets an HTTPS certificate automatically. |
-| `web` | The Extra Duty web app. Exactly one. |
+| `web` | The Signal 90 web app. Exactly one. |
 | `worker` | Sends email and alerts and runs the scheduled jobs (reminders, nightly training reset). |
 | `postgres` | The database: a live database and a training database. |
 | `migrate` | Runs once at each start (database updates), then stops. |
@@ -47,7 +47,7 @@ Compose, the database and the one-time `migrate` step use.
 ## 2. Download and configure
 
     sudo mkdir -p /opt/extra-duty && sudo chown "$USER" /opt/extra-duty
-    git clone <the Extra Duty repository> /opt/extra-duty
+    git clone <the Signal 90 repository> /opt/extra-duty
     cd /opt/extra-duty
     cp .env.example .env
     cp app.env.example app.env
@@ -123,7 +123,7 @@ The first administrator account exists (from `SEED_ADMIN_EMAIL`) but has no pass
 emailed. Save your email server once from the command line, then use "Forgot password":
 
     docker compose run --rm -e ROLE=setup-email \
-      -e SETUP_EMAIL_FROM="Extra Duty <noreply@your-county.example>" \
+      -e SETUP_EMAIL_FROM="Signal 90 <noreply@your-county.example>" \
       -e SETUP_SMTP_HOST=smtp.your-county.example \
       -e SETUP_SMTP_PORT=587 \
       -e SETUP_SMTP_USER=extraduty \
@@ -230,13 +230,13 @@ to an address on the list.
 
 ## Unraid
 
-Extra Duty runs on an Unraid server with the same files. The differences:
+Signal 90 runs on an Unraid server with the same files. The differences:
 
 1. **Compose.** Use the Docker Compose Manager plugin (Apps tab) or the terminal (`docker compose`, from the
    project folder). The steps below use the terminal; in the plugin, point the stack at the same folder.
 2. **Folder.** Put the project in `/mnt/user/appdata/extra-duty`:
 
-       git clone <the Extra Duty repository> /mnt/user/appdata/extra-duty
+       git clone <the Signal 90 repository> /mnt/user/appdata/extra-duty
        cd /mnt/user/appdata/extra-duty
        cp .env.example .env
        cp app.env.example app.env
@@ -280,7 +280,7 @@ Extra Duty runs on an Unraid server with the same files. The differences:
 
 ## First real build on a Docker host: checklist
 
-Extra Duty's container image was written without a Docker host to build it on. Its entry points were checked by
+Signal 90's container image was written without a Docker host to build it on. Its entry points were checked by
 running the same commands directly, but the first real build needs these checks once:
 
 1. `docker compose config` prints the merged file with no errors (it checks `.env` and `app.env` too).

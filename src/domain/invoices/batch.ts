@@ -22,7 +22,7 @@ import type { Storage } from "@/lib/storage";
 import type { Cents } from "../types";
 import { assertInvoiceEmailReady, invoiceSettingsProblem } from "./email";
 import { buildInvoicePdfData, formatInvoiceNumber, loadAgencyHeader, type Invoice } from "./invoices";
-import { effectiveSchedule, isSendDay, nextSendDay, queuedSendText, type SendSchedule } from "./send-schedule";
+import { effectiveSchedule, isSendDay, nextSendDay, queuedSendText, type ScheduleAnchors, type SendSchedule } from "./send-schedule";
 
 /**
  * Queued for a batch: ready to send, or a paid invoice explicitly queued to go out as its paid version (it stays paid
@@ -99,11 +99,24 @@ export type SendBatchInput = {
 export type SendBatchResult = { batchId: string; sent: number; held: number };
 
 /** The date a queued invoice is scheduled to go: the schedule's next send day on or after both its queued date and today. */
-function queuedSendDay(schedule: SendSchedule, s: AgencySettings, readyAt: Date, now: Date): string {
+function queuedSendDay(schedule: SendSchedule, s: ScheduleAnchors, readyAt: Date, now: Date): string {
   const ready = agencyDayKey(readyAt);
   const today = agencyDayKey(now);
   // Once the scheduled day has passed unsent, name the next real send day.
   return nextSendDay(schedule, s, ready > today ? ready : today);
+}
+
+/** The batched send a ready invoice waits for: its schedule and send day; null for any other or an immediate schedule. */
+export function queuedSendOf(
+  inv: { status: Invoice["status"]; readyAt: Date | null; sentAt: Date | null; paidSendQueued: boolean },
+  vendorSchedule: SendSchedule | null,
+  s: ScheduleAnchors & { invoiceSendSchedule: SendSchedule },
+  now: Date,
+): { schedule: Exclude<SendSchedule, "immediate">; day: string } | null {
+  if (!inv.readyAt || !isQueued(inv)) return null;
+  const schedule = effectiveSchedule(vendorSchedule, s);
+  if (schedule === "immediate") return null;
+  return { schedule, day: queuedSendDay(schedule, s, inv.readyAt, now) };
 }
 
 /** "Queued for the weekly send on Fri, Nov 27." for a ready invoice; null for any other or an immediate schedule. */
@@ -113,10 +126,8 @@ export function queuedSendFor(
   s: AgencySettings,
   now: Date,
 ): string | null {
-  if (!inv.readyAt || !isQueued(inv)) return null;
-  const schedule = effectiveSchedule(vendorSchedule, s);
-  if (schedule === "immediate") return null;
-  return queuedSendText(schedule, queuedSendDay(schedule, s, inv.readyAt, now));
+  const q = queuedSendOf(inv, vendorSchedule, s, now);
+  return q ? queuedSendText(q.schedule, q.day) : null;
 }
 
 /** True when an approved invoice for this vendor waits for a batch instead of going at once. */
@@ -281,6 +292,19 @@ async function loadBatches(tx: Tx, s: AgencySettings, now: Date, vendorId?: stri
 export async function listInvoiceBatches(actor: Actor, tx: Tx, now: Date = new Date()): Promise<VendorBatch[]> {
   assertCan(actor, "invoice.review");
   return loadBatches(tx, await getSettings(tx), now);
+}
+
+/**
+ * Which vendors are on a batched send: the agency's own schedule, and each active vendor whose own schedule batches
+ * (vendors following a batched agency schedule are counted, not listed). For the empty Send invoices page.
+ */
+export async function batchedVendors(actor: Actor, tx: Tx): Promise<{ agency: SendSchedule; following: number; vendors: Array<{ id: string; name: string; schedule: SendSchedule }> }> {
+  assertCan(actor, "invoice.review");
+  const s = await getSettings(tx);
+  const rows = await tx.select({ id: vendors.id, name: vendors.name, schedule: vendors.invoiceSendSchedule }).from(vendors).where(eq(vendors.active, true)).orderBy(asc(vendors.name));
+  const own = rows.filter((v): v is { id: string; name: string; schedule: SendSchedule } => v.schedule !== null && v.schedule !== "immediate");
+  const following = s.invoiceSendSchedule === "immediate" ? 0 : rows.filter((v) => v.schedule === null).length;
+  return { agency: s.invoiceSendSchedule, following, vendors: own };
 }
 
 /** Batches due today or earlier, for the coordinator to-do. The caller authorizes. */

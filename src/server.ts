@@ -3,6 +3,7 @@
  * before Next sees the request. X-Forwarded-For is believed only from TRUSTED_PROXY (the reverse proxy, Caddy);
  * without it the connection's own address is used and a client-supplied header is replaced.
  */
+import "./bootstrap/clean-env";
 import { createServer } from "node:http";
 import next from "next";
 import { parseTrustedProxies, setForwardedFor } from "./lib/client-ip";
@@ -20,7 +21,7 @@ const server = createServer((req, res) => {
   void handle(req, res);
 });
 server.listen(port, host, () => {
-  console.log(`Extra Duty web listening on http://${host}:${port}${trusted ? " (trusting X-Forwarded-For from TRUSTED_PROXY)" : ""}`);
+  console.log(`Signal 90 web listening on http://${host}:${port}${trusted ? " (trusting X-Forwarded-For from TRUSTED_PROXY)" : ""}`);
 });
 
 const shutdown = () => server.close(() => process.exit(0));

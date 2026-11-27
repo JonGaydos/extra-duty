@@ -93,7 +93,7 @@ test("every response forbids framing and sniffing: pages, the sign-in screen and
     expect(h["content-security-policy"], path).toBe("frame-ancestors 'none'");
     expect(h["x-frame-options"], path).toBe("DENY");
     expect(h["x-content-type-options"], path).toBe("nosniff");
-    expect(h["referrer-policy"], path).toBe("same-origin");
+    expect(h["referrer-policy"], path).toBe("strict-origin-when-cross-origin");
     // HSTS belongs to Caddy's HTTPS site, never the app.
     expect(h["strict-transport-security"], path).toBeUndefined();
   }
@@ -325,7 +325,7 @@ test("an admin's SMTP test email reaches the server, and the password stays writ
     await page.setViewportSize(DESKTOP);
     await page.goto("/admin/system/email");
     await page.getByLabel("Provider").selectOption({ label: "SMTP server" });
-    await page.getByLabel("From address").fill("Extra Duty <noreply@e2e.test>");
+    await page.getByLabel("From address").fill("Signal 90 <noreply@e2e.test>");
     await page.getByLabel("Host").fill("127.0.0.1");
     await page.getByLabel("Port").fill(String(smtp.port));
     await page.getByLabel("Username").fill("mailer");
@@ -347,7 +347,7 @@ test("an admin's SMTP test email reaches the server, and the password stays writ
     await expect(page.getByRole("status")).toContainText(`Test email sent to ${E2E_USERS.admin.email}.`);
     expect(smtp.messages).toHaveLength(1);
     expect(smtp.messages[0]).toContain(`To: ${E2E_USERS.admin.email}`);
-    expect(smtp.messages[0]).toContain("Subject: Extra Duty test email");
+    expect(smtp.messages[0]).toContain("Subject: Signal 90 test email");
   } finally {
     smtp.server.close();
   }
@@ -383,7 +383,7 @@ test("System server actions answer 403 to a coordinator", async ({ page, context
     if (url.endsWith("security")) await page.getByLabel("Sign-in code lifetime (minutes)").fill("20");
     await page.getByRole("button", { name: button }).click();
     expect((await response).status(), url).toBe(403);
-    await expect(page.getByRole("status")).toContainText("Only admins can do that.");
+    await expect(page.getByRole("status").filter({ hasText: "Only admins can do that." })).toBeVisible();
     expect(await rows("select value from settings")).toEqual(before);
     await context.clearCookies();
     await signInAs(context, "admin");
@@ -397,13 +397,15 @@ test("an admin saves security settings", async ({ page, context }) => {
   await page.getByLabel("Minimum password length").fill("6");
   await page.getByRole("button", { name: "Save security settings" }).click();
   await expect(page.getByText("Enter 8 or more.")).toBeVisible();
+  // The floating note can sit over the Save button at the foot of a long phone page; close it as a person would.
+  await page.getByRole("button", { name: "Dismiss" }).click();
   await page.getByLabel("Minimum password length").fill("14");
   await page.getByRole("button", { name: "Save security settings" }).click();
-  await expect(page.getByRole("status")).toContainText("Security settings saved.");
+  await expect(page.getByRole("status").filter({ hasText: "Security settings saved." })).toBeVisible();
   expect((await one<{ n: number }>("select (value->'security'->>'passwordMinLength')::int as n from settings")).n).toBe(14);
   await page.getByLabel("Minimum password length").fill("12");
   await page.getByRole("button", { name: "Save security settings" }).click();
-  await expect(page.getByRole("status")).toContainText("Security settings saved.");
+  await expect(page.getByRole("status").filter({ hasText: "Security settings saved." })).toBeVisible();
 });
 
 test("a coordinator sets the agency rate range, and one detail outside it needs an approved reason", async ({ page, context }) => {
@@ -475,7 +477,7 @@ test("the vendor record lists contact details one per line with links", async ({
     await page.setViewportSize(viewport);
     await page.goto(`/coordinate/vendors/${v.id}`);
     const list = page.locator("dl").first();
-    await expect(list.locator("dt")).toHaveText(["Contact", "Phone", "Billing emails", "Default rate"]);
+    await expect(list.locator("dt")).toHaveText(["Contact", "Phone", "Billing emails", "Default rate", "Invoices go", "Email approved invoices"]);
     await expect(list.getByRole("link", { name: "850-555-0148" })).toHaveAttribute("href", "tel:+18505550148");
     await expect(list.getByRole("link", { name: "office@market.example" })).toHaveAttribute("href", "mailto:office@market.example");
     await expect(list.getByRole("link", { name: "books@market.example" })).toBeVisible();

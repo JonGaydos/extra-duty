@@ -1,5 +1,5 @@
 ---
-name: Extra Duty
+name: Signal 90
 description: Off-duty detail scheduling for a sheriff's office, phone and desktop equally for deputies and desktop first for coordinators.
 colors:
   canvas: "#f4f6f8"
@@ -220,13 +220,13 @@ components:
     padding: "8px 12px"
 ---
 
-# Design System: Extra Duty
+# Design System: Signal 90
 
 ## Overview
 
 **Creative North Star: "The Duty Board"**
 
-Extra Duty is the board a deputy checks between shifts and a coordinator keeps on a second monitor: a calm, daylight surface of white cards on a cool gray canvas, one confident blue for everything you can act on, and status color only where a rule or a deadline needs attention. It is a working tool. The interface recedes so the facts (when, where, how much, who is short) read in one glance on a phone in a parking lot or on a desktop at home (deputies use both about equally), and in one scan across a coordinator's to-do list.
+Signal 90 is the board a deputy checks between shifts and a coordinator keeps on a second monitor: a calm, daylight surface of white cards on a cool gray canvas, one confident blue for everything you can act on, and status color only where a rule or a deadline needs attention. It is a working tool. The interface recedes so the facts (when, where, how much, who is short) read in one glance on a phone in a parking lot or on a desktop at home (deputies use both about equally), and in one scan across a coordinator's to-do list.
 
 Density follows the device. Phone screens are roomy and stacked, with one primary action per card and a full-width tab bar pinned to the bottom edge, within thumb reach. Desktop screens are a centered 1240 px column with a top nav, two-column card layouts and compact 36 px row actions. Night mode is the same board in low light: deep blue-gray surfaces, lighter text, a brighter button blue and a pale link blue, so a deputy checking a detail at 2 AM is not blinded.
 
@@ -239,6 +239,14 @@ Source of truth: this document, with the manual screenshots in `docs/manuals/ima
 - Inter throughout, 400 to 700, a tight product scale from 11 to 28 px.
 - Line icons on a 24 px grid with a 1.8 stroke.
 - Day and night themes from the same tokens; the device decides until the person chooses.
+
+### Name
+
+- **Name:** Signal 90. **Descriptor:** Extra Duty, what the app is for.
+- **One combined form:** "Signal 90 · Extra Duty", with a middle dot, wherever the name and descriptor appear together on one line: the browser's default title, the installed app's full name, the sign-in page, the README heading and the manual covers.
+- **Short form:** "Signal 90" alone where space is tight or the context is already the app: the desktop and phone headers, the home screen short name, page titles ("Payments | Signal 90"), email subjects and lines, sample sender names ("Signal 90 <noreply@agency.gov>") and the manual file names.
+- The agency name from settings is separate and is never replaced by the product name. Lowercase "the extra duty office" is the agency's own office, not the product.
+- Technical names keep "extra-duty" or "extra_duty" so existing installs keep working (package, image, containers, databases, cookies, the `ed_live_` key prefix, environment variables, the repository).
 
 ## Colors
 
@@ -285,7 +293,7 @@ Cool neutrals with a single saturated blue; status hues appear as soft fills wit
 - **Page title** (700, 28 px desktop and 23 px phone, `text-3xl` and `text-2xl`): one `h1` per page.
 - **Greeting** (700, 20 px, `text-xl`): the phone home header.
 - **Stat** (700, 21 px, `text-stat`): numbers in stat tiles and summary cards, with the unit in 13 px muted 500.
-- **Brand** (700, 17 px, `text-lg`): "Extra Duty" in the top nav.
+- **Brand** (700, 17 px, `text-lg`): "Signal 90" in the top nav.
 - **Card title** (600, 15 px phone and 16 px desktop, `text-title` / `md:text-base`): `h2` in cards.
 - **Body** (400, 14 px, `text-body`): default text, nav items, table cells. Running paragraphs stop at about 70 characters.
 - **Secondary** (400, 13 px, `text-sm`): times, places and other second lines; field labels at 500.
@@ -363,9 +371,10 @@ Tactile and plain: solid blue for the action, quiet outlined for the rest.
 - **Switches:** a `button` with `role="switch"` and `aria-checked`, a 30 by 18 px track (field color off, accent on) and a visible text label (Training mode, Alert me if it opens).
 
 ### Navigation
-- **Top nav (768 px and up):** surface bar with a bottom line, min 64 px tall, content at 1240 px. Brand "Extra Duty" at 17 px 700, then the role's sections as 14 px 500 muted items (8 by 12 px, 10 px radius). The current item is accent-soft with link text at 600 and `aria-current="page"`. Right side: the compact theme control and the avatar (36 px, initials; coordinator purple for coordinators and admins, accent for others), which opens Profile.
+- **Top nav (768 px and up):** surface bar with a bottom line, min 64 px tall, content at 1240 px. Brand "Signal 90" at 17 px 700, then the role's sections as 14 px 500 muted items (8 by 12 px, 10 px radius). The current item is accent-soft with link text at 600 and `aria-current="page"`. Right side: for coordinators and admins the personal group (below), then the compact theme control, Help, the alerts bell and, for other roles, the avatar (36 px, initials; coordinator purple for coordinators and admins, accent for others), which opens Profile.
 - **Tab bar (under 768 px):** a full-width bar pinned flush to the bottom edge: no side or bottom margin, no radius, no shadow. Surface fill with a 1 px top line, 64 px tall plus bottom padding for the safe-area inset (the home indicator sits on the bar's own surface, not on content). It is a static child of the app shell, so it never overlaps content. Up to five tabs share the width equally: 22 px icon over an 11 px label, at least 58 by 44 px; the current tab has an accent-soft wash (14 px radius) with link text at 600.
-- **Sections by role:** deputies get Home, Details, Map, Billing, Profile (all five on the phone). Coordinators and admins get To-do, Details, Calendar, Vendors, Payments, Reports, Messages, Management; the phone shows To-do, Details, Calendar, Messages and More. Vendors get My details, Request a detail, Invoices, Locations, Contracts; the phone shows My details, Request, Invoices, Locations and More. More lists the remaining sections plus Profile; deputies have no More page (it sends them Home). The current tab is worked out from all of the role's sections, so a section that lives under More marks More, never a parent tab such as To-do.
+- **Sections by role:** deputies get Home, Details, Calendar, Billing, Messages and Profile on the desktop; the phone shows Home, Details, Calendar, Billing and More, and More lists Map, Messages, Profile and Help. Map is not its own tab: the List, Calendar and Map buttons on Details, Calendar and Map link the three views. Coordinators and admins get To-do, Details, Calendar, Vendors, Payments, Reports, Messages, Management; the phone shows To-do, Details, Calendar, Messages and More. Vendors get My details, Request a detail, Invoices, Locations, Contracts; the phone shows My details, Request, Invoices, Locations and More. More lists the remaining sections plus Profile and Help. The current tab is worked out from all of the role's sections, including those on More, so a section that lives under More marks More, never a parent tab such as To-do.
+- **Personal group (coordinators and admins):** staff also work details, so they never miss anything a deputy has (a unit test checks every deputy section is in their navigation). On the desktop their own work sits in a second nav, "My work", at the start of the right side, set apart from the role's sections by a 1 px line: My work (/home), Open details (/jobs), My billing (/billing) and Profile. Items are styled like the main nav items; the Profile item leads with the 28 px avatar and replaces the separate avatar button. On the phone the same items, plus Map, are on More after the role's sections; the four tabs do not change.
 - **Skip link:** "Skip to content" is the first focusable element on every signed-in page.
 
 ### Links
@@ -398,6 +407,7 @@ Every address link (detail page, cards, calendar entries, the map popup, vendor 
 ### Calendar
 The agency Calendar (every detail the person may see; vendors use their portal) and the coordinator Details list share one filter panel.
 - **Filter panel** (`FilterPanel`): a 272 px left column on desktop, a full-width Filters button that opens the same panel inline on phones. Search, job number, My details only, status (open, filled, not released, past, canceled, and vendor requests for staff), vendor, vendor type, detail type, location (collapsible checkbox groups that open when something is picked), person signed up, Remember my filters, then Apply and Reset. Filters are the person's own: they live in the address bar and, when remembered, on that person's account only.
+- **Payments filters:** the Payments page uses the same panel layout (272 px left column, Filters button on phones) with its own fields: Status (each turn, Overdue, Vendor reports paid, Vendor on hold, Vendor not confirmed; any checked matches), days waiting with presets and a custom range, Vendor and Deputy as collapsible checkbox lists with a search box, invoice date and amount ranges, and Sent or not. It is a plain GET form, so the filters live in the address bar and Reset is a link to the bare page.
 - **Month grid:** desktop cells are 144 px tall with the day number (today in a Duty Blue circle on an accent-soft cell, `aria-current="date"`), "N details" in micro text, and a scrolling list of entries "7:00 AM Vendor name" (title on hover). Phone cells show the day and a count pill; the cell opens that day's list.
 - **Status stripe:** a 4 px rounded stripe at the left of each entry (6 px in lists), steady, never animated: open `cal-open` green, filled `cal-filled` red, not released or held `cal-unreleased` amber, past `cal-past` dark blue-gray, vendor request coordinator purple, canceled field gray with the text struck through. Each stripe is 3:1 or better on surfaces in both themes, and every entry also carries its status in words (a chip in lists, screen-reader text in the grid). A legend ("Color key") sits under the calendar. "(you)" marks the viewer's own details.
 - **Bulk edit:** staff lists (Details, Calendar list view) put a 44 px checkbox before each row and "Edit selected" above; the edit opens inline with a before and after preview and saves every detail or none.
@@ -415,7 +425,7 @@ The agency Calendar (every detail the person may see; vendors use their portal) 
 `AuthShell` frames sign-in, code entry, invite acceptance and password resets:
 - A centered column, phone width on every screen (440 px max), 56 px from the top (80 px on desktop).
 - The agency mark: the agency logo in its slot (see Agency logo), or a 76 px circle with the agency's initials when there is none.
-- "Extra Duty" at 23 px 700 over the agency name from settings in muted 14 px.
+- "Signal 90 · Extra Duty" at 23 px: the name at 700, the descriptor "· Extra Duty" at 500 in muted, over the agency name from settings in muted 14 px.
 - One 20 px-radius card holding the page's `h1` (20 px 700), then 48 px fields (`Input size="lg"`) and a full-width 50 px primary button.
 - A muted 12 px line under the card.
 - Sign-in adds "Forgot password?" over the amber inactivity notice.

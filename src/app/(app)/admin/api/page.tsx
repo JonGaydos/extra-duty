@@ -38,7 +38,7 @@ export default async function ApiPage() {
       <p className="m-0 text-sm">
         <Link href="/admin/system">System</Link>
       </p>
-      <PageTitle sub="Keys let other systems read and change Extra Duty data through the REST API. Admins only.">API access</PageTitle>
+      <PageTitle sub="Keys let other systems read and change Signal 90 data through the REST API. Admins only.">API access</PageTitle>
       <div className="grid items-start gap-4.5 md:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         <CreateKey />
         <KeyList rows={rows} />

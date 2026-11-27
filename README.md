@@ -1,8 +1,8 @@
-# Extra Duty
+# Signal 90 · Extra Duty
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=JonGaydos_extra-duty&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=JonGaydos_extra-duty)
 
-Extra Duty schedules and bills off-duty details for a law enforcement agency. Vendors (businesses, churches,
+Signal 90 is Extra Duty scheduling: it schedules and bills off-duty details for a law enforcement agency. Vendors (businesses, churches,
 schools and event organizers) request officers for an event or a job site. Deputies sign up first come, first
 served under the agency's rank, hour-cap and billing rules. After the detail, the deputy bills the vendor with an
 emailed PDF invoice. The vendor pays the deputy directly, so the agency never holds or routes detail money.
@@ -32,7 +32,7 @@ The agency hosts the app itself. It is a web app that installs to a phone's home
 - **Alerts.** In-app inbox, email and web push, with agency-wide and personal switches.
 - **Reports.** Activity, billing, tax summaries and CSV or PDF exports.
 - **Training mode.** A separate practice database with demo data, reset every night.
-- **Security.** Two-factor sign-in by emailed code, encrypted W-9 files, an audit log, and records that are
+- **Security.** Two-factor sign-in by emailed code (always for admins, switchable for other roles), encrypted W-9 files, an audit log, and records that are
   deactivated rather than deleted.
 - **API.** A REST API with API keys and an OpenAPI description.
 - **Manuals.** Deputy, coordinator and admin, and vendor manuals in the app's Help pages and as PDFs.
@@ -65,6 +65,9 @@ logo) under Admin. Every agency-specific value is a setting.
   few date formatters). Release times, hour caps, billing locks and date-only API inputs all use it. An agency in
   another time zone must change it in the code for now.
 - **United States.** Addresses, phone numbers (10 digits) and the W-9 tax form are US formats.
+- **Technical names.** The app was first called Extra Duty. Its technical names keep that name so existing installs
+  keep working: the package, the Docker image, container and Compose project names, folders, databases, cookies, the
+  `ed_live_` API key prefix, the environment variables and the repository address.
 
 ## Development
 
@@ -129,5 +132,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as desc
 
 ## License
 
-Copyright the Extra Duty contributors. Licensed under the GNU Affero General Public License, version 3 only
+Copyright the Signal 90 contributors. Licensed under the GNU Affero General Public License, version 3 only
 ([LICENSE](LICENSE)). If you run a modified version for others over a network, you must offer them its source code.

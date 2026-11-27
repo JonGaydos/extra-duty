@@ -159,7 +159,7 @@ describe("vendors", () => {
     expect(loc).toMatchObject({ lat: 41.5, lng: -90.5, geocodeSource: "auto", active: true });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("https://nominatim.openstreetmap.org/search");
-    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("ExtraDuty/1.0");
+    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("Signal90/1.0");
   });
 
   test("a geocoder failure still saves the location with no pin", async () => {

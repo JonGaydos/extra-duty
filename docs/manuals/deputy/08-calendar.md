@@ -2,7 +2,7 @@
 
 The calendar shows every detail you are allowed to see, by day.
 
-1. Open **Details** and choose **Calendar**.
+1. Open **Calendar**. From **Details**, the **List**, **Calendar** and **Map** buttons switch between the three views.
 2. Pick **Day**, **Week**, **Month** or **List**. Use the arrows to move between months. On a phone, tap a day to see its details.
 
    ![The month calendar](../images/deputy/08-calendar-1-phone.webp)

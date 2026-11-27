@@ -498,7 +498,7 @@ export function PushEnable({ vapidKey, devices }: Readonly<{ vapidKey: string | 
         onClick={async () => {
           setError(null);
           try {
-            if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("This browser does not support push alerts. On iPhone, add Extra Duty to your Home Screen first.");
+            if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("This browser does not support push alerts. On iPhone, add Signal 90 to your Home Screen first.");
             const permission = await Notification.requestPermission();
             if (permission !== "granted") throw new Error("Notifications are blocked for this site. Allow them in your browser settings.");
             const reg = await navigator.serviceWorker.ready;

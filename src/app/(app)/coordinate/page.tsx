@@ -414,7 +414,15 @@ export default async function TodoPage() {
                 key={l.userId}
                 title={l.name}
                 meta={[l.unbilled ? `${plural(l.unbilled, "unbilled detail")}` : "", l.unacknowledged ? `${plural(l.unacknowledged, "unconfirmed payment")}` : ""].filter(Boolean).join(", ")}
-                actions={<LiftLock userId={l.userId} name={l.name} />}
+                actions={
+                  l.userId === actor.userId ? (
+                    <ButtonLink href="/billing" size="sm" variant="secondary">
+                      Open my billing
+                    </ButtonLink>
+                  ) : (
+                    <LiftLock userId={l.userId} name={l.name} />
+                  )
+                }
               />
             ))}
           </Rows>

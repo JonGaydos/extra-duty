@@ -6,7 +6,7 @@ import { useEmailQueue } from "../../setup/email-queue";
 import { HOUR, setupFixture } from "../assignments/helpers";
 import { assignments, deputyNotes, invoiceEvents, invoices, jobSeries, jobs, opsPlans, paymentIssues, vendorHolds, vendors } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
-import { coordinatorTodo, jobAdmin, paymentsBoard, staffInvoice } from "@/domain/coordinator/views";
+import { coordinatorTodo, jobAdmin, paymentsBoard, staffInvoice, vendorNotConfirmedInvoices } from "@/domain/coordinator/views";
 import { ForbiddenError, ValidationError } from "@/domain/errors";
 import { realBillingLockReader } from "@/domain/billing/lock";
 import { detailsMissingContract } from "@/domain/jobs/contract-status";
@@ -64,6 +64,24 @@ describe("coordinator views", () => {
     expect(todo.issues.map((i) => i.invoiceId)).not.toContain(vendorTurn.id);
   });
 
+  test("Vendor not confirmed lists deputy-confirmed invoices the vendor never marked, and nothing else counts them", async () => {
+    const { db } = get();
+    const confirmed = await invoice({ status: "sent", party: "vendor", since: new Date(NOW.getTime() - 40 * DAY), cents: 28000 });
+    await db.update(invoices).set({ status: "paid", closedByDeputy: true, deputyPaidAt: NOW, responsibleParty: null, responsibleSince: null }).where(eq(invoices.id, confirmed.id));
+    const both = await invoice({ status: "sent", party: "vendor", since: NOW, cents: 1000 });
+    await db.update(invoices).set({ status: "paid", closedByDeputy: true, deputyPaidAt: NOW, vendorPaidAt: NOW, responsibleParty: null }).where(eq(invoices.id, both.id));
+    const list = await f.run((tx) => vendorNotConfirmedInvoices(f.coord, tx));
+    expect(list.map((r) => r.invoiceId)).toContain(confirmed.id);
+    expect(list.map((r) => r.invoiceId)).not.toContain(both.id);
+    expect(list.find((r) => r.invoiceId === confirmed.id)).toMatchObject({ totalCents: 28000, vendorName: expect.any(String), payeeName: expect.any(String) });
+    // Informational only: not on the board, not overdue, and not on the to-do list.
+    const board = await f.run((tx) => paymentsBoard(f.coord, tx, NOW));
+    expect(board.rows.map((r) => r.invoiceId)).not.toContain(confirmed.id);
+    const todo = await f.run((tx) => coordinatorTodo(f.coord, tx, NOW));
+    expect(JSON.stringify(todo)).not.toContain(confirmed.id);
+    await expect(f.run((tx) => vendorNotConfirmedInvoices(deputy, tx))).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
   test("personnel cannot read the coordinator views", async () => {
     await expect(f.run((tx) => paymentsBoard(deputy, tx, NOW))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(f.run((tx) => coordinatorTodo(deputy, tx, NOW))).rejects.toBeInstanceOf(ForbiddenError);
@@ -117,7 +135,7 @@ describe("coordinator views", () => {
 
   test("no invoice view, email or PDF mentions the agency rate range or an approved exception", async () => {
     await f.run((tx) => updateSettings(f.coord, tx, { rateMaxCents: 8000, billingReplyToEmail: "billing@sheriff.test" }));
-    await f.run((tx) => updateSettings({ ...f.coord, role: "admin" }, tx, { email: { provider: "smtp", from: "Extra Duty <noreply@sheriff.test>", smtp: { host: "mail.test" } } }));
+    await f.run((tx) => updateSettings({ ...f.coord, role: "admin" }, tx, { email: { provider: "smtp", from: "Signal 90 <noreply@sheriff.test>", smtp: { host: "mail.test" } } }));
     await get().db.update(vendors).set({ billingEmails: ["ap@vendor.test"] }).where(eq(vendors.id, f.vendorId));
     try {
       const reason = "Holiday rate agreed with the vendor";

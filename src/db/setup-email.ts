@@ -7,6 +7,7 @@
  * Once an email server is saved it is refused, so the command cannot quietly redirect sign-in codes to another
  * server. `--replace` overrides that: the replacement is audited and every admin is alerted in the app and by email.
  */
+import "../bootstrap/clean-env";
 import { and, eq, sql } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 import { createDb, type Db } from "./client";

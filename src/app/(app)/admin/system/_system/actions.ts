@@ -29,6 +29,18 @@ export async function saveSecurityGroupAction(slug: string, values: GroupValues)
   });
 }
 
+export type SignInCodes = { coordinator: boolean; personnel: boolean; vendor: boolean };
+
+/** "Require emailed sign-in codes" per role. Admins are not in the form: they always need a code. Audited. */
+export async function saveSignInCodesAction(codes: SignInCodes): Promise<ActionResult> {
+  return systemAct(async (actor, tx) => {
+    const { coordinator, personnel, vendor } = codes;
+    if (![coordinator, personnel, vendor].every((v) => typeof v === "boolean")) throw new ValidationError("Send each switch as on or off.");
+    await updateSettings(actor, tx, { security: { signInCodes: { coordinator, personnel, vendor } } });
+    return { ok: true, message: "Sign-in codes saved. The change applies at each person's next sign-in." };
+  });
+}
+
 const PROVIDERS = agencySettingsSchema.shape.email.shape.provider.options;
 export type EmailForm = {
   provider: string;
@@ -61,7 +73,7 @@ export async function saveEmailAction(f: EmailForm): Promise<ActionResult> {
       if (!/^\d+$/.test(f.port.trim()) || port < 1 || port > 65535) fields.port = "Enter a port from 1 to 65535.";
       if (!f.host.trim()) fields.host = "Enter the email server's host name.";
     }
-    if (f.from.trim() && !/^[^<>]*<[^<>\s@]+@[^<>\s@]+>\s*$|^[^\s@<>]+@[^\s@<>]+$/.test(f.from.trim())) fields.from = "Enter an address, such as Extra Duty <noreply@agency.gov>.";
+    if (f.from.trim() && !/^[^<>]*<[^<>\s@]+@[^<>\s@]+>\s*$|^[^\s@<>]+@[^\s@<>]+$/.test(f.from.trim())) fields.from = "Enter an address, such as Signal 90 <noreply@agency.gov>.";
     if (!f.from.trim()) fields.from = "Enter the address mail is sent from.";
     if (Object.keys(fields).length) return { ok: false, error: "Check the highlighted fields. Nothing was saved.", fields };
     const current = (await getSettings(tx)).email;

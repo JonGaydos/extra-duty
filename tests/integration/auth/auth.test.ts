@@ -791,6 +791,111 @@ describe("authentication", () => {
     });
   });
 
+  describe("sign-in codes per role", () => {
+    const codes = (o: Partial<Record<"coordinator" | "personnel" | "vendor", boolean>>) => ({
+      ...DEFAULT_SETTINGS.security,
+      signInCodes: { admin: true as const, coordinator: true, personnel: true, vendor: true, ...o },
+    });
+    const authWith = (security: ReturnType<typeof codes>) => createAuth({ db: get().db, emailSender: { send: (m) => getEmailSender().send(m) }, security });
+    let vendorId: string;
+    beforeAll(async () => {
+      const [v] = await get().db.insert(vendors).values({ name: "Codes Vendor", billingEmails: ["codes@vendor.example"] }).returning();
+      vendorId = v.id;
+    });
+    async function userFor(role: "admin" | "coordinator" | "personnel" | "vendor", email: string): Promise<string> {
+      // Only an admin may invite an admin, so an admin starts as a coordinator here.
+      const id = await makeUser(email, role === "personnel" ? {} : { role: role === "admin" ? "coordinator" : role, rankId: null });
+      if (role === "admin") await get().db.update(users).set({ role: "admin" }).where(eq(users.id, id));
+      if (role === "vendor") await get().db.insert(vendorUsers).values({ userId: id, vendorId });
+      return id;
+    }
+
+    test("every role needs a code by default, admins included", () => {
+      expect(DEFAULT_SETTINGS.security.signInCodes).toEqual({ admin: true, coordinator: true, personnel: true, vendor: true });
+    });
+
+    for (const role of ["coordinator", "personnel", "vendor"] as const) {
+      test(`${role}: off signs in with the password alone; on asks for the code`, async () => {
+        const email = `codes-${role}@example.test`;
+        const id = await userFor(role, email);
+        const off = authWith(codes({ [role]: false }));
+        const { jar, response } = await passwordStep(off, email, PASSWORD);
+        expect(response.twoFactorRedirect).toBeUndefined();
+        expect(await getActor(jar.headers())).toMatchObject({ userId: id, role });
+        // The other roles still need theirs.
+        const on = authWith(codes({}));
+        const again = await passwordStep(on, email, PASSWORD);
+        expect(again.response.twoFactorRedirect).toBe(true);
+        expect(await getActor(again.jar.headers())).toBeNull();
+      });
+    }
+
+    test("an admin always needs a code, even with every other role off", async () => {
+      const email = "codes-admin@example.test";
+      await userFor("admin", email);
+      const { jar, response } = await passwordStep(authWith(codes({ coordinator: false, personnel: false, vendor: false })), email, PASSWORD);
+      expect(response.twoFactorRedirect).toBe(true);
+      expect(await getActor(jar.headers())).toBeNull();
+    });
+
+    test("a sign-in without a code gets a 12-hour browser session, never a trusted-device one", async () => {
+      const email = "codes-lifetime@example.test";
+      const id = await userFor("personnel", email);
+      const { headers } = await authWith(codes({ personnel: false })).api.signInEmail({ body: { email, password: PASSWORD }, returnHeaders: true });
+      expect(lastSetCookie(headers, "session_token")).not.toMatch(/max-age|expires/i);
+      const rows = await get().db.select().from(sessions).where(eq(sessions.userId, id));
+      expect(Math.abs(rows.at(-1)!.expiresAt.getTime() - Date.now() - 12 * 3600_000)).toBeLessThan(60_000);
+    });
+
+    test("a change applies at the next sign-in; a session already open stays", async () => {
+      const email = "codes-existing@example.test";
+      const id = await userFor("personnel", email);
+      const { jar } = await passwordStep(authWith(codes({ personnel: false })), email, PASSWORD);
+      const { response } = await passwordStep(authWith(codes({})), email, PASSWORD);
+      expect(response.twoFactorRedirect).toBe(true);
+      expect(await getActor(jar.headers())).toMatchObject({ userId: id });
+    });
+
+    test("wrong passwords are still counted and locked out the same way", async () => {
+      const email = "codes-throttle@example.test";
+      await userFor("personnel", email);
+      const off = authWith(codes({ personnel: false }));
+      for (let i = 0; i < 5; i++) expect((await authError(passwordStep(off, email, "wrong-password-123"))).status).toBe(401);
+      expect(await authError(passwordStep(off, email, PASSWORD))).toMatchObject({ code: "TOO_MANY_SIGN_IN_ATTEMPTS" });
+    });
+
+    test("the native app's bearer token follows the same rule", async () => {
+      const email = "codes-bearer@example.test";
+      const id = await userFor("personnel", email);
+      const { response } = await passwordStep(authWith(codes({ personnel: false })), email, PASSWORD);
+      expect(response.twoFactorRedirect).toBeUndefined();
+      const [s] = await get().db.select().from(sessions).where(eq(sessions.userId, id));
+      const ok = await listJobsRoute(new Request("http://localhost/api/v1/jobs", { headers: { authorization: `Bearer ${s.token}` } }), { params: Promise.resolve({}) });
+      expect(ok.status).toBe(200);
+      // With the switch on, the password alone gives no session to send as a bearer token.
+      const adminEmail = "codes-bearer-on@example.test";
+      const adminId = await userFor("admin", adminEmail);
+      await passwordStep(authWith(codes({ personnel: false })), adminEmail, PASSWORD);
+      expect(await get().db.select().from(sessions).where(eq(sessions.userId, adminId))).toHaveLength(0);
+    });
+
+    test("settings: admins cannot be switched off, coordinators cannot change the switches, and a change is audited", async () => {
+      const { db } = get();
+      const [a] = await db.insert(users).values({ name: "Codes Admin", email: "codes-settings-admin@example.test", role: "admin" }).returning();
+      const admin: Actor = { userId: a.id, role: "admin", rankId: null, vendorId: null };
+      await expect(db.transaction((tx) => updateSettings(admin, tx, { security: { signInCodes: { admin: false } } } as never))).rejects.toThrow(
+        /Admins always need an emailed sign-in code/,
+      );
+      await expect(db.transaction((tx) => updateSettings(coordinator, tx, { security: { signInCodes: { personnel: false } } }))).rejects.toBeInstanceOf(ForbiddenError);
+      const out = await db.transaction((tx) => updateSettings(admin, tx, { security: { signInCodes: { personnel: false } } }));
+      expect(out.security.signInCodes).toEqual({ admin: true, coordinator: true, personnel: false, vendor: true });
+      const [entry] = await db.select().from(auditLog).where(and(eq(auditLog.action, "settings.sign_in_codes"), eq(auditLog.actorUserId, a.id)));
+      expect(entry.before).toEqual({ signInCodes: { admin: true, coordinator: true, personnel: true, vendor: true } });
+      expect(entry.after).toEqual({ signInCodes: { admin: true, coordinator: true, personnel: false, vendor: true } });
+      await db.transaction((tx) => updateSettings(admin, tx, { security: { signInCodes: { personnel: true } } }));
+    });
+  });
+
   describe("API bearer tokens", () => {
     test("no session token exists before the code is accepted, so nothing a bearer can send reaches a protected route", async () => {
       const id = await makeUser("bearer-2fa@example.test");

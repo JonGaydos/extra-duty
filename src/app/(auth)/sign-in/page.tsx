@@ -15,7 +15,7 @@ export default async function SignInPage() {
     <AuthShell
       agencyName={agency.name} logo={logo}
       title="Sign in"
-      footer="After your password, we email you a 6-digit code to finish signing in."
+      footer="After your password, we may email you a 6-digit code to finish signing in."
     >
       <SignInForm />
       <p className="m-0 flex flex-col gap-2 border-t border-divider pt-3.5">

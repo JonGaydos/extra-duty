@@ -31,12 +31,13 @@ import type { Actor } from "../actor";
 import { detailEvents, signupHistory, type DetailEvent, type HistoryEntry } from "../assignments/history";
 import { assertCan } from "../auth/policy";
 import { lockedPeople } from "../billing/lock";
-import { isOverdue, responsibleDueAt, type Party } from "../billing/payments";
+import { isOverdue, paidLabel, responsibleDueAt, type Party } from "../billing/payments";
 import { NotFoundError } from "../errors";
 import { formatInvoiceNumber } from "../invoices/invoices";
 import { dueInvoiceBatches, queuedSendFor, type VendorBatch } from "../invoices/batch";
+import { approveLine, sendLine, type SendLineInvoice } from "../invoices/send-line";
 import { listInvoicesForReview, sendableLater, type ReviewRow } from "../invoices/review";
-import { effectiveSchedule, type SendSchedule } from "../invoices/send-schedule";
+import { effectiveSchedule, scheduleText, type SendSchedule } from "../invoices/send-schedule";
 import { upcomingMissingContract } from "../jobs/contract-status";
 import { opsPlanDueAt } from "../ops-plans/ops-plans";
 import { scheduledPayCents } from "../planning/recommend";
@@ -379,7 +380,7 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
   };
 }
 
-export type UnsentRow = { id: string; number: string; payeeName: string; vendorId: string; vendorName: string; jobTitle: string; totalCents: Cents; deputyPaid: boolean };
+export type UnsentRow = { id: string; number: string; payeeName: string; payeeUserId: string; vendorId: string; vendorName: string; jobTitle: string; totalCents: Cents; createdAt: Date; deputyPaid: boolean };
 
 /** Invoices approved without sending, by number, for coordinators to send later. */
 export async function unsentInvoices(actor: Actor, tx: Tx): Promise<UnsentRow[]> {
@@ -398,11 +399,58 @@ export async function unsentInvoices(actor: Actor, tx: Tx): Promise<UnsentRow[]>
     id: r.inv.id,
     number: formatInvoiceNumber(invoiceNumberPrefix, r.inv.number),
     payeeName: r.payeeName,
+    payeeUserId: r.inv.payeeUserId,
     vendorId: r.inv.vendorId,
     vendorName: r.vendorName,
     jobTitle: r.jobTitle,
     totalCents: r.inv.totalCents,
+    createdAt: r.inv.createdAt,
     deputyPaid: r.inv.deputyPaidAt !== null,
+  }));
+}
+
+export type VendorNotConfirmedRow = {
+  invoiceId: string;
+  number: string;
+  payeeName: string;
+  payeeUserId: string;
+  vendorId: string;
+  vendorName: string;
+  jobTitle: string;
+  totalCents: Cents;
+  issuedAt: Date;
+  confirmedAt: Date | null;
+  sentAt: Date | null;
+};
+
+/**
+ * Paid invoices the deputy's confirmation closed that the vendor never marked paid itself. Informational only (the
+ * Payments filter "Vendor not confirmed"): they are on no to-do list, never overdue and never alerted.
+ */
+export async function vendorNotConfirmedInvoices(actor: Actor, tx: Tx): Promise<VendorNotConfirmedRow[]> {
+  assertCan(actor, "invoice.review");
+  const { invoiceNumberPrefix } = await getSettings(tx);
+  const rows = await tx
+    .select({ inv: invoices, payeeName: users.name, vendorName: vendors.name, jobTitle: jobs.title })
+    .from(invoices)
+    .innerJoin(users, eq(users.id, invoices.payeeUserId))
+    .innerJoin(vendors, eq(vendors.id, invoices.vendorId))
+    .innerJoin(assignments, eq(assignments.id, invoices.assignmentId))
+    .innerJoin(jobs, eq(jobs.id, assignments.jobId))
+    .where(and(eq(invoices.status, "paid"), eq(invoices.closedByDeputy, true), isNull(invoices.vendorPaidAt)))
+    .orderBy(desc(invoices.deputyPaidAt), desc(invoices.number));
+  return rows.map((r) => ({
+    invoiceId: r.inv.id,
+    number: formatInvoiceNumber(invoiceNumberPrefix, r.inv.number),
+    payeeName: r.payeeName,
+    payeeUserId: r.inv.payeeUserId,
+    vendorId: r.inv.vendorId,
+    vendorName: r.vendorName,
+    jobTitle: r.jobTitle,
+    totalCents: r.inv.totalCents,
+    issuedAt: r.inv.sentAt ?? r.inv.createdAt,
+    confirmedAt: r.inv.deputyPaidAt,
+    sentAt: r.inv.sentAt,
   }));
 }
 
@@ -412,10 +460,14 @@ export type BoardRow = {
   status: "pending_review" | "sent" | "returned";
   kind: "detail" | "late_cancel";
   payeeName: string;
+  payeeUserId: string;
   vendorId: string;
   vendorName: string;
   jobTitle: string;
   totalCents: Cents;
+  /** When it was sent, else when it was made. */
+  issuedAt: Date;
+  sent: boolean;
   party: Party;
   since: Date | null;
   /** Whole days since the party's turn began (at least 1), against the party's response time. */
@@ -425,6 +477,8 @@ export type BoardRow = {
   vendorReportsPaid: boolean;
   vendorOnHold: boolean;
   issueId: string | null;
+  /** How the vendor's approved invoices go: "Right away", "Weekly" and so on, marked when it is the agency's. */
+  vendorSends: string;
 };
 
 export type PaymentsBoard = {
@@ -437,7 +491,7 @@ export async function paymentsBoard(actor: Actor, tx: Tx, now: Date = new Date()
   assertCan(actor, "invoice.review");
   const s = await getSettings(tx);
   const rows = await tx
-    .select({ inv: invoices, payeeName: users.name, vendorName: vendors.name, hold: vendors.paymentHold, jobTitle: jobs.title, issueId: paymentIssues.id })
+    .select({ inv: invoices, payeeName: users.name, vendorName: vendors.name, hold: vendors.paymentHold, vendorSchedule: vendors.invoiceSendSchedule, jobTitle: jobs.title, issueId: paymentIssues.id })
     .from(invoices)
     .innerJoin(users, eq(users.id, invoices.payeeUserId))
     .innerJoin(vendors, eq(vendors.id, invoices.vendorId))
@@ -459,10 +513,13 @@ export async function paymentsBoard(actor: Actor, tx: Tx, now: Date = new Date()
       status: r.inv.status as BoardRow["status"],
       kind: r.inv.kind,
       payeeName: r.payeeName,
+      payeeUserId: r.inv.payeeUserId,
       vendorId: r.inv.vendorId,
       vendorName: r.vendorName,
       jobTitle: r.jobTitle,
       totalCents: r.inv.totalCents,
+      issuedAt: r.inv.sentAt ?? r.inv.createdAt,
+      sent: r.inv.status === "sent",
       party,
       since,
       day,
@@ -471,6 +528,7 @@ export async function paymentsBoard(actor: Actor, tx: Tx, now: Date = new Date()
       vendorReportsPaid: !!r.inv.vendorPaidAt && !r.inv.deputyPaidAt,
       vendorOnHold: r.hold,
       issueId: r.issueId,
+      vendorSends: scheduleText(r.vendorSchedule, s),
     });
     totals[party].cents += r.inv.totalCents;
     totals[party].count += 1;
@@ -524,6 +582,12 @@ export type StaffInvoice = {
   overdue: boolean;
   issueId: string | null;
   issueWaitingOn: Party | null;
+  /** For a paid invoice, "Paid" or "Paid (confirmed by deputy)"; null otherwise. */
+  paidText: string | null;
+  /** Staff only: how and when it goes, or went, to the vendor. */
+  sendLine: string;
+  /** On the approve step: where it goes once approved. */
+  approveLine: string;
   timeline: StaffTimelineEvent[];
 };
 
@@ -534,6 +598,10 @@ export async function rateOverrideOf(tx: Tx, job: { rateOverrideReason: string |
   if (!job.rateOverrideReason || !job.rateOverrideAt) return null;
   const [u] = job.rateOverrideBy ? await tx.select({ name: users.name }).from(users).where(eq(users.id, job.rateOverrideBy)) : [];
   return { reason: job.rateOverrideReason, byName: u?.name ?? "a coordinator", at: job.rateOverrideAt };
+}
+
+function sendLines(inv: SendLineInvoice, s: AgencySettingsLike, now: Date): { sendLine: string; approveLine: string } {
+  return { sendLine: sendLine(inv, s, now), approveLine: approveLine(inv, s, now) };
 }
 
 /** One invoice with its full timeline (author names included), for coordinators and admins. */
@@ -595,6 +663,19 @@ export async function staffInvoice(actor: Actor, tx: Tx, id: string, now: Date =
     overdue: party ? isOverdue({ responsibleParty: party, responsibleSince: since }, now, s) : false,
     issueId: issue?.id ?? null,
     issueWaitingOn: (issue?.waitingOn as Party | null) ?? (issue ? "coordinator" : null),
+    paidText: r.inv.status === "paid" ? paidLabel(r.inv) : null,
+    ...sendLines(
+      {
+        ...r.inv,
+        batched: r.inv.batchId !== null,
+        sentByPayee: events.find(({ e }) => e.event === "sent")?.e.actorUserId === r.inv.payeeUserId,
+        vendorName: r.vendorName,
+        vendorSchedule: r.vendorSchedule,
+        sendByDefault: r.sendByDefault,
+      },
+      s,
+      now,
+    ),
     timeline: events.map(({ e, actorName }) => ({ id: e.id, event: e.event, party: e.party, note: e.note, at: e.at, actorName })),
   };
 }

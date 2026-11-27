@@ -21,14 +21,14 @@ describe("first-run email setup (ROLE=setup-email)", () => {
     const { db } = get();
     await setupEmail(db, {
       SEED_ADMIN_EMAIL: "Admin@County.example",
-      SETUP_EMAIL_FROM: "Extra Duty <noreply@county.example>",
+      SETUP_EMAIL_FROM: "Signal 90 <noreply@county.example>",
       SETUP_SMTP_HOST: "smtp.county.example",
       SETUP_SMTP_PORT: "587",
       SETUP_SMTP_USER: "extraduty",
       SETUP_SMTP_PASSWORD: "placeholder-password",
     });
     const s = await db.transaction((tx) => getSettings(tx));
-    expect(s.email).toMatchObject({ provider: "smtp", from: "Extra Duty <noreply@county.example>", smtp: { host: "smtp.county.example", port: 587, secure: false, user: "extraduty" } });
+    expect(s.email).toMatchObject({ provider: "smtp", from: "Signal 90 <noreply@county.example>", smtp: { host: "smtp.county.example", port: 587, secure: false, user: "extraduty" } });
     expect(s.email.smtp.passwordEnc).not.toContain("placeholder-password");
     expect(decryptSecret(s.email.smtp.passwordEnc)).toBe("placeholder-password");
     const audit = await db.select().from(auditLog).where(and(eq(auditLog.action, "settings.update"), eq(auditLog.actorUserId, adminId)));

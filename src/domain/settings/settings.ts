@@ -11,7 +11,7 @@ import { ForbiddenError, ValidationError } from "../errors";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { agencyChannelsProblem, type AgencyChannels } from "../notifications/catalog";
 import { cleanChangedPhone } from "../phone";
-import { DEFAULT_POSITION_TYPE_NAME, DEFAULT_SETTINGS } from "./defaults";
+import { DEFAULT_POSITION_TYPE_NAME, settingsDefaults } from "./defaults";
 
 const int = z.number().int();
 
@@ -23,6 +23,10 @@ const notificationChannelsSchema = z
     if (problem) ctx.addIssue({ code: "custom", message: problem });
   });
 const hours = int.min(0).max(24 * 365);
+
+/** Why the admin switch is locked on; shown on the Security page and in the refusal. */
+export const ADMIN_CODES_REASON = "Admins can change the email server and security settings and export all data.";
+const ADMIN_CODES_MESSAGE = `Admins always need an emailed sign-in code. ${ADMIN_CODES_REASON}`;
 
 export const agencySettingsSchema = z.object({
   releaseDayOfMonth: int.min(1).max(31),
@@ -117,6 +121,16 @@ export const agencySettingsSchema = z.object({
     emailCodeAttempts: int.min(1).max(20),
     trustedDeviceDays: int.min(0).max(365),
     passwordMinLength: int.min(8).max(128),
+    /**
+     * Whether each role must enter an emailed code at sign-in. Admins always must: they can change the email server
+     * and security settings and export all data, so `admin` can only be true.
+     */
+    signInCodes: z.object({
+      admin: z.literal(true, { error: ADMIN_CODES_MESSAGE }),
+      coordinator: z.boolean(),
+      personnel: z.boolean(),
+      vendor: z.boolean(),
+    }),
   }),
 });
 
@@ -167,7 +181,7 @@ async function resolveDefaultPositionTypeId(tx: Tx): Promise<string | null> {
 async function current(tx: Tx): Promise<{ rowId: string | null; value: AgencySettings }> {
   const row = await loadRow(tx);
   const stored = isPlainObject(row?.value) ? row.value : {};
-  const merged = deepMerge(DEFAULT_SETTINGS as unknown as Record<string, unknown>, stored);
+  const merged = deepMerge(settingsDefaults() as unknown as Record<string, unknown>, stored);
   if (!stored.defaultPositionTypeId) merged.defaultPositionTypeId = await resolveDefaultPositionTypeId(tx);
   return { rowId: row?.id ?? null, value: agencySettingsSchema.parse(merged) };
 }
@@ -338,6 +352,17 @@ export async function saveSettings(actor: Actor, tx: Tx, patch: SettingsPatch): 
     before: maskSecrets(before),
     after: maskSecrets(after, before),
   });
+  if (JSON.stringify(after.security.signInCodes) !== JSON.stringify(before.security.signInCodes)) {
+    // Its own entry, so a switch that lets people sign in without a code is easy to find in the audit log.
+    await recordAudit(tx, {
+      actor,
+      action: "settings.sign_in_codes",
+      entityType: "settings",
+      entityId: id,
+      before: { signInCodes: before.security.signInCodes },
+      after: { signInCodes: after.security.signInCodes },
+    });
+  }
   let releaseDatesMoved: number | null = null;
   if (after.releaseDayOfMonth !== before.releaseDayOfMonth || after.releaseTime !== before.releaseTime) {
     releaseDatesMoved = await recomputeReleaseDates(tx, { releaseDayOfMonth: after.releaseDayOfMonth, releaseTime: after.releaseTime }, actor);

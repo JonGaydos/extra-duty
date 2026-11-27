@@ -1,6 +1,6 @@
 # Marking an invoice paid
 
-Mark an invoice received when the money reaches you. The invoice is paid and closed when both you and the vendor have marked it paid. A coordinator can also close it.
+Mark an invoice received when the money reaches you. Your confirmation closes the invoice as paid; the vendor does not need to mark it too. A coordinator can also close it.
 
 1. Open **Billing** and choose **Waiting**. Each invoice shows whose turn it is, such as **Vendor's turn**, and what happens next. **Invoice and timeline** opens the full invoice.
 
@@ -9,9 +9,9 @@ Mark an invoice received when the money reaches you. The invoice is paid and clo
 2. Choose **Mark received**. Enter the **Date received**, the **Method** and an optional **Check or reference number** and **Note**.
 3. Choose **Record payment**. **Cancel** closes the form without saving.
 4. Where the invoice goes next:
-   - If the vendor has already marked it paid, it closes now and moves to the **Paid** tab.
-   - If not, it stays under **Waiting** and the **Mark received** button goes away. It moves to **Paid** when the vendor marks it paid too, or when a coordinator closes it.
-   - An invoice marked **Approved, not sent** closes as soon as you mark it received.
+   - It closes now and moves to the **Paid** tab, whether or not the vendor has marked it paid. No reminders, deadlines or locks follow.
+   - An invoice marked **Approved, not sent** closes the same way.
+   - The vendor may still mark it paid later for their own records. That shows on the timeline; you need to do nothing.
 
    ![Mark received](../images/deputy/16-marking-paid-2-phone.webp)
 

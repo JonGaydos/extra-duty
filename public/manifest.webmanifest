@@ -1,7 +1,7 @@
 {
-  "name": "Extra Duty",
-  "short_name": "Extra Duty",
-  "description": "Off-duty detail scheduling",
+  "name": "Signal 90 · Extra Duty",
+  "short_name": "Signal 90",
+  "description": "Extra Duty: off-duty detail scheduling",
   "id": "/",
   "start_url": "/",
   "scope": "/",

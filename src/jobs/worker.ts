@@ -1,3 +1,4 @@
+import "../bootstrap/clean-env";
 import { installEmailSender } from "@/bootstrap/email";
 import { trainingConfigured } from "@/db/client";
 import { getBoss, stopBoss } from "./boss";
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
     await registerEmailHandlers(training, "training");
     await registerNotificationHandlers(training, "training");
   }
-  console.log(`Extra Duty worker started${trainingConfigured() ? " (live and training)" : ""}.`);
+  console.log(`Signal 90 worker started${trainingConfigured() ? " (live and training)" : ""}.`);
 
   const shutdown = () => {
     stopBoss().then(

@@ -6,7 +6,7 @@ Which invoices come to a coordinator depends on the **Invoice review** setting (
 
    ![Invoices to review](../images/coordinator-admin/18-invoice-review-1-desktop.webp)
 
-2. Open the invoice to check the hours, rate and total against the detail.
+2. Open the invoice to check the hours, rate and total against the detail. Beside the status, one line says how and when it goes to the vendor, such as **Waiting for review (agency reviews every invoice)** or **Sent right away when billed**. Above the buttons, another says where approving sends it, such as **Approve and send: goes to the vendor now** or **Approve for the next send: the weekly send on Fri, Dec 4**. Deputies do not see these lines.
 3. Choose one:
    - **Approve and send**: approves it and emails it to the vendor. When the vendor is batched, the button reads **Approve for the next send** and the invoice waits for the batch.
    - **Approve, don't send**: approves it but keeps it back. The vendor cannot see it until it is sent.

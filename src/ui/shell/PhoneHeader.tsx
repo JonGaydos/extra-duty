@@ -9,7 +9,7 @@ export function PhoneHeader({ home, unreadAlerts, logo = null }: Readonly<{ home
       <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-1.5">
         <Link href={home} data-nav-item className="flex items-center gap-2.5 text-lg font-bold text-ink no-underline hover:text-ink">
           {logo ? <AgencyLogo logo={logo} place="header" /> : null}
-          Extra Duty
+          Signal 90
         </Link>
         <AlertsBell unread={unreadAlerts} size="md" />
       </div>

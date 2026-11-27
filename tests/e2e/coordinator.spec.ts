@@ -503,3 +503,69 @@ test("a coordinator cancels a detail with two deputies, then reactivates it with
   await expect(v.getByRole("main")).not.toContainText("Canceled");
   await vendor.close();
 });
+
+test("Payments filters live in the address: status, days waiting, vendor search, amount and sent, and Back keeps them", async ({ page, context }) => {
+  await signInAs(context, "coordinator");
+  await page.setViewportSize(DESKTOP);
+  await page.goto("/coordinate/payments");
+  const panel = page.getByRole("complementary", { name: "Filters" });
+  const captions = () => page.getByRole("main").locator("table caption").allTextContents();
+
+  await panel.getByLabel("Coordinator's turn").check();
+  await panel.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/[?&]status=coordinator/);
+  for (const c of await captions()) expect(c).toMatch(/^Coordinator's turn/);
+
+  await page.goBack();
+  await expect(page).not.toHaveURL(/status=/);
+  await expect(page.getByRole("main").locator("table caption").filter({ hasText: /^Vendor's turn/ })).toBeVisible();
+
+  // A shared link: over 30 days waiting, sent only, at least $1.
+  await page.goto("/coordinate/payments?days=31-&sent=sent&amin=1");
+  await expect(panel.getByLabel("Days waiting on this step")).toHaveValue("31-");
+  for (const cell of await page.getByRole("main").getByRole("cell", { name: /of \d+ days/ }).allTextContents()) {
+    const waited = cell.split(" of ")[0].replace(/\D/g, "");
+    expect(Number(waited)).toBeGreaterThan(30);
+  }
+  await expect(page.getByRole("table", { name: /Approved, not sent/ })).toHaveCount(0);
+
+  // The vendor list narrows as you type; a checked vendor filters the lists.
+  await page.goto("/coordinate/payments");
+  await panel.locator("summary").filter({ hasText: /^Vendor/ }).click();
+  await panel.getByLabel("Search vendor").fill(COORD.unsentVendor.slice(0, 6));
+  await expect(panel.getByLabel(COORD.unsentVendor)).toBeVisible();
+  await panel.getByLabel(COORD.unsentVendor).check();
+  await panel.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/[?&]vendor=/);
+  await expect(page.getByRole("main").locator("tbody tr").first()).toBeVisible();
+  for (const row of await page.getByRole("main").locator("tbody tr").allTextContents()) expect(row).toContain(COORD.unsentVendor);
+
+  // Phone: the panel opens from the Filters button and the page never scrolls sideways.
+  await page.setViewportSize(PHONE);
+  await page.goto("/coordinate/payments?status=vendor");
+  const button = page.getByRole("button", { name: /^Filters \(1 on\)$/ });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(panel.getByLabel("Vendor's turn")).toBeChecked();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
+  await expectNoSeriousA11yIssues(page);
+});
+
+test("staff see how and when an invoice goes to the vendor, and where approving sends it", async ({ page, context }) => {
+  await signInAs(context, "coordinator");
+  await page.setViewportSize(DESKTOP);
+  const sent = await one<{ id: string }>("select id from invoices where status = 'sent' order by number limit 1");
+  await page.goto(`/invoices/${sent.id}`);
+  await expect(page.getByTestId("send-line")).toHaveText(/^Sent (right away when billed|when approved on|with the|in a batch)/);
+  const held = await one<{ id: string } | undefined>("select id from invoices where status = 'pending_review' order by number limit 1");
+  if (held) {
+    await page.goto(`/invoices/${held.id}`);
+    await expect(page.getByTestId("send-line")).toHaveText(/^Waiting for review/);
+    await expect(page.getByTestId("approve-line")).toHaveText(/^Approve (and send: goes to .+ now|for the next send: the .+ send on .+)\.$/);
+  }
+  const vendor = await vendorId(COORD.batchVendor);
+  await page.goto(`/coordinate/vendors/${vendor}`);
+  await expect(page.getByRole("main")).toContainText("Invoices go");
+  await expect(page.getByRole("main")).toContainText("Weekly");
+  await expect(page.getByRole("main")).toContainText("Email approved invoices");
+});

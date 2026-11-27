@@ -1,6 +1,6 @@
 # Security Policy
 
-Extra Duty holds sensitive records: W-9 forms with Social Security numbers, sign-in codes, vendor billing details and
+Signal 90 holds sensitive records: W-9 forms with Social Security numbers, sign-in codes, vendor billing details and
 an audit log. Please report security problems privately so they can be fixed before they are public.
 
 ## Reporting a vulnerability

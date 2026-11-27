@@ -36,7 +36,7 @@ function serviceWorker(sw: ServiceWorkerScope, offlineHtml: string): void {
   sw.addEventListener("activate", (e) => e.waitUntil(sw.clients.claim()));
 
   sw.addEventListener("push", (e) => {
-    let msg = { title: "Extra Duty", body: "", url: "/" };
+    let msg = { title: "Signal 90", body: "", url: "/" };
     try {
       msg = { ...msg, ...(e.data?.json() as Partial<typeof msg>) };
     } catch {
@@ -85,7 +85,7 @@ const OFFLINE_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Offline | Extra Duty</title>
+<title>Offline | Signal 90</title>
 <script>(function(){var m=document.cookie.match(/(?:^|; )ed-theme=(day|night)/);if(m)document.documentElement.setAttribute("data-theme",m[1])})()</script>
 <style>
 :root{color-scheme:light dark;--canvas:light-dark(#f4f6f8,#0f1318);--surface:light-dark(#fff,#171c23);--line:light-dark(#e3e6eb,#2a313b);--ink:light-dark(#14181f,#e8ecf1);--muted:light-dark(#5b6472,#9aa4b2);--accent:light-dark(#2147c2,#3d6bf0);--focus:light-dark(#2147c2,#8fb0ff)}
@@ -100,7 +100,7 @@ a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 <body>
 <main>
 <h1>You are offline</h1>
-<p>Extra Duty needs a connection to load this page. Check your signal, then try again.</p>
+<p>Signal 90 needs a connection to load this page. Check your signal, then try again.</p>
 <a href="">Try again</a>
 </main>
 </body>

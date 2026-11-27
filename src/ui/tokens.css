@@ -1,5 +1,5 @@
 /*
- * Extra Duty design tokens. DESIGN.md at the repo root explains each one.
+ * Signal 90 design tokens. DESIGN.md at the repo root explains each one.
  *
  * Every color is light-dark(day, night). The root's color-scheme picks the
  * side: "light dark" follows the device, and [data-theme="day"|"night"] (set

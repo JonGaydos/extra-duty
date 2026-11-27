@@ -142,7 +142,7 @@ export const requestPinned = (r: HopRequest): Promise<HopResponse> =>
         path: `${r.url.pathname}${r.url.search}`,
         method: "GET",
         agent: false,
-        headers: { Host: r.url.host, Accept: "text/calendar, text/plain, */*", "User-Agent": "ExtraDuty-CalendarSync" },
+        headers: { Host: r.url.host, Accept: "text/calendar, text/plain, */*", "User-Agent": "Signal90-CalendarSync" },
         signal: r.signal,
       },
       (res) => {

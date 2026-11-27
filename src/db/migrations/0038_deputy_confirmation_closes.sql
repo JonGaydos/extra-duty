@@ -1,0 +1,1 @@
+ALTER TABLE "invoices" ADD COLUMN "closed_by_deputy" boolean DEFAULT false NOT NULL;

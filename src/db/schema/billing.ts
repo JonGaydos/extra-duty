@@ -92,6 +92,11 @@ export const invoices = pgTable(
     responsibleParty: responsibleParty("responsible_party"),
     responsibleSince: tstz("responsible_since"),
     closedReason: text("closed_reason"),
+    /**
+     * Closed as paid by the payee's own payment confirmation while it was with the vendor. With no vendorPaidAt it is
+     * "Vendor not confirmed": paid, and the vendor may still add their own mark for their records.
+     */
+    closedByDeputy: boolean("closed_by_deputy").notNull().default(false),
     ...timestamps,
   },
   (t) => [index("invoices_vendor_idx").on(t.vendorId), index("invoices_status_idx").on(t.status), index("invoices_payee_idx").on(t.payeeUserId)],

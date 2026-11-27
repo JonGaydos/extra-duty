@@ -5,6 +5,7 @@ import type { Actor } from "../actor";
 import { assertCan } from "../auth/policy";
 import { ForbiddenError, NotFoundError } from "../errors";
 import { formatInvoiceNumber } from "../invoices/invoices";
+import { vendorNotConfirmed } from "../billing/payments";
 import { getSettings } from "../settings/settings";
 import type { Cents, Minutes } from "../types";
 import { VENDOR_FILLED, vendorEditAllowed, type EditDecision } from "./rules";
@@ -259,6 +260,11 @@ export type VendorInvoiceRow = {
   deputyPaidAt: Date | null;
   /** The vendor's own paid note (12.8). */
   vendorPaid: { at: Date; method: string | null; reference: string | null } | null;
+  /**
+   * The vendor may mark it paid: a sent invoice it has not marked, or one the deputy's confirmation already closed
+   * (optional then, for the vendor's own records).
+   */
+  canMarkPaid: boolean;
 };
 
 /** Invoices sent to the vendor, newest first. Invoices still in review or waiting to send are never shown. */
@@ -290,5 +296,6 @@ export async function vendorInvoices(actor: Actor, tx: Tx): Promise<VendorInvoic
     sentAt: inv.sentAt!,
     deputyPaidAt: inv.deputyPaidAt,
     vendorPaid: inv.vendorPaidAt ? { at: inv.vendorPaidAt, method, reference: inv.vendorPaidReference } : null,
+    canMarkPaid: !inv.vendorPaidAt && (inv.status === "sent" || vendorNotConfirmed(inv)),
   }));
 }

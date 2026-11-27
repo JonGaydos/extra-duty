@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "More" };
 
 /**
  * Phone only in practice: the sections that do not fit in the tab bar, and, for coordinators and admins where training
- * is set up, the training switch (the desktop top bar's, which phones do not show). Deputies have none, so they go Home.
+ * is set up, the training switch (the desktop top bar's, which phones do not show). A role with nothing here goes Home.
  */
 export default async function MorePage() {
   const shell = await loadShell();

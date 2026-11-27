@@ -11,11 +11,11 @@ import "./globals.css";
 const inter = localFont({ src: "./fonts/InterVariable-latin.woff2", weight: "100 900", style: "normal", variable: "--font-inter", display: "swap", fallback: ["Arial"] });
 
 export const metadata: Metadata = {
-  title: { default: "Extra Duty", template: "%s | Extra Duty" },
+  title: { default: "Signal 90 · Extra Duty", template: "%s | Signal 90" },
   description: "Off-duty detail scheduling",
-  applicationName: "Extra Duty",
+  applicationName: "Signal 90",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Extra Duty", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Signal 90", statusBarStyle: "default" },
   icons: {
     icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: "/icons/apple-touch-icon.png",

@@ -25,7 +25,7 @@ test("the web app manifest is served", async ({ request }) => {
   expect(res.status()).toBe(200);
   expect(res.headers()["content-type"]).toContain("manifest+json");
   const manifest = await res.json();
-  expect(manifest).toMatchObject({ name: "Extra Duty", short_name: "Extra Duty", start_url: "/", display: "standalone" });
+  expect(manifest).toMatchObject({ name: "Signal 90 · Extra Duty", short_name: "Signal 90", start_url: "/", display: "standalone" });
   const sizes = manifest.icons.map((i: { sizes: string }) => i.sizes);
   expect(sizes).toEqual(expect.arrayContaining(["192x192", "512x512"]));
   for (const icon of manifest.icons) expect((await request.get(icon.src)).status()).toBe(200);
@@ -89,20 +89,28 @@ test("the tab bar switches to the top nav at 768 px", async ({ page, context }) 
 });
 
 const NAV = {
-  deputy: { start: "/home", desktop: ["Home", "Details", "Map", "Billing", "Profile"], phone: ["Home", "Details", "Map", "Billing", "Profile"] },
+  deputy: {
+    start: "/home",
+    desktop: ["Home", "Details", "Calendar", "Billing", "Messages", "Profile"],
+    personal: [],
+    phone: ["Home", "Details", "Calendar", "Billing", "More"],
+  },
   coordinator: {
     start: "/coordinate",
     desktop: ["To-do", "Details", "Calendar", "Vendors", "Payments", "Reports", "Messages", "Management"],
+    personal: ["My work", "Open details", "My billing", "Profile"],
     phone: ["To-do", "Details", "Calendar", "Messages", "More"],
   },
   admin: {
     start: "/coordinate",
     desktop: ["To-do", "Details", "Calendar", "Vendors", "Payments", "Reports", "Messages", "Management"],
+    personal: ["My work", "Open details", "My billing", "Profile"],
     phone: ["To-do", "Details", "Calendar", "Messages", "More"],
   },
   vendor: {
     start: "/vendor",
     desktop: ["My details", "Request a detail", "Invoices", "Locations", "Contracts"],
+    personal: [],
     phone: ["My details", "Request", "Invoices", "Locations", "More"],
   },
 } as const;
@@ -121,24 +129,49 @@ for (const [who, nav] of Object.entries(NAV) as [keyof typeof NAV, (typeof NAV)[
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(topNav(page).getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
     }
+    // Coordinators and admins: their own work as a deputy, one click away in its own nav.
+    const mine = topNav(page).getByRole("navigation", { name: "My work" });
+    if (nav.personal.length) {
+      await expect(mine.getByRole("link")).toHaveText(nav.personal.map((n) => new RegExp(`${n}`)));
+      for (const name of nav.personal) {
+        await mine.getByRole("link", { name: new RegExp(`^${name}`) }).click();
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        await expect(mine.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute("aria-current", "page");
+      }
+    } else {
+      await expect(mine).toHaveCount(0);
+    }
 
     await page.setViewportSize(PHONE);
     await expect(tabBar(page).getByRole("link")).toHaveText([...nav.phone]);
   });
 }
 
-test("More lists the sections that do not fit in the tab bar", async ({ page, context }) => {
+test("More lists the sections that do not fit in the tab bar, and the coordinator's own work", async ({ page, context }) => {
   await signInAs(context, "coordinator");
   await page.setViewportSize(PHONE);
   await page.goto("/coordinate");
   await tabBar(page).getByRole("link", { name: "More" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "More" })).toBeVisible();
   await expect(tabBar(page).getByRole("link", { name: "More" })).toHaveAttribute("aria-current", "page");
-  for (const name of ["Vendors", "Payments", "Reports", "Management", "Profile"]) {
+  for (const name of ["Vendors", "Payments", "Reports", "Management", "My work", "Open details", "My billing", "Map", "Profile", "Help"]) {
     await expect(page.getByRole("main").getByRole("link", { name, exact: true })).toBeVisible();
   }
   await page.screenshot({ path: `${E2E.screenshotDir}/more-phone-day.png`, fullPage: true });
   await expectNoSeriousA11yIssues(page);
+});
+
+test("a deputy's More lists Map, Messages, Profile and Help", async ({ page, context }) => {
+  await signInAs(context, "deputy");
+  await page.setViewportSize(PHONE);
+  await page.goto("/home");
+  await tabBar(page).getByRole("link", { name: "More" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "More" })).toBeVisible();
+  const links = page.getByRole("main").getByRole("link");
+  await expect(links).toHaveText(["Map", "Messages", "Profile", "Help"]);
+  await links.filter({ hasText: "Map" }).click();
+  await expect(page).toHaveURL(/\/map$/);
+  await expect(tabBar(page).getByRole("link", { name: "More" })).toHaveAttribute("aria-current", "page");
 });
 
 test.describe("theme override", () => {
@@ -218,16 +251,12 @@ test.describe("phone current tab", () => {
     await expect(current(page)).toHaveText(["More"]);
   });
 
-  test("a deputy on Profile sees Profile as current", async ({ page, context }) => {
+  test("a deputy on Calendar sees Calendar as current, and on Profile sees More", async ({ page, context }) => {
     await signInAs(context, "deputy");
+    await page.goto("/calendar");
+    await expect(current(page)).toHaveText(["Calendar"]);
     await page.goto("/profile");
-    await expect(current(page)).toHaveText(["Profile"]);
-  });
-
-  test("deputies have no More page", async ({ page, context }) => {
-    await signInAs(context, "deputy");
-    await page.goto("/more");
-    await expect(page).toHaveURL(/\/home$/);
+    await expect(current(page)).toHaveText(["More"]);
   });
 });
 
@@ -347,7 +376,7 @@ for (const theme of THEMES) {
 test("the sign-in page matches the approved copy and field sizes", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await page.goto("/sign-in");
-  await expect(page.getByText("After your password, we email you a 6-digit code to finish signing in.")).toBeVisible();
+  await expect(page.getByText("After your password, we may email you a 6-digit code to finish signing in.")).toBeVisible();
   await expect(
     page.getByText(
       "Accounts not signed in within the past 3 months require a password reset. Use Forgot password to reset it yourself.",

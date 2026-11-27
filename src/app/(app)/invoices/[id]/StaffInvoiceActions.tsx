@@ -267,15 +267,17 @@ function ActionButtons({
 function ApproveStep({
   vendorName,
   sendByDefault,
+  approveLine,
   attachW9,
   payeeName,
   payeeHasW9,
   withW9,
   setWithW9,
   children,
-}: Readonly<{ vendorName: string; sendByDefault: boolean; attachW9: boolean; payeeName: string; payeeHasW9: boolean; withW9: boolean; setWithW9: (v: boolean) => void; children: React.ReactNode }>) {
+}: Readonly<{ vendorName: string; sendByDefault: boolean; approveLine?: string; attachW9: boolean; payeeName: string; payeeHasW9: boolean; withW9: boolean; setWithW9: (v: boolean) => void; children: React.ReactNode }>) {
   return (
     <div className="flex flex-col gap-1">
+      {approveLine ? <p className="m-0 text-sm" data-testid="approve-line">{approveLine}</p> : null}
       {!sendByDefault ? <p className="m-0 text-sm text-muted">{vendorName} is set to not get approved invoices by email. You can still send this one.</p> : null}
       {attachW9 ? null : (
         <Check
@@ -313,6 +315,7 @@ export function StaffInvoiceActions({
   canSendPaid = false,
   canResend = false,
   billingEmails = [],
+  approveLine,
 }: Readonly<{
   invoiceId: string;
   status: string;
@@ -336,6 +339,8 @@ export function StaffInvoiceActions({
   /** Already sent: it can be emailed again. */
   canResend?: boolean;
   billingEmails?: string[];
+  /** Where the invoice goes once approved, such as "Approve and send: goes to Harborview Bank now." */
+  approveLine?: string;
 }>) {
   const [withW9, setWithW9] = useState(false);
   const [mode, setMode] = useState<Mode>(null);
@@ -375,7 +380,7 @@ export function StaffInvoiceActions({
   if (mode === null) {
     if (status !== "pending_review") return buttons;
     return (
-      <ApproveStep vendorName={vendorName} sendByDefault={sendByDefault} attachW9={attachW9} payeeName={payeeName} payeeHasW9={payeeHasW9} withW9={withW9} setWithW9={setWithW9}>
+      <ApproveStep vendorName={vendorName} sendByDefault={sendByDefault} approveLine={approveLine} attachW9={attachW9} payeeName={payeeName} payeeHasW9={payeeHasW9} withW9={withW9} setWithW9={setWithW9}>
         {buttons}
       </ApproveStep>
     );

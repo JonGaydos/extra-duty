@@ -322,7 +322,7 @@ export default async function ProfilePage() {
           </Card>
           <Card>
             <CardTitle>Help</CardTitle>
-            <p className="m-0 text-muted">Step-by-step guides with pictures for everything you do in Extra Duty.</p>
+            <p className="m-0 text-muted">Step-by-step guides with pictures for everything you do in Signal 90.</p>
             <ActionLink href="/help">Help and user manual</ActionLink>
           </Card>
           <Card>

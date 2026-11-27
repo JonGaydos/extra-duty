@@ -504,7 +504,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     const agency = await Agency.create();
     // Mail leaves through the capture; another suite may have pointed it elsewhere.
     await agency.settings({
-      email: { provider: "smtp", from: "Extra Duty <no-reply@sheriff.example>", smtp: { host: "127.0.0.1", port: E2E.smtpPort, secure: false, user: "", password: "" } },
+      email: { provider: "smtp", from: "Signal 90 <no-reply@sheriff.example>", smtp: { host: "127.0.0.1", port: E2E.smtpPort, secure: false, user: "", password: "" } },
       billingReplyToEmail: "billing@sheriff.example",
     });
     await provide(agency);

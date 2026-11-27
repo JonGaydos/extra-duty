@@ -45,7 +45,7 @@ export function EmailSettingsForm({ initial, secrets }: Readonly<{ initial: Omit
             ))}
           </Select>
         </FormField>
-        <FormField label="From address" hint="Such as Extra Duty <noreply@agency.gov>." error={errors.from}>
+        <FormField label="From address" hint="Such as Signal 90 <noreply@agency.gov>." error={errors.from}>
           <Input value={v.from} onChange={set("from")} maxLength={320} autoComplete="off" />
         </FormField>
       </div>

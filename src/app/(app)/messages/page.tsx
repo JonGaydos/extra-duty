@@ -49,7 +49,7 @@ export default async function MessagesPage({ searchParams }: Readonly<Props>) {
   const tag = (jobId: string | null) => (jobId && data.numbers.has(jobId) ? `Job #${data.numbers.get(jobId)}` : null);
   const rows: MessageRowView[] =
     tab === "inbox"
-      ? data.inbox.map((m) => ({ id: m.messageId, who: m.senderName ?? "Extra Duty", initials: initialsOf(m.senderName ?? "Extra Duty"), when: when(m.sentAt, now), subject: m.subject, snippet: m.snippet, unread: !m.read, tag: tag(m.jobId) }))
+      ? data.inbox.map((m) => ({ id: m.messageId, who: m.senderName ?? "Signal 90", initials: initialsOf(m.senderName ?? "Signal 90"), when: when(m.sentAt, now), subject: m.subject, snippet: m.snippet, unread: !m.read, tag: tag(m.jobId) }))
       : data.sent.map((m) => ({ id: m.messageId, who: `To ${m.recipientCount} ${m.recipientCount === 1 ? "person" : "people"}`, initials: "To", when: when(m.sentAt, now), subject: m.subject, snippet: m.snippet, unread: false, tag: tag(m.jobId) }));
 
   return (

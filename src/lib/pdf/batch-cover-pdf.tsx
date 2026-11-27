@@ -1,3 +1,5 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
 import { Document, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { TrainingMark } from "./training-mark";
 import { AgencyHeader, formatDate, formatMoney, type AgencyHeaderData } from "./invoice-pdf";

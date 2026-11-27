@@ -114,7 +114,7 @@ export function ApiReference() {
         <h2 id="reference-title" className="m-0 text-title font-semibold md:text-base">
           API reference
         </h2>
-        <a href="/api/v1/openapi.json" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold" download="extra-duty-openapi.json">
+        <a href="/api/v1/openapi.json" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold" download="signal-90-openapi.json">
           Download the OpenAPI document
           <Icon name="download" size={16} />
         </a>

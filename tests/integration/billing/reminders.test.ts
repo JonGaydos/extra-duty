@@ -196,6 +196,8 @@ describe("billing lock, overrides and reminders", () => {
       expect(msg).toBe("Confirm payment on 1 invoice to sign up again");
       await tx((x) => markPaid(p, x, id, { paymentMethodId: method, reference: "9", paidAt: new Date(AFTER.getTime() - DAY) }, AFTER));
       expect((await lock(p.userId)).locked).toBe(false);
+      // The deputy's confirmation closed it as paid, so it can never lock again.
+      expect((await get().db.select().from(invoices).where(eq(invoices.id, id)))[0]).toMatchObject({ status: "paid", responsibleParty: null });
     });
 
     test("an open payment issue clears it", async () => {

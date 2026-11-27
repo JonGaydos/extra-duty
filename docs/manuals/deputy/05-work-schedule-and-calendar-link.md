@@ -1,6 +1,6 @@
 # Your work schedule and calendar link
 
-Tell Extra Duty when you are on duty. It then shows which details you can work and recommends details that fit. Your schedule is private to you.
+Tell Signal 90 when you are on duty. It then shows which details you can work and recommends details that fit. Your schedule is private to you.
 
 1. Open **Profile** and find **My schedule**.
 2. Choose **Weekly** if you work the same days every week, or **Rotation** for a repeating pattern. For a rotation, pick the **Pattern** and the **First work day** (day 1 of the pattern).
@@ -13,7 +13,7 @@ Tell Extra Duty when you are on duty. It then shows which details you can work a
 
    ![The Outlook calendar card](../images/deputy/05-work-schedule-and-calendar-link-2-phone.webp)
 
-6. To see your details in your own phone calendar, open **Details**, then **Calendar**. Under **Calendar link**, choose **Make calendar link** and add the link to Outlook, Google or Apple Calendar.
+6. To see your details in your own phone calendar, open **Calendar**. Under **Calendar link**, choose **Make calendar link** and add the link to Outlook, Google or Apple Calendar.
 
    ![The Calendar link card](../images/deputy/05-work-schedule-and-calendar-link-3-phone.webp)
 

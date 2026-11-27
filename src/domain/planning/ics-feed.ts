@@ -127,7 +127,7 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
     )
     .orderBy(asc(jobs.startAt));
 
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Extra Duty//Personal details//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Extra Duty"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Signal 90//Personal details//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Signal 90"];
   for (const r of rows) {
     const status = r.status as (typeof FEED_STATUSES)[number];
     const label = status === "backup" && r.backupPosition ? `Backup #${r.backupPosition}` : LABEL[status];

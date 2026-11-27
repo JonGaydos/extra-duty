@@ -1,6 +1,6 @@
 # Conflicts and overrides on time edits
 
-When an edit moves a detail's time, Extra Duty checks every deputy on it again for overlapping details and hour caps.
+When an edit moves a detail's time, Signal 90 checks every deputy on it again for overlapping details and hour caps.
 
 1. Change the times in **Quick edit**, **Edit detail** or a bulk edit, and save.
 2. If a deputy would be double-booked or over a cap, nothing is saved. The panel says **This change double-books or overloads a deputy** and lists each conflict: who, and which rule.

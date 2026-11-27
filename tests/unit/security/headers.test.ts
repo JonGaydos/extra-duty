@@ -17,7 +17,7 @@ describe("security headers", () => {
     expect(h["content-security-policy"]).toBe("frame-ancestors 'none'");
     expect(h["x-frame-options"]).toBe("DENY");
     expect(h["x-content-type-options"]).toBe("nosniff");
-    expect(h["referrer-policy"]).toBe("same-origin");
+    expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
     // The app is also served over plain HTTP on a LAN install, so HSTS never comes from the app.
     expect(h["strict-transport-security"]).toBeUndefined();
   });

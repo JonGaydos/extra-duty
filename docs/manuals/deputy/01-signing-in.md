@@ -1,8 +1,8 @@
 # Signing in
 
-Every account signs in with a password and a 6-digit code sent to your email. There is no authenticator app.
+You sign in with a password and, unless your agency has turned codes off for deputies, a 6-digit code sent to your email. There is no authenticator app.
 
-1. Open the Extra Duty site. Enter your **Email** and **Password**, then choose **Sign in**.
+1. Open the Signal 90 site. Enter your **Email** and **Password**, then choose **Sign in**.
 
    ![The Sign in page with an email and password entered](../images/deputy/01-signing-in-1-phone.webp)
 

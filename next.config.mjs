@@ -10,7 +10,8 @@ const nextConfig = {
     authInterrupts: true,
   },
   // On every response: no other site may frame the app (one-click actions would be open to clickjacking), no
-  // content sniffing, and no full URL in the Referer to other sites. HSTS comes from Caddy's HTTPS site only,
+  // content sniffing, and only the origin (never the full URL) in the Referer to other sites. Map tile servers require
+  // that origin, so the Referer is not dropped altogether. HSTS comes from Caddy's HTTPS site only,
   // since a LAN install serves plain HTTP.
   async headers() {
     return [
@@ -20,7 +21,7 @@ const nextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
     ];

@@ -1,3 +1,5 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
 import { Document, Image, Page, renderToBuffer, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { TrainingMark } from "./training-mark";
 import { AGENCY_TZ } from "@/domain/time/agency-time";

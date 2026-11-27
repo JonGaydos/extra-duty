@@ -17,7 +17,7 @@ describe("saveEmailAction: the write-only API key", () => {
 
   const form = (apiKey: string): EmailForm => ({
     provider: "postmark",
-    from: "Extra Duty <noreply@agency.example>",
+    from: "Signal 90 <noreply@agency.example>",
     host: "",
     port: "",
     secure: false,

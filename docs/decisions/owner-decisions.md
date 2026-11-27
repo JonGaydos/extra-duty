@@ -5,9 +5,12 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
 ## Design and platform
 
 - **Design system (2026-11-23).** Every screen follows `DESIGN.md`, built from the approved mockups (Inter, day and night themes), and front-end work uses the impeccable design review.
+- **Product name (2026-11-26).** The app is named Signal 90; "Extra Duty" becomes its descriptor. The combined form is "Signal 90 · Extra Duty", and "Signal 90" alone is used where space is short (see DESIGN.md, Name). Technical names stay as they are so existing installs keep working: package, Docker image, container and Compose project names, folders, databases, cookies, the `ed_live_` API key prefix, environment variables and the repository address. The agency name setting is separate and unchanged.
 - **Product brief (2026-11-24).** `PRODUCT.md` is confirmed with one correction: deputies use phone and desktop about equally, so both are designed with the same care.
 - **Phone tab bar (2026-11-24).** The bottom bar is full width and pinned flush to the bottom edge, not floating. Only the main area scrolls, so the Firefox Android address bar stays visible.
 - **Links (2026-11-24).** Text links are underlined at rest. Action links carry an icon and have a 44 px tap area. Phone and email links show an icon and the full value. Disclosure toggles are buttons with a rotating chevron.
+- **Deputy navigation (2026-11-26).** Deputies get Home, Details, Calendar, Billing, Messages and Profile on the desktop, and Home, Details, Calendar, Billing and More on the phone, where More lists Map, Messages, Profile and Help. Map is no longer its own tab; the List, Calendar and Map buttons link the three views.
+- **Staff have everything a deputy has (2026-11-26).** Coordinators and admins also work details, so their navigation always includes every deputy section: on the desktop a "My work" group (My work, Open details, My billing, Profile) at the right of the top bar, and on the phone the same items plus Map on More. The four phone tabs do not change. A unit test guards it.
 - **Logos (2026-11-24).**
   - Accepted formats are PNG, SVG, JPG and WebP. Margins are trimmed, and logos are never cropped or stretched.
   - The header logo is 40 px tall, and logos about 1.3:1 or wider get a wider slot.
@@ -22,6 +25,8 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - Contact names must contain a letter.
   - Each vendor keeps a list of site contacts. Picking a contact on a detail fills in the phone number.
   - The vendor record shows its fields one per line.
+
+- **Sign-in codes per role (2026-11-26).** Management, Security has an admin-only "Require emailed sign-in codes" switch for coordinators, deputies and vendors, on by default. Admins always need a code, because they can change the email server and security settings and export all data. Turning a role off needs a confirmation that warns the site holds W-9s with Social Security numbers and pay records, is audited with before and after values, and applies at the next sign-in while open sessions stay. Throttling and lockout do not change, and the native app's bearer sessions follow the same rule.
 
 ## Details and scheduling
 
@@ -70,6 +75,12 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - An invoice paid on the spot closes as paid.
   - It can still be sent to the vendor marked Paid, with $0.00 due.
   - In a batch, it adds $0.00 to the total due.
+- **The deputy's confirmation closes the invoice (2026-11-26).** This replaces the spec's two-sided rule, where an invoice closed only when both the deputy and the vendor marked it paid. Vendors do not work for the agency, many have no account, and they cannot be made to click.
+  - When the payee confirms payment, the invoice closes as paid, shown to staff as "Paid (confirmed by deputy)". Its response clock, overdue status, vendor reminders, coordinator to-dos and alerts stop, and an "unconfirmed payment" sign-up lock clears.
+  - The vendor's own "Mark paid" stays optional, for its records; a later mark goes on the timeline. The vendor portal shows the invoice as Paid.
+  - Payments has a quiet "Vendor not confirmed" filter for deputy-confirmed invoices the vendor never marked: no counts, no alerts, never overdue.
+  - Reports count an invoice as paid once the deputy confirms it.
+  - Invoices the deputy already confirmed under the old rule were closed as paid by the release step, each with a system audit entry.
 - **Resend and PDF (2026-11-24).**
   - Staff can resend any sent invoice, with an optional extra address. The W-9 never goes to that extra address.
   - Staff can download any invoice as a PDF.

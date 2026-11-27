@@ -10,7 +10,7 @@ export const GET = apiHandler(routes["GET /calendar.ics"], async ({ query, run }
   return new Response(ics, {
     headers: {
       "content-type": "text/calendar; charset=utf-8",
-      "content-disposition": 'inline; filename="extra-duty.ics"',
+      "content-disposition": 'inline; filename="signal-90.ics"',
       "x-content-type-options": "nosniff",
       "cache-control": "no-store",
       "referrer-policy": "no-referrer",

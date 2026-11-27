@@ -16,7 +16,7 @@ const MATCH_TTL_MS = 24 * 3_600_000;
 const MISS_TTL_MS = 3_600_000;
 const DEFAULT_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 /** Generic on purpose: no person, email or agency name goes to the outside service. */
-const USER_AGENT = "ExtraDuty/1.0";
+const USER_AGENT = "Signal90/1.0";
 
 export type LatLng = { lat: number; lng: number };
 type GeocodeMatch = LatLng & { label: string };

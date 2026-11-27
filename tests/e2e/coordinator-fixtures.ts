@@ -170,7 +170,7 @@ export async function seedCoordinator(db: Db): Promise<void> {
 
   // Invoices go out by email, so the sender must be set.
   await db.transaction((tx) =>
-    updateSettings({ userId: coordinator.id, role: "admin", rankId: null, vendorId: null }, tx, { email: { provider: "smtp", from: "Extra Duty <no-reply@sheriff.example>", smtp: { host: "smtp.test" } }, billingReplyToEmail: "billing@sheriff.example" }),
+    updateSettings({ userId: coordinator.id, role: "admin", rankId: null, vendorId: null }, tx, { email: { provider: "smtp", from: "Signal 90 <no-reply@sheriff.example>", smtp: { host: "smtp.test" } }, billingReplyToEmail: "billing@sheriff.example" }),
   );
 
   // Unfilled and starting within 72 hours.

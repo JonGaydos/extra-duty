@@ -201,10 +201,10 @@ describe("management read models and services", () => {
     const { db } = get();
     const sender = createMemorySender();
     await expect(sendTestEmail(admin, (fn) => db.transaction(fn), () => sender)).rejects.toBeInstanceOf(ValidationError);
-    await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "smtp", from: "Extra Duty <noreply@example.test>", smtp: { host: "mail.example.test" } } }));
+    await db.transaction((tx) => updateSettings(admin, tx, { email: { provider: "smtp", from: "Signal 90 <noreply@example.test>", smtp: { host: "mail.example.test" } } }));
     expect(await sendTestEmail(admin, (fn) => db.transaction(fn), () => sender)).toBe("admin@example.test");
     expect(sender.sent).toHaveLength(1);
-    expect(sender.sent[0]).toMatchObject({ to: ["admin@example.test"], subject: "Extra Duty test email" });
+    expect(sender.sent[0]).toMatchObject({ to: ["admin@example.test"], subject: "Signal 90 test email" });
     expect(sender.sent[0].text).toContain("goes out through the email server mail.example.test. If you can read this, it works.");
     await expect(sendTestEmail(coordinator, (fn) => db.transaction(fn), () => sender)).rejects.toBeInstanceOf(ForbiddenError);
     const failing = { send: () => Promise.reject(new Error("connection refused")) };

@@ -1,6 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTx, type Tx } from "@/db/client";
-import { invoices, notifications, vendors } from "@/db/schema";
+import { invoices, notifications, users, vendors } from "@/db/schema";
 import { coordinatorAudience } from "@/domain/notifications/audiences";
 import { emit } from "@/domain/notifications/notify";
 import { recordAudit } from "@/domain/audit/audit";
@@ -25,20 +25,34 @@ export function invoiceSettingsProblem(email: Parameters<typeof emailConfigProbl
 }
 
 /**
+ * Where the alert sends each reader, and what it says. The billing reply-to address is on the billing settings page,
+ * which coordinators and admins can both open. The email server page is admin only, so a coordinator is sent to
+ * write to an admin instead. Exported for tests.
+ */
+export function settingsAlertFor(problem: SettingsProblem, role: string): { body: string; link: string } {
+  if (!problem.adminOnly) return { body: `Set ${problem.what} in Management, Settings, Billing and invoices before ${PURPOSE}.`, link: "/admin/settings/billing" };
+  if (role === "admin") return { body: `Set ${problem.what} in Management, System, Email before ${PURPOSE}.`, link: "/admin/system/email" };
+  return { body: `Ask an admin to set ${problem.what} in Management, System, Email before ${PURPOSE}.`, link: "/messages/new" };
+}
+
+/**
  * Tells coordinators and admins what to set, once per person until they read it. It commits in its own
  * transaction: the caller's transaction rolls back with the error that follows, and the alert must outlive it.
  */
-async function alertSettingsIncomplete(message: string): Promise<void> {
+async function alertSettingsIncomplete(problem: SettingsProblem): Promise<void> {
   await withTx(async (tx) => {
+    const audience = await coordinatorAudience(tx);
+    const roles = new Map((await tx.select({ id: users.id, role: users.role }).from(users).where(inArray(users.id, audience))).map((u) => [u.id, u.role]));
     // Sequential: the reads and alert writes share this transaction.
-    for (const id of await coordinatorAudience(tx)) {
+    for (const id of audience) {
       const [open] = await tx
         .select({ id: notifications.id })
         .from(notifications)
         .where(and(eq(notifications.userId, id), eq(notifications.type, "settings.email_incomplete"), isNull(notifications.readAt)))
         .limit(1);
       if (open) continue;
-      await emit(tx, { recipients: [id], type: "settings.email_incomplete", title: "Email settings are incomplete", body: message, link: "/settings" });
+      const { body, link } = settingsAlertFor(problem, roles.get(id) ?? "coordinator");
+      await emit(tx, { recipients: [id], type: "settings.email_incomplete", title: "Email settings are incomplete", body, link });
     }
   });
 }
@@ -86,7 +100,7 @@ export async function assertInvoiceEmailReady(tx: Tx, row: { vendorName: string;
   const settingsProblem = invoiceSettingsProblem(settings.email, settings.billingReplyToEmail);
   if (settingsProblem) {
     const message = settingsProblemMessage(settingsProblem, PURPOSE);
-    await alertSettingsIncomplete(message);
+    await alertSettingsIncomplete(settingsProblem);
     throw new ValidationError(message);
   }
   if (!row.billingEmails.length) {

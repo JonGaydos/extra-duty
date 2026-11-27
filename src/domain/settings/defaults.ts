@@ -84,5 +84,20 @@ export const DEFAULT_SETTINGS: AgencySettings = {
     emailCodeAttempts: 5,
     trustedDeviceDays: 30,
     passwordMinLength: 12,
+    signInCodes: { admin: true, coordinator: true, personnel: true, vendor: true },
   },
 };
+
+/**
+ * The defaults with the server's map tile choice applied: MAP_TILE_URL and MAP_TILE_ATTRIBUTION, when set, replace the
+ * OpenStreetMap defaults. A tile address or attribution saved in Admin, Settings, Map still wins over both.
+ */
+export function settingsDefaults(env: Readonly<Record<string, string | undefined>> = process.env): AgencySettings {
+  const tileUrl = env.MAP_TILE_URL?.trim();
+  const attribution = env.MAP_TILE_ATTRIBUTION?.trim();
+  return {
+    ...DEFAULT_SETTINGS,
+    mapTileUrl: tileUrl || DEFAULT_SETTINGS.mapTileUrl,
+    mapAttribution: attribution || DEFAULT_SETTINGS.mapAttribution,
+  };
+}

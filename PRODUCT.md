@@ -33,13 +33,13 @@ The agency runs its own system and never touches detail money: vendors pay deput
 ## Capabilities and Constraints
 
 - Roles: admin, coordinator, personnel, vendor. Admin includes coordinator powers; coordinator includes personnel powers.
-- Two-factor sign-in by emailed 6-digit code; no SSO.
+- Two-factor sign-in by emailed 6-digit code; no SSO. Admins always need the code; an admin can turn it off for coordinators, deputies or vendors.
 - The agency never processes payments.
 - Native apps are planned later; the web app is API-first.
 
 ## Brand Commitments
 
-- Working name "Extra Duty". The agency logo appears on invoices and sign-in (asset not yet provided).
+- Name "Signal 90", described as "Extra Duty" (combined form "Signal 90 · Extra Duty"; see DESIGN.md, Name). The agency logo appears on invoices and sign-in (asset not yet provided).
 - Plain, professional copy; no emojis.
 
 ## Evidence on Hand

@@ -31,7 +31,7 @@ test("walkthrough: request, approval, release on the 15th at 4:00 PM, sign-up, b
     const since = mail.mark();
     await admin.getByRole("button", { name: "Send test email" }).click();
     await expect(admin.getByRole("status")).toContainText(`Test email sent to ${agency.admin.email}.`);
-    await mail.waitFor({ to: agency.admin.email, subject: "Extra Duty test email", since });
+    await mail.waitFor({ to: agency.admin.email, subject: "Signal 90 test email", since });
   });
 
   await test.step("the deputy uploads a W-9 in Profile", async () => {

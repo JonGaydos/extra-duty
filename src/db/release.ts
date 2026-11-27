@@ -5,6 +5,7 @@
  * settings defaults need no row). The demo data is loaded where a database has none yet: always for training, and
  * for the live database on staging, which runs on demo data. This is the only step that needs DDL rights.
  */
+import "../bootstrap/clean-env";
 import { count } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 import { createDb, runInMode, type DataMode } from "./client";
@@ -12,6 +13,7 @@ import { seedDemo } from "./demo-seed";
 import { runMigrations } from "./migrate";
 import { vendors } from "./schema";
 import { seed } from "./seed";
+import { closeDeputyConfirmedInvoices } from "../domain/billing/payments";
 import { appEnvFromProcess } from "../lib/env";
 
 async function prepare(mode: DataMode, url: string, opts: { adminEmail?: string; demoIfEmpty: boolean }): Promise<void> {
@@ -19,6 +21,9 @@ async function prepare(mode: DataMode, url: string, opts: { adminEmail?: string;
   const db = createDb(url);
   try {
     await seed(db, { adminEmail: opts.adminEmail });
+    // Owner decision 2026-11-26: invoices the deputy confirmed under the old two-sided rule close as paid.
+    const closed = await runInMode(mode, () => db.transaction((tx) => closeDeputyConfirmedInvoices(tx)));
+    if (closed) console.log(`release: ${closed} deputy-confirmed invoices closed as paid (${mode})`);
     if (opts.demoIfEmpty && (await db.select({ n: count() }).from(vendors))[0].n === 0) {
       // In the database's own mode, so the demo files go to its own storage.
       await runInMode(mode, () => seedDemo(db));

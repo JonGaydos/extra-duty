@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     const chapters = await loadChapters(m.id, root);
     const images = await manualImages(root, m.id, chapters);
     const pdf = await renderManualPdf({ agency, title: m.title, summary: m.summary, dated: dated(now), chapters, images });
-    const name = `Extra Duty Manual - ${m.title.replace(/ manual$/, "")} - ${isoDay(now)}.pdf`;
+    const name = `Signal 90 Manual - ${m.title.replace(/ manual$/, "")} - ${isoDay(now)}.pdf`;
     writeFileSync(join(OUT, name), pdf);
     console.log(`${name}: ${chapters.length} chapters, ${images.size} pictures, ${(pdf.length / 1024 / 1024).toFixed(1)} MB`);
   }

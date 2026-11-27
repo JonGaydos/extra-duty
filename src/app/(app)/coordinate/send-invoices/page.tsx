@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { InvoicePdfLink } from "../../invoices/[id]/InvoicePdfLink";
 import { withTx } from "@/ui/shell/request";
-import { listInvoiceBatches, waitingText, type VendorBatch } from "@/domain/invoices/batch";
-import { sendDayLabel } from "@/domain/invoices/send-schedule";
+import { batchedVendors, listInvoiceBatches, waitingText, type VendorBatch } from "@/domain/invoices/batch";
+import { SCHEDULE_LABEL, sendDayLabel } from "@/domain/invoices/send-schedule";
 import { Card } from "@/ui/components/Card";
 import { Chip } from "@/ui/components/Chip";
 import { EmptyState } from "@/ui/components/EmptyState";
@@ -124,7 +125,7 @@ function BatchCard({ b }: Readonly<{ b: VendorBatch }>) {
  */
 export default async function SendInvoicesPage() {
   const actor = await coordinatorActor();
-  const batches = await withTx((tx) => listInvoiceBatches(actor, tx));
+  const { batches, batched } = await withTx(async (tx) => ({ batches: await listInvoiceBatches(actor, tx), batched: await batchedVendors(actor, tx) }));
   const due = batches.filter((b) => b.due).length;
   return (
     <div className="flex flex-col gap-4.5">
@@ -134,6 +135,31 @@ export default async function SendInvoicesPage() {
       {batches.length === 0 ? (
         <Card pad={false}>
           <EmptyState title="Nothing queued">Invoices approved for a weekly, every-two-weeks or monthly send show up here.</EmptyState>
+          <div className="flex flex-col gap-2 border-t border-divider px-4 py-3.5 text-sm md:px-5.5">
+            <p className="m-0">
+              {batched.agency === "immediate"
+                ? "The agency sends approved invoices right away."
+                : `The agency's default is ${SCHEDULE_LABEL[batched.agency].toLowerCase()}, followed by ${plural(batched.following, "vendor")} without a schedule of their own.`}{" "}
+              <Link href="/admin/settings/billing">Billing settings</Link>
+            </p>
+            {batched.vendors.length ? (
+              <>
+                <p className="m-0">These vendors have a batched schedule of their own:</p>
+                <ul className="m-0 flex flex-col gap-1 pl-5">
+                  {batched.vendors.map((v) => (
+                    <li key={v.id}>
+                      <Link href={`/coordinate/vendors/${v.id}#send-settings`}>{v.name}</Link>
+                      <span className="text-muted">, {SCHEDULE_LABEL[v.schedule].toLowerCase()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="m-0 text-muted">
+                No vendor has a batched schedule of its own. Set one on a vendor&apos;s record under <Link href="/coordinate/vendors">Vendors</Link>.
+              </p>
+            )}
+          </div>
         </Card>
       ) : (
         <div className="grid gap-4.5 lg:grid-cols-2 lg:items-start">

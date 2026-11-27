@@ -13,10 +13,11 @@ import {
   checkSessionAllowed,
   clearAttempts,
   completePasswordReset,
-  ensureTwoFactorOn,
+  applySignInCodeRule,
   forgetAttempt,
   normalizeEmail,
   recordSignIn,
+  signInCodeRequired,
   takeAttempt,
   type ThrottleKind,
 } from "@/domain/auth/sign-in-policy";
@@ -120,7 +121,7 @@ function signInPolicy(db: Db, security: AgencySettings["security"]): BetterAuthP
                 await forgetAttempt(db, "password_ip", `${email}|${ip}`, at);
                 throw throttleError("password", wide.retryAfterMs);
               }
-              await ensureTwoFactorOn(db, email);
+              await applySignInCodeRule(db, email, security.signInCodes);
               return;
             }
             const kind: ThrottleKind = ctx.path === "/two-factor/send-otp" ? "code_send" : "code_verify";
@@ -149,10 +150,12 @@ function signInPolicy(db: Db, security: AgencySettings["security"]): BetterAuthP
             }
             const created = ctx.context.newSession;
             if (!created) return;
-            // A session here comes from a trusted device (sign-in) or a code with
-            // "trust this device" ticked; anything else is a browser-session cookie.
-            const trusted =
-              security.trustedDeviceDays > 0 && (ctx.path === "/sign-in/email" || ctx.body?.trustDevice === true);
+            // A session here comes from a trusted device (sign-in), a code with "trust this device" ticked, or a
+            // role that signs in without a code. Only the first two are trusted; anything else is a browser-session
+            // cookie. A role without codes has no trusted devices, since no code step offers the choice.
+            const [who] = await db.select({ role: users.role }).from(users).where(eq(users.id, created.user.id));
+            const viaTrustedDevice = ctx.path === "/sign-in/email" && signInCodeRequired(who?.role ?? "", security.signInCodes);
+            const trusted = security.trustedDeviceDays > 0 && (viaTrustedDevice || ctx.body?.trustDevice === true);
             const lifetimeS = trusted ? security.trustedDeviceDays * DAY_S : UNTRUSTED_SESSION_S;
             const expiresAt = new Date(Date.now() + lifetimeS * 1000);
             await db.update(sessions).set({ expiresAt }).where(eq(sessions.id, created.session.id));
@@ -173,7 +176,7 @@ function signInPolicy(db: Db, security: AgencySettings["security"]): BetterAuthP
 
 function codeEmail(to: string, code: string, minutes: number) {
   const msg = simpleEmail(to, "Your sign-in code", [
-    `Your Extra Duty sign-in code is ${code}.`,
+    `Your Signal 90 sign-in code is ${code}.`,
     `It expires in ${minutes} minutes. If you did not try to sign in, reset your password.`,
   ]);
   return { ...msg, auth: true as const };
@@ -181,7 +184,7 @@ function codeEmail(to: string, code: string, minutes: number) {
 
 function resetEmail(to: string, url: string) {
   const msg = simpleEmail(to, "Reset your password", [
-    "Use this link to set a new Extra Duty password. It also unlocks an account locked for inactivity.",
+    "Use this link to set a new Signal 90 password. It also unlocks an account locked for inactivity.",
     url,
     "The link expires in 1 hour. If you did not ask for this, ignore this email.",
   ]);
@@ -191,7 +194,7 @@ function resetEmail(to: string, url: string) {
 export function createAuth(o: CreateAuthOptions) {
   const { db, security } = o;
   return betterAuth({
-    appName: "Extra Duty",
+    appName: "Signal 90",
     baseURL: o.baseURL ?? process.env.BETTER_AUTH_URL,
     secret: o.secret ?? process.env.BETTER_AUTH_SECRET,
     basePath: "/api/auth",

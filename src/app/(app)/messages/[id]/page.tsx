@@ -31,7 +31,7 @@ export default async function MessagePage({ params }: Readonly<Props>) {
       const m = await getMessage(actor, tx, id);
       const [sender] = m.senderUserId ? await tx.select({ name: users.name }).from(users).where(eq(users.id, m.senderUserId)) : [];
       const [job] = m.jobId ? await tx.select({ id: jobs.id, number: jobs.number, title: jobs.title }).from(jobs).where(eq(jobs.id, m.jobId)) : [];
-      return { m, sender: sender?.name ?? "Extra Duty", job };
+      return { m, sender: sender?.name ?? "Signal 90", job };
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;

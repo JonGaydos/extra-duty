@@ -3,7 +3,7 @@ import type { Db, Tx } from "@/db/client";
 import { accounts, authThrottle, users, vendorUsers, verifications } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
-import { getSettings } from "../settings/settings";
+import { getSettings, type AgencySettings } from "../settings/settings";
 import { isInactive } from "./inactivity";
 
 /** All sign-in limits use a sliding 15-minute window. */
@@ -187,13 +187,19 @@ export async function completePasswordReset(db: Db, userId: string): Promise<voi
   });
 }
 
+/** Whether this role must enter an emailed code at sign-in (Security settings). Admins always must. */
+export function signInCodeRequired(role: string, codes: AgencySettings["security"]["signInCodes"]): boolean {
+  if (role === "coordinator" || role === "personnel" || role === "vendor") return codes[role];
+  return true;
+}
+
 /**
- * Two-factor is required for every account. Turns it back on for an account
- * that somehow has it off, before the password check reads the user.
+ * Sets the account's two-factor flag from its role's switch, before the password check reads the user, so the code
+ * step follows the current setting at every sign-in. Sessions already open are not touched.
  */
-export async function ensureTwoFactorOn(db: Db, email: string): Promise<void> {
-  await db
-    .update(users)
-    .set({ twoFactorEnabled: true })
-    .where(and(eq(users.email, email), eq(users.twoFactorEnabled, false)));
+export async function applySignInCodeRule(db: Db, email: string, codes: AgencySettings["security"]["signInCodes"]): Promise<void> {
+  const [u] = await db.select({ id: users.id, role: users.role, on: users.twoFactorEnabled }).from(users).where(eq(users.email, email)).limit(1);
+  if (!u) return;
+  const required = signInCodeRequired(u.role, codes);
+  if (u.on !== required) await db.update(users).set({ twoFactorEnabled: required }).where(eq(users.id, u.id));
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-11-23T00:00:00Z",
-  "title": "Design System: Extra Duty",
+  "title": "Design System: Signal 90",
   "extensions": {
     "colorMeta": {
       "accent": {
@@ -133,7 +133,7 @@
   ],
   "narrative": {
     "northStar": "The Duty Board",
-    "overview": "Extra Duty is the board a deputy checks between shifts and a coordinator keeps on a second monitor: a calm, daylight surface of white cards on a cool gray canvas, one confident blue for everything you can act on, and status color only where a rule or a deadline needs attention. Night mode is the same board in low light.",
+    "overview": "Signal 90 is the board a deputy checks between shifts and a coordinator keeps on a second monitor: a calm, daylight surface of white cards on a cool gray canvas, one confident blue for everything you can act on, and status color only where a rule or a deadline needs attention. Night mode is the same board in low light.",
     "keyCharacteristics": [
       "Flat white cards with a 1 px line, no shadows except the floating tab bar.",
       "One accent blue for buttons, the active tab, links and filled staffing squares.",

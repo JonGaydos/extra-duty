@@ -1,6 +1,6 @@
 # Operations Guide
 
-How Extra Duty is deployed, configured, backed up, updated and restored. The step-by-step install for one Linux
+How Signal 90 is deployed, configured, backed up, updated and restored. The step-by-step install for one Linux
 machine with Docker Compose is in [self-hosting.md](self-hosting.md).
 
 ## Two deployments from one image
@@ -93,8 +93,15 @@ Compose's own secrets go in `.env` (copy `.env.example`). Never put real secrets
 | `STORAGE_LOCAL_DIR`, `TRAINING_STORAGE_LOCAL_DIR` | For `local` | Folders for live and training files (default `./var/storage`, `./var/training-storage`; under Docker Compose `/data/live` and `/data/training`). The container entry point creates them and stops if it cannot write them. |
 | `STAGING_EMAIL_ALLOWLIST` | On staging | Comma-separated addresses that receive sign-in codes, invitations and password reset links on staging. Everything else stays in the outbox. Ignored in production; training mode never sends anything. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web push. Without them push is skipped. |
+| `MAP_TILE_URL` | No | Where map tiles come from, with `{z}`, `{x}` and `{y}` in it. Default `https://tile.openstreetmap.org/{z}/{x}/{y}.png`. OpenStreetMap's free tile servers suit light use under their tile usage policy; a busier install should use a hosted tile provider. A tile address saved in Admin, Settings, Map wins over this. |
+| `MAP_TILE_ATTRIBUTION` | No | The credit shown on every map, as the tile provider's terms require. Default `© OpenStreetMap contributors`. An attribution saved in Admin, Settings, Map wins over this. |
 | `DEMO_PASSWORD` | No | Local development only: the password of the local preview's demo accounts and the screenshot capture's practice deputy. Unset: random for each run, printed once. Never set it on a live site. |
 | `NODE_OPTIONS` | No | The image sets `--max-old-space-size=768` (heap per process). Raise it with the container's memory. |
+
+**Comments in env files.** Put each comment on its own line. Docker Compose reads `APP_URL=  # comment` as the value
+`# comment`, not as empty. At start, the app treats a web address setting (`APP_URL`, `BETTER_AUTH_URL`,
+`S3_ENDPOINT`, `VAPID_SUBJECT`, `MAP_TILE_URL`) that is not an http or https URL as unset, and an optional setting
+whose value starts with `#` as unset, and logs one warning naming each one. Fix the file when you see that warning.
 
 Docker Compose's `.env` holds `SITE_DOMAIN`, `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` and, optionally, `FILES_PATH`
 (a host folder for the files instead of the `files` volume). Compose builds the database settings from them; web and

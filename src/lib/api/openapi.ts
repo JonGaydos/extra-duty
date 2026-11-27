@@ -85,10 +85,10 @@ export function openApiDocument(): Json {
   return {
     openapi: "3.1.0",
     info: {
-      title: "Extra Duty API",
+      title: "Signal 90 API",
       version: "1",
       description:
-        "The REST API behind the Extra Duty app. Authenticate with an API key (`Authorization: Bearer ed_live_...`, made by an admin), a session token as a bearer token, or the session cookie. Read scope allows GET; write scope allows every method and follows the same rules and audit as the app; w9 scope adds W-9 downloads. Answers are `{ data }` on success and `{ error: { code, message } }` on failure. Date-only inputs (YYYY-MM-DD) are agency days in America/Chicago.",
+        "The REST API behind Signal 90 · Extra Duty. Authenticate with an API key (`Authorization: Bearer ed_live_...`, made by an admin), a session token as a bearer token, or the session cookie. Read scope allows GET; write scope allows every method and follows the same rules and audit as the app; w9 scope adds W-9 downloads. Answers are `{ data }` on success and `{ error: { code, message } }` on failure. Date-only inputs (YYYY-MM-DD) are agency days in America/Chicago.",
     },
     servers: [{ url: "/" }],
     security: [{ bearer: [] }, { cookie: [] }],

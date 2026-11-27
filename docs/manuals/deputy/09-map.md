@@ -1,6 +1,6 @@
 # The map
 
-1. Open **Map**. Each pin shows a detail's pay.
+1. Open **Details** and choose **Map** (on a phone, **Map** is also on **More**). Each pin shows a detail's pay.
 
    ![The map of details](../images/deputy/09-map-1-phone.webp)
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { scheduleText } from "@/domain/invoices/send-schedule";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withTx } from "@/ui/shell/request";
@@ -78,6 +79,21 @@ function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySc
           { label: "Default rate", value: v.defaultRateCents ? <span data-numeric>{dollars(v.defaultRateCents)}/hr</span> : "Agency default" },
           { label: "Minimum billable", value: v.minimumBillableMinutes ? hoursText(v.minimumBillableMinutes) : null },
           { label: "Vendor type", value: rec.typeName },
+          {
+            label: "Invoices go",
+            value: (
+              <span>
+                {scheduleText(v.invoiceSendSchedule, { invoiceSendSchedule: agencySchedule })}. <a href="#send-settings">Change</a>
+                {v.invoiceSendSchedule ? null : (
+                  <>
+                    {" "}
+                    or <Link href="/admin/settings/billing">change the agency default</Link>
+                  </>
+                )}
+              </span>
+            ),
+          },
+          { label: "Email approved invoices", value: v.emailApprovedInvoices ? "Yes, approving sends them" : "No, approving does not send them" },
           { label: "Notes", value: v.notes ? <span className="whitespace-pre-line">{v.notes}</span> : null },
         ]}
       />
@@ -88,8 +104,10 @@ function VendorCard({ rec, agencySchedule }: Readonly<{ rec: VendorRec; agencySc
         />
         <PaymentHold vendorId={v.id} onHold={v.paymentHold} />
       </div>
-      <VendorSendSchedule vendorId={v.id} current={v.invoiceSendSchedule} agency={agencySchedule} />
-      <VendorEmailApproved vendorId={v.id} initial={v.emailApprovedInvoices} />
+      <div id="send-settings" className="flex scroll-mt-24 flex-col gap-3">
+        <VendorSendSchedule vendorId={v.id} current={v.invoiceSendSchedule} agency={agencySchedule} />
+        <VendorEmailApproved vendorId={v.id} initial={v.emailApprovedInvoices} />
+      </div>
       {v.paymentHold ? <p className="m-0 text-sm text-danger-ink">On hold: {v.paymentHoldReason}. Future details are locked and closed to sign-ups.</p> : null}
     </Card>
   );

@@ -1,4 +1,4 @@
-# Extra Duty on one Linux machine: Caddy (HTTPS) in front of one web container, the worker and PostgreSQL. Files
+# Signal 90 on one Linux machine: Caddy (HTTPS) in front of one web container, the worker and PostgreSQL. Files
 # (W-9s, contracts, ops plans, logos) are kept on disk in the files volume, shared by web, the worker and migrate.
 # Settings: .env holds Compose's own secrets (copy .env.example); app.env holds the app's settings (copy
 # app.env.example). Guide: docs/self-hosting.md.

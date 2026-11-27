@@ -1,6 +1,6 @@
 # API keys and data export (admins)
 
-Keys let other systems, such as payroll, read and change Extra Duty data through the REST API.
+Keys let other systems, such as payroll, read and change Signal 90 data through the REST API.
 
 1. Open **Management**, **System**, then **API access**.
 2. Under **Make a key**, give it a **Name** (the system that will use it). Choose **Read only** or **Read and write**. Tick **W-9 downloads** only if the system must read tax forms. Set **Expires** if you want.

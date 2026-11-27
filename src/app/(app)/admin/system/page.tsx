@@ -62,7 +62,7 @@ export default async function SystemPage() {
               API access
             </Link>
           </CardTitle>
-          <p className="m-0 text-muted">Keys that let other systems read and change Extra Duty data, and the API reference.</p>
+          <p className="m-0 text-muted">Keys that let other systems read and change Signal 90 data, and the API reference.</p>
         </Card>
       </div>
     </div>

@@ -42,7 +42,9 @@ export function AuthShell({
           </div>
         )}
         <div className="flex flex-col gap-0.5">
-          <p className="m-0 text-2xl font-bold">Extra Duty</p>
+          <p className="m-0 text-2xl font-bold">
+            Signal 90 <span className="font-medium text-muted">· Extra Duty</span>
+          </p>
           <p className="m-0 text-body text-muted">{agencyName}</p>
         </div>
       </div>

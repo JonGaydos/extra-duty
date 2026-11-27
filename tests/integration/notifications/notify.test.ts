@@ -157,7 +157,7 @@ describe("notification core", () => {
     await drain();
     process.env.BETTER_AUTH_URL = saved;
     expect(mail.sent).toHaveLength(2);
-    expect(mail.sent[0].text).not.toContain("Open in Extra Duty");
+    expect(mail.sent[0].text).not.toContain("Open in Signal 90");
     expect(warn.mock.calls.filter((c) => String(c[0]).includes("APP_URL"))).toHaveLength(1);
     warn.mockRestore();
   });

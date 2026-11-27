@@ -5,6 +5,7 @@
  * interruption: files already on the new key (by key id) are skipped. Files that cannot be read are listed, the rest
  * still move, and the run exits non-zero. Steps: docs/operations.md, "Rotating FILE_MASTER_KEY".
  */
+import "../bootstrap/clean-env";
 import { asc, eq } from "drizzle-orm";
 import { fileURLToPath } from "node:url";
 import { dbFor, runInMode, trainingConfigured, type Db, type DataMode } from "./client";

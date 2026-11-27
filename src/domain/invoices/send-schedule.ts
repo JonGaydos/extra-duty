@@ -59,6 +59,20 @@ export function nextSendDay(schedule: SendSchedule, a: ScheduleAnchors, fromKey:
 }
 
 const LABEL: Record<Exclude<SendSchedule, "immediate">, string> = { weekly: "weekly", every_2_weeks: "every-two-weeks", monthly: "monthly" };
+
+/** A schedule's name as a label: "Right away", "Weekly", "Every two weeks", "Monthly". */
+export const SCHEDULE_LABEL: Record<SendSchedule, string> = { immediate: "Right away", weekly: "Weekly", every_2_weeks: "Every two weeks", monthly: "Monthly" };
+
+/** The send's name inside a sentence: "the weekly send". */
+export function sendName(schedule: Exclude<SendSchedule, "immediate">): string {
+  return `the ${LABEL[schedule]} send`;
+}
+
+/** A vendor's schedule for a label, marked when it is the agency's: "Weekly" or "Right away (agency default)". */
+export function scheduleText(vendorOverride: SendSchedule | null, s: { invoiceSendSchedule: SendSchedule }): string {
+  const label = SCHEDULE_LABEL[effectiveSchedule(vendorOverride, s)];
+  return vendorOverride ? label : `${label} (agency default)`;
+}
 const dayFmt = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 
 /** "Fri, Nov 27" for a day key. */

@@ -2,7 +2,7 @@
 
 The agency sends you an invite email. Use its link to set your password. After that, you sign in with your password and a 6-digit code that is emailed to you each time.
 
-1. Open the Extra Duty site. Enter your **Email** and **Password**, then choose **Sign in**.
+1. Open the Signal 90 site. Enter your **Email** and **Password**, then choose **Sign in**.
 
    ![The Sign in page](../images/vendor/01-signing-in-1-phone.webp)
 
