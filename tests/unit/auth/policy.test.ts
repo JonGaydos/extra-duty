@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { ForbiddenError } from "@/domain/errors";
 import type { Actor, Role } from "@/domain/actor";
-import { ACTIONS, assertCan, can, type Action } from "@/domain/auth/policy";
+import { ACTIONS, assertCan, can, isVendorManager, managesVendor, type Action } from "@/domain/auth/policy";
 
 const actorFor = (role: Role, userId = "u1"): Actor => ({
   userId,
@@ -158,6 +158,47 @@ describe("vendor-scoped actions", () => {
     const orphan: Actor = { ...vendor, vendorId: null };
     expect(can(orphan, "job.read", {})).toBe(false);
     expect(can(orphan, "job.read", { vendorId: undefined })).toBe(false);
+  });
+});
+
+describe("vendor manager scope (owner decision 2026-11-27)", () => {
+  const manager: Actor = { ...personnel, managedVendorIds: ["v1", "v3"] };
+  const managed: Action[] = [
+    "job.create", "job.update", "job.cancel", "job.reactivate",
+    "assignment.assign", "assignment.remove",
+    "vendorRequest.decide", "vendorLocation.manageOwn", "vendorContact.manage", "vendor.read",
+  ];
+
+  test.each(managed)("%s: a deputy for the vendors they manage only", (action) => {
+    expect(can(manager, action, { vendorId: "v1" })).toBe(true);
+    expect(can(manager, action, { vendorId: "v3" })).toBe(true);
+    expect(can(manager, action, { vendorId: "v2" })).toBe(false);
+    expect(can(manager, action)).toBe(false);
+    expect(can(personnel, action, { vendorId: "v1" })).toBe(false);
+    expect(can(coordinator, action, { vendorId: "v2" })).toBe(true);
+  });
+
+  test.each([
+    "assignment.noShow", "assignment.writeOff", "invoice.review", "billing.overrideLock", "w9.uploadFor", "w9.review",
+    "user.manage", "vendor.manage", "vendor.paymentHold", "vendorRestriction.manage", "lateCancel.waive",
+    "audit.read", "settings.read", "report.run", "paymentIssue.manage", "training.switch",
+  ] as const)("%s stays with coordinators, even for a managed vendor", (action) => {
+    expect(can(manager, action, { vendorId: "v1" })).toBe(false);
+  });
+
+  test("a vendor login with the same ids gains nothing from the manager list", () => {
+    const odd: Actor = { ...vendor, managedVendorIds: ["v2"] };
+    expect(can(odd, "job.update", { vendorId: "v2" })).toBe(false);
+  });
+
+  test("managesVendor", () => {
+    expect(managesVendor(manager, "v1")).toBe(true);
+    expect(managesVendor(manager, "v2")).toBe(false);
+    expect(managesVendor(personnel, "v1")).toBe(false);
+    expect(managesVendor(coordinator, "v1")).toBe(false);
+    expect(isVendorManager(manager)).toBe(true);
+    expect(isVendorManager(personnel)).toBe(false);
+    expect(isVendorManager({ ...personnel, managedVendorIds: [] })).toBe(false);
   });
 });
 

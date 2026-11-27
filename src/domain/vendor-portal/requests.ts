@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
+import { changeRequestVendorId, jobVendorId } from "../auth/scope";
 import { assertCan, type Action } from "../auth/policy";
 import { NotFoundError, RuleViolation, ValidationError, type CheckResult } from "../errors";
 import { uploadFile } from "../files/files";
@@ -28,7 +29,7 @@ import {
 } from "../jobs/jobs";
 import { expandDates, previewBulk, type DateSelection, type TimeOverrides } from "../jobs/recurrence";
 import type { SafetyInput } from "../jobs/safety";
-import { coordinatorAudience, jobAudience, vendorAudience } from "../notifications/audiences";
+import { jobAudience, vendorAudience, vendorStaffAudience } from "../notifications/audiences";
 import { emit } from "../notifications/notify";
 import { getSettings, type AgencySettings } from "../settings/settings";
 import type { ConflictOverride } from "../jobs/schedule-conflicts";
@@ -210,7 +211,7 @@ export async function submitRequest(actor: Actor, tx: Tx, input: VendorRequestIn
 
   const first = created[0];
   await emit(tx, {
-    recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
+    recipients: (await vendorStaffAudience(tx, first.vendorId)).filter((u) => u !== actor.userId),
     type: "vendor.request_submitted",
     title: `Vendor request: ${vendor.name}`,
     body: `${first.title}, ${requestDates(created.length, when(first.startAt))}.`,
@@ -235,7 +236,7 @@ async function requestSet(tx: Tx, jobId: string): Promise<Job[]> {
 
 /** Approves the whole request (every date). `edits` apply to each job; times can change only on a single-date request. */
 export async function approveRequest(actor: Actor, tx: Tx, jobId: string, edits?: Partial<JobInput>): Promise<Job[]> {
-  assertCan(actor, "vendorRequest.decide");
+  assertCan(actor, "vendorRequest.decide", { vendorId: await jobVendorId(tx, jobId) });
   const set = await requestSet(tx, jobId);
   const hasEdits = !!edits && Object.keys(edits).length > 0;
   if (hasEdits && set.length > 1 && (edits.startAt !== undefined || edits.endAt !== undefined || edits.flex !== undefined)) {
@@ -261,7 +262,7 @@ export async function approveRequest(actor: Actor, tx: Tx, jobId: string, edits?
 }
 
 export async function declineRequest(actor: Actor, tx: Tx, jobId: string, reason: string): Promise<Job[]> {
-  assertCan(actor, "vendorRequest.decide");
+  assertCan(actor, "vendorRequest.decide", { vendorId: await jobVendorId(tx, jobId) });
   const why = reason?.trim();
   if (!why) throw new ValidationError("A reason is required to decline a request.");
   const set = await requestSet(tx, jobId);
@@ -370,7 +371,7 @@ async function editRequest(actor: Actor, tx: Tx, job: Job, clean: VendorEditPatc
   }
   const after = await applyPatch(actor, tx, job, fromStored(toStored(clean)), changes);
   await emit(tx, {
-    recipients: (await coordinatorAudience(tx)).filter((u) => u !== actor.userId),
+    recipients: (await vendorStaffAudience(tx, after.vendorId)).filter((u) => u !== actor.userId),
     type: "vendor.request_edited",
     title: `Vendor request edited: #${after.number} ${after.title}`,
     body: `The request now starts ${when(after.startAt)}.`,
@@ -418,7 +419,7 @@ export async function vendorEditJob(actor: Actor, tx: Tx, jobId: string, patch: 
   const [request] = await tx.insert(jobChangeRequests).values({ jobId: job.id, requestedBy: actor.userId, patch: toStored(clean) }).returning();
   await recordAudit(tx, { actor, action: "job.change_request", entityType: "job", entityId: job.id, before: null, after: request });
   await emit(tx, {
-    recipients: await coordinatorAudience(tx),
+    recipients: await vendorStaffAudience(tx, job.vendorId),
     type: "vendor.request_edited",
     title: `Vendor change to approve: #${job.number} ${job.title}`,
     body: `The vendor asks to change ${changes.map((c) => c.replace("_", " ")).join(", ")}.`,
@@ -437,7 +438,7 @@ async function pendingChange(tx: Tx, id: string): Promise<JobChangeRequest> {
 /** Applies the vendor's pending change and alerts the people on the job. */
 /** `conflictOverride`: a coordinator's override of the deputy conflicts the change was shown to cause. */
 export async function approveJobChange(actor: Actor, tx: Tx, requestId: string, now: Date = new Date(), opts: { conflictOverride?: ConflictOverride | null } = {}): Promise<Job> {
-  assertCan(actor, "vendorRequest.decide");
+  assertCan(actor, "vendorRequest.decide", { vendorId: await changeRequestVendorId(tx, requestId) });
   const row = await pendingChange(tx, requestId);
   const job = await getJobRow(tx, row.jobId);
   if (job.state === "canceled" || job.state === "declined") throw new ValidationError("A canceled or declined detail cannot be changed.");
@@ -458,7 +459,7 @@ export async function approveJobChange(actor: Actor, tx: Tx, requestId: string, 
 }
 
 export async function declineJobChange(actor: Actor, tx: Tx, requestId: string, reason: string, now: Date = new Date()): Promise<JobChangeRequest> {
-  assertCan(actor, "vendorRequest.decide");
+  assertCan(actor, "vendorRequest.decide", { vendorId: await changeRequestVendorId(tx, requestId) });
   const why = reason?.trim();
   if (!why) throw new ValidationError("A reason is required to decline a change.");
   const row = await pendingChange(tx, requestId);

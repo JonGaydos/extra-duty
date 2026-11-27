@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { assignments, hiddenVendors, users, vendorUsers } from "@/db/schema";
+import { vendorManagerIds } from "../vendors/managers";
 
 /** People holding a spot or a place in line for the job: pending short, signed up or backup, once each. */
 export async function jobAudience(tx: Tx, job: { id: string }): Promise<string[]> {
@@ -20,6 +21,14 @@ export async function coordinatorAudience(tx: Tx): Promise<string[]> {
     .where(and(eq(users.active, true), inArray(users.role, ["coordinator", "admin"])))
     .orderBy(asc(users.id));
   return rows.map((r) => r.id);
+}
+
+/**
+ * The coordinators and admins, plus the deputies who manage this vendor (owner decision 2026-11-27): alerts about a
+ * vendor's details that go to the coordinators also go to its managers.
+ */
+export async function vendorStaffAudience(tx: Tx, vendorId: string): Promise<string[]> {
+  return [...new Set([...(await coordinatorAudience(tx)), ...(await vendorManagerIds(tx, vendorId))])];
 }
 
 /** Active logins of one vendor. */

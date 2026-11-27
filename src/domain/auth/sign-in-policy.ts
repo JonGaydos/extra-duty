@@ -1,6 +1,7 @@
 import { and, asc, count, eq, isNotNull, isNull, like, lte, min, sql } from "drizzle-orm";
 import type { Db, Tx } from "@/db/client";
 import { accounts, authThrottle, users, vendorUsers, verifications } from "@/db/schema";
+import { managedVendorIdsOf } from "../vendors/managers";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { getSettings, type AgencySettings } from "../settings/settings";
@@ -131,6 +132,10 @@ export async function loadActiveActor(tx: Tx, userId: string): Promise<Actor | n
       .orderBy(asc(vendorUsers.createdAt))
       .limit(1);
     vendorId = vu?.vendorId ?? null;
+  }
+  if (u.role === "personnel") {
+    const managed = await managedVendorIdsOf(tx, userId);
+    if (managed.length) return { userId: u.id, role: u.role, rankId: u.rankId, vendorId, managedVendorIds: managed };
   }
   return { userId: u.id, role: u.role, rankId: u.rankId, vendorId };
 }

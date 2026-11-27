@@ -443,6 +443,14 @@ export const routes = define({
     body: z.object({ reason: text, until: agencyDate("start").nullable().optional().transform((v) => v ?? null).meta({ description: "A date (from agency midnight) or timestamp; null or left out for no end." }), removeFutureAssignments: z.boolean().optional() }),
     response: record("The user."),
   },
+  "GET /users/{id}/managed-vendors": { tag: "Users", summary: "Vendors a deputy manages", description: "Coordinators and admins.", response: z.object({ vendorIds: z.array(text) }) },
+  "PUT /users/{id}/managed-vendors": {
+    tag: "Users",
+    summary: "Set the vendors a deputy manages",
+    description: "Coordinators and admins. For these vendors only, the deputy creates, edits, staffs, holds, releases, cancels and reactivates details, decides the vendor's requests and keeps its locations and site contacts. Only a deputy (personnel) can manage vendors; an empty list clears it. Audited.",
+    body: z.object({ vendorIds: z.array(text) }),
+    response: z.object({ vendorIds: z.array(text) }),
+  },
   "DELETE /users/{id}/suspension": { tag: "Users", summary: "Lift a suspension", response: record("The user.") },
   "GET /users/{id}/w9": { tag: "Users", summary: "Download a person's W-9", description: "The owner, coordinators and admins; every read is audited. API keys need the w9 scope.", w9: true, hideForbidden: true, response: file("application/pdf", "The W-9.") },
   "POST /users/{id}/w9": {

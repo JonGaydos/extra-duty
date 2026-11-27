@@ -51,6 +51,11 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
   - Any late-cancel pay not yet billed is canceled.
 - **No billing before the end time (2026-11-24).** Nothing can be billed before the detail's scheduled end time, including late-cancel pay. This means a detail can never be reactivated after its late-cancel pay was billed.
 
+- **Vendor managers (2026-11-27).** Staff can make a deputy the manager of a few chosen vendors (Management, Users, "Vendors this person manages"; audited), so a coordinator does not have to handle them, such as a school resource sergeant for two or three schools.
+  - For those vendors only, the deputy creates and edits details (positions, times, a rate inside the agency range, description, contract, copy and repeat), holds and releases them, cancels and reactivates them, assigns and removes people under the coordinators' conflict and override rules, sees the roster and sign-up history, decides the vendor's requests and keeps its locations and site contacts. The API enforces the same scope.
+  - They never see W-9s, other people's payments or invoices, other vendors, the vendor record, staff reports, To-do, Management or the audit log, and cannot approve a rate outside the range, mark no-shows, name the Incident Commander, hold an invoice or waive late-cancel pay. Otherwise they are a deputy.
+  - Same screens: they keep the deputy tabs and get a Manage tab with their vendors, requests and upcoming details; Details and Calendar show Manage on their vendors' details, which opens Manage this detail. Every action is audited under their name, and coordinators' alerts about these vendors' requests and changes also go to them.
+
 ## People and reports
 
 - **Personnel activity report (2026-11-24).** This report is for coordinators and admins.
@@ -102,7 +107,7 @@ Decisions and requests from the owner made during the build, from 2026-11-23 on.
 ## Messages and calendar
 
 - **About a detail (2026-11-27).** The message field "About a job" is now "About a detail". A deputy may link only a detail they are signed up for, pending on or offered a spot on that has not ended; staff may link any detail that has not ended. Past details are never offered, and the server refuses any other link (form and API). A detail a deputy is not on is never offered to them.
-- **Message recipients (2026-11-27).** "Send to" is either Everyone (with the count of people) or Choose recipients (people by name, a rank, a detail's roster or the coordinators, as removable chips). Choosing Everyone replaces the chips and offers Undo; no confirmation is asked. Someone covered by more than one chip gets one copy.
+- **Message recipients (2026-11-27).** "Send to" is either Everyone (with the count of people) or Choose recipients (people by name, a rank, a detail's roster or the coordinators, as removable chips). A deputy may message the roster only of a detail they may link under About a detail (form and API). Choosing Everyone replaces the chips and offers Undo; no confirmation is asked. Someone covered by more than one chip gets one copy.
 - **Calendar link import (2026-11-27).** Adding or changing the calendar link in Profile (or through the API) imports it at once, through the same path and 15-minute limit as Sync now, instead of waiting for the nightly run. The card shows "Importing your calendar..." and then the last fetched time or the error.
 - **To-do wording (2026-11-27).** The To-do page counts "To-do: 3 items." and never says something "needs you".
 

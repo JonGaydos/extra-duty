@@ -29,7 +29,8 @@ import {
 } from "@/db/schema";
 import type { Actor } from "../actor";
 import { detailEvents, signupHistory, type DetailEvent, type HistoryEntry } from "../assignments/history";
-import { assertCan } from "../auth/policy";
+import { assertCan, isVendorManager } from "../auth/policy";
+import { jobVendorId } from "../auth/scope";
 import { lockedPeople } from "../billing/lock";
 import { isOverdue, paidLabel, responsibleDueAt, type Party } from "../billing/payments";
 import { NotFoundError } from "../errors";
@@ -729,7 +730,7 @@ export type JobAdmin = {
 
 /** What a coordinator needs on a job page beyond getJob: roster with ids and statuses, series size, pending vendor changes. */
 export async function jobAdmin(actor: Actor, tx: Tx, jobId: string): Promise<JobAdmin> {
-  assertCan(actor, "job.update");
+  assertCan(actor, "job.update", { vendorId: await jobVendorId(tx, jobId) });
   const [row] = await tx
     .select({ job: jobs, vendorName: vendors.name, hold: vendors.paymentHold, vendorMin: vendors.minimumBillableMinutes, locationName: vendorLocations.name, address: vendorLocations.address, lat: vendorLocations.lat, lng: vendorLocations.lng, typeName: sql<string>`(select name from job_types where id = ${jobs.typeId})` })
     .from(jobs)
@@ -895,9 +896,9 @@ export async function vendorRecord(actor: Actor, tx: Tx, vendorId: string, now: 
   };
 }
 
-/** Active personnel, coordinators and admins by name: for pickers (assign, restrict, earnings lookup). */
+/** Active personnel, coordinators and admins by name: for pickers (assign, restrict, earnings lookup). Vendor managers get it to assign. */
 export async function staffDirectory(actor: Actor, tx: Tx): Promise<Array<{ id: string; name: string; role: string }>> {
-  assertCan(actor, "user.manage");
+  if (!isVendorManager(actor)) assertCan(actor, "user.manage");
   return tx
     .select({ id: users.id, name: users.name, role: users.role })
     .from(users)
@@ -916,6 +917,8 @@ export type DetailFormOptions = {
   defaultPositionTypeId: string | null;
   agencyDefaultRateCents: Cents;
   rateRange: { rateMinCents: Cents | null; rateMaxCents: Cents | null };
+  /** Coordinators and admins may approve a rate outside the range; a vendor manager may not. */
+  canApproveRate: boolean;
   minimumBillableMinutes: number;
   hourRoundingMinutes: number;
   weekStartsOn: number;
@@ -923,20 +926,24 @@ export type DetailFormOptions = {
   releaseByMonth: Record<string, string>;
 };
 
-/** Choices and rules the detail form needs: active vendors, their active locations, types, positions and release dates. */
+/**
+ * Choices and rules the detail form needs: active vendors, their active locations, types, positions and release dates.
+ * A vendor manager gets only the vendors they manage.
+ */
 export async function detailFormOptions(actor: Actor, tx: Tx, now: Date = new Date()): Promise<DetailFormOptions> {
-  assertCan(actor, "job.create");
+  const managed = isVendorManager(actor) ? [...(actor.managedVendorIds ?? [])] : null;
+  if (!managed) assertCan(actor, "job.create");
   const s = await getSettings(tx);
-  const vendorRows = await tx.select().from(vendors).where(eq(vendors.active, true)).orderBy(asc(vendors.name));
+  const vendorRows = await tx.select().from(vendors).where(and(eq(vendors.active, true), managed ? inArray(vendors.id, managed) : undefined)).orderBy(asc(vendors.name));
   const locations = await tx
     .select({ id: vendorLocations.id, vendorId: vendorLocations.vendorId, name: vendorLocations.name, address: vendorLocations.address })
     .from(vendorLocations)
-    .where(eq(vendorLocations.active, true))
+    .where(and(eq(vendorLocations.active, true), managed ? inArray(vendorLocations.vendorId, managed) : undefined))
     .orderBy(asc(vendorLocations.name));
   const contacts = await tx
     .select({ id: vendorContacts.id, vendorId: vendorContacts.vendorId, name: vendorContacts.name, phone: vendorContacts.phone })
     .from(vendorContacts)
-    .where(eq(vendorContacts.active, true))
+    .where(and(eq(vendorContacts.active, true), managed ? inArray(vendorContacts.vendorId, managed) : undefined))
     .orderBy(asc(vendorContacts.name));
   const types = await tx.select({ id: jobTypes.id, name: jobTypes.name }).from(jobTypes).where(eq(jobTypes.active, true)).orderBy(asc(jobTypes.sortOrder), asc(jobTypes.name));
   const posTypes = await tx.select({ id: positionTypes.id, name: positionTypes.name, rateDifferentialCents: positionTypes.rateDifferentialCents }).from(positionTypes).where(eq(positionTypes.active, true)).orderBy(asc(positionTypes.sortOrder), asc(positionTypes.name));
@@ -957,6 +964,7 @@ export async function detailFormOptions(actor: Actor, tx: Tx, now: Date = new Da
     defaultPositionTypeId: s.defaultPositionTypeId,
     agencyDefaultRateCents: s.agencyDefaultRateCents,
     rateRange: { rateMinCents: s.rateMinCents, rateMaxCents: s.rateMaxCents },
+    canApproveRate: !managed,
     minimumBillableMinutes: s.minimumBillableMinutes,
     hourRoundingMinutes: s.hourRoundingMinutes,
     weekStartsOn: s.weekStartsOn,

@@ -579,6 +579,15 @@
       "height": 800
     },
     {
+      "file": "coordinator-admin/34-vendor-managers-1-desktop.webp",
+      "source": "staging",
+      "role": "coordinator",
+      "path": "/admin/users/01a21eb9-bc42-7da0-a14d-b157d793010d",
+      "size": "desktop",
+      "width": 664,
+      "height": 669
+    },
+    {
       "file": "deputy/01-signing-in-1-desktop.webp",
       "source": "staging",
       "role": "signed-out",
@@ -1306,6 +1315,24 @@
       "size": "phone",
       "width": 780,
       "height": 1688
+    },
+    {
+      "file": "deputy/24-managing-vendors-1-phone.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/manage",
+      "size": "phone",
+      "width": 780,
+      "height": 1688
+    },
+    {
+      "file": "deputy/24-managing-vendors-2-desktop.webp",
+      "source": "staging",
+      "role": "deputy",
+      "path": "/jobs/206",
+      "size": "desktop",
+      "width": 1280,
+      "height": 800
     },
     {
       "file": "vendor/01-signing-in-1-desktop.webp",

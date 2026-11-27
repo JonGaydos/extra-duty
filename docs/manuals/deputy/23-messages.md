@@ -9,7 +9,7 @@ Messages are for people inside the agency: deputies, coordinators and admins. Ve
 3. With **Choose recipients**, pick how to add people, then add them:
    - **People by name**: start typing a name and choose **Add**.
    - **Everyone with a rank**.
-   - **A detail's roster**: everyone signed up, waiting on a shorter shift or backing up on one of your details.
+   - **A detail's roster**: everyone signed up, waiting on a shorter shift or backing up on one of your details. The same rule as **About a detail** applies: only a detail you are signed up for, waiting on or offered a spot on, that has not ended.
    - **The coordinators**.
 
    Each one shows as a chip. Choose the cross on a chip to remove it. Someone covered twice, for example by name and by rank, still gets one copy.

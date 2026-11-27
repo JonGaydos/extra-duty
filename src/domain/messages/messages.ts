@@ -56,15 +56,19 @@ async function rankUsers(tx: Tx, ids: unknown): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-async function jobUsers(tx: Tx, jobId: unknown): Promise<Iterable<string>> {
+/** A detail's roster: staff for any detail, a deputy only for one they may link (the About a detail rule). */
+async function jobUsers(actor: Actor, tx: Tx, jobId: unknown, now: Date): Promise<Iterable<string>> {
   if (typeof jobId !== "string" || !UUID.test(jobId)) throw new NotFoundError("Job not found.");
   const [job] = await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId));
   if (!job) throw new NotFoundError("Job not found.");
+  if (!isCoordinator(actor) && (await linkableDetails(actor, tx, now, job.id)).length === 0) {
+    throw new ForbiddenError("You can message the roster only of a detail that has not ended and that you are signed up for, pending on or offered.");
+  }
   return jobAudience(tx, job);
 }
 
 /** One audience's candidate user ids, or "everyone". */
-async function audienceIds(actor: Actor, tx: Tx, a: Audience): Promise<Iterable<string> | "everyone"> {
+async function audienceIds(actor: Actor, tx: Tx, a: Audience, now: Date): Promise<Iterable<string> | "everyone"> {
   switch (a.kind) {
     case "all":
       await assertMayMessageAll(actor, tx);
@@ -74,7 +78,7 @@ async function audienceIds(actor: Actor, tx: Tx, a: Audience): Promise<Iterable<
     case "rank":
       return rankUsers(tx, a.rankIds);
     case "job":
-      return jobUsers(tx, a.jobId);
+      return jobUsers(actor, tx, a.jobId, now);
     case "coordinators":
       return coordinatorAudience(tx);
     default:
@@ -83,12 +87,12 @@ async function audienceIds(actor: Actor, tx: Tx, a: Audience): Promise<Iterable<
 }
 
 /** Resolves the audiences to candidate user ids. Validates everything it is given before any write. */
-async function resolve(actor: Actor, tx: Tx, audiences: Audience[]): Promise<{ ids: string[]; everyone: boolean }> {
+async function resolve(actor: Actor, tx: Tx, audiences: Audience[], now: Date): Promise<{ ids: string[]; everyone: boolean }> {
   const ids = new Set<string>();
   let everyone = false;
   // Sequential: each audience is checked in order in this transaction, so the first refusal is the one reported.
   for (const a of audiences) {
-    const found = await audienceIds(actor, tx, a);
+    const found = await audienceIds(actor, tx, a, now);
     if (found === "everyone") everyone = true;
     else for (const id of found) ids.add(id);
   }
@@ -186,15 +190,15 @@ export async function sendMessage(actor: Actor, tx: Tx, input: SendInput, now: D
   assertCan(actor, "message.send");
   checkSendInput(input);
   if (input.jobId !== undefined) await assertMayLink(actor, tx, input.jobId, now);
-  return deliver(actor, tx, input);
+  return deliver(actor, tx, input, now);
 }
 
 /** Sends after the caller has checked the detail link. */
-async function deliver(actor: Actor, tx: Tx, input: SendInput): Promise<Message> {
+async function deliver(actor: Actor, tx: Tx, input: SendInput, now: Date = new Date()): Promise<Message> {
   const { subject, body } = checkSendInput(input);
   const audiences = input.audiences;
 
-  const { ids, everyone } = await resolve(actor, tx, audiences);
+  const { ids, everyone } = await resolve(actor, tx, audiences, now);
   if (input.replyToMessageId !== undefined) {
     for (const id of await replyRecipients(actor, tx, input.replyToMessageId)) ids.push(id);
   }

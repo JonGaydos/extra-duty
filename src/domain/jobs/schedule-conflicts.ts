@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { assignments, users } from "@/db/schema";
+import { managesVendor } from "../auth/policy";
 import type { Actor } from "../actor";
 import { buildContext, loadPosition } from "../assignments/signup";
 import { evaluateSignup } from "../eligibility/eligibility";
@@ -34,8 +35,8 @@ const CONFLICT_CHECKS = new Set<string>(["overlap", "cap_rolling", "cap_week", "
 const HOLDING = ["signed_up", "pending_short"] as const;
 const CLOCK = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" });
 
-/** Only coordinators and admins (who hold coordinator powers) may override a conflict. */
-const canOverrideConflicts = (actor: Actor) => actor.role === "coordinator" || actor.role === "admin";
+/** Only coordinators and admins (who hold coordinator powers) may override a conflict, and a vendor manager on their vendor's detail. */
+const canOverrideConflicts = (actor: Actor, vendorId: string) => actor.role === "coordinator" || actor.role === "admin" || managesVendor(actor, vendorId);
 
 const MAX_CONFLICT_REASON = 500;
 
@@ -117,9 +118,9 @@ export async function conflictsAt(tx: Tx, job: Job, settings: AgencySettings, no
  * The override reason to use, or null when the actor may not override, gave no reason, or the fingerprint does not
  * match the conflicts now found (the coordinator was shown a different set).
  */
-export function overrideReason(actor: Actor, conflicts: ScheduleConflict[], override: ConflictOverride | null | undefined): string | null {
+export function overrideReason(actor: Actor, vendorId: string, conflicts: ScheduleConflict[], override: ConflictOverride | null | undefined): string | null {
   const why = override?.reason?.trim();
-  if (!why || !canOverrideConflicts(actor)) return null;
+  if (!why || !canOverrideConflicts(actor, vendorId)) return null;
   if (why.length > MAX_CONFLICT_REASON) throw new ValidationError(`Keep the reason to ${MAX_CONFLICT_REASON} characters.`);
   return override!.fingerprint === conflictFingerprint(conflicts) ? why : null;
 }

@@ -47,6 +47,7 @@ import { liftSuspension, suspendUser } from "@/domain/users/suspension";
 import { writeOffDetail, type DepartureChecklist } from "@/domain/users/departure";
 import { createUser, deactivateUser, departureChecklist, getUserOrThrow, reactivateUser, updateUser } from "@/domain/users/users";
 import { reviewW9 } from "@/domain/w9/w9";
+import { setManagedVendors } from "@/domain/vendors/managers";
 import { createW9Request } from "@/domain/w9/requests";
 import type { W9RequestAudience } from "@/db/schema";
 import { parseDollars } from "../../coordinate/_coordinator/detail-input";
@@ -186,6 +187,14 @@ export async function grantFlagAction(input: { userId: string; qualificationId: 
     const u = await getUserOrThrow(tx, input.userId);
     const [q] = await tx.select({ name: qualifications.name }).from(qualifications).where(eq(qualifications.id, input.qualificationId));
     return { ok: true, message: `${q.name} granted to ${u.name}.` };
+  });
+}
+
+/** The vendors a deputy manages (owner decision 2026-11-27); audited. */
+export async function setManagedVendorsAction(input: { userId: string; vendorIds: string[] }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const saved = await setManagedVendors(actor, tx, input.userId, input.vendorIds);
+    return { ok: true, message: saved.length ? `Saved. They manage ${plural(saved.length, "vendor")}.` : "Saved. They manage no vendors." };
   });
 }
 

@@ -1,10 +1,10 @@
-import { and, asc, eq, isNull, lte, or, gte, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, gte, isNotNull } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { users, vendorDocuments, vendorHolds, vendorLocations, vendors, vendorTypes, vendorUsers } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { createInvite } from "../auth/invites";
-import { assertCan, type Action } from "../auth/policy";
+import { assertCan, isVendorManager, type Action } from "../auth/policy";
 import { normalizeEmail } from "../auth/sign-in-policy";
 import { NotFoundError, ValidationError } from "../errors";
 import { readStoredFile, uploadFile, type FileRow } from "../files/files";
@@ -191,6 +191,7 @@ export async function listVendors(actor: Actor, tx: Tx, filter: VendorFilter = {
     if (!actor.vendorId) return [];
     return tx.select().from(vendors).where(eq(vendors.id, actor.vendorId));
   }
+  if (isVendorManager(actor)) return tx.select().from(vendors).where(inArray(vendors.id, [...(actor.managedVendorIds ?? [])])).orderBy(asc(vendors.name));
   assertCan(actor, "vendor.read");
   const conds = [];
   if (filter.active !== undefined) conds.push(eq(vendors.active, filter.active));

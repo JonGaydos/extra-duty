@@ -15,8 +15,8 @@ export type ShellNav = {
   /** Desktop top nav: the role's sections. Deputies, coordinators and admins share the same list. */
   desktop: NavItem[];
   /**
-   * Coordinators and admins only: their staff sections, after the shared ones and set apart by a separator on the
-   * desktop bar, and in their own group on More. Empty for every other role.
+   * Coordinators and admins: their staff sections, after the shared ones and set apart by a separator on the
+   * desktop bar, and in their own group on More. A vendor manager gets Manage there. Empty for everyone else.
    */
   staff: NavItem[];
   /** Phone tab bar: at most five, the last is More when sections do not fit. */
@@ -69,13 +69,16 @@ function build(desktop: NavItem[], phoneLabels: string[]): ShellNav {
   return { home: desktop[0].href, desktop, staff: [], phone: [...phone, MORE], more };
 }
 
+/** A deputy who manages vendors (owner decision 2026-11-27): their vendors' details, requests, locations and contacts. */
+const MANAGE: NavItem = { label: "Manage", href: "/manage", icon: "building" };
+
 /** Staff see the Outbox where email is kept instead of sent (training mode and staging). */
 const OUTBOX: NavItem = { label: "Outbox", href: "/coordinate/outbox", icon: "mail" };
 
-export function navFor(role: Role, opts: { outbox?: boolean } = {}): ShellNav {
+export function navFor(role: Role, opts: { outbox?: boolean; manager?: boolean } = {}): ShellNav {
   switch (role) {
     case "personnel":
-      return { home: "/home", desktop: SHARED, staff: [], phone: SHARED_PHONE, more: SHARED_MORE };
+      return { home: "/home", desktop: SHARED, staff: opts.manager ? [MANAGE] : [], phone: SHARED_PHONE, more: SHARED_MORE };
     case "coordinator":
     case "admin":
       return { home: "/home", desktop: SHARED, staff: opts.outbox ? [...STAFF, OUTBOX] : STAFF, phone: SHARED_PHONE, more: SHARED_MORE };

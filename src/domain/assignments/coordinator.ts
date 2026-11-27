@@ -4,6 +4,7 @@ import { assignments, jobs, spotOffers, vendorRestrictions } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
+import { assignmentVendorId, positionVendorId } from "../auth/scope";
 import { evaluateSignup } from "../eligibility/eligibility";
 import { NotFoundError, RuleViolation, ValidationError, type CheckResult } from "../errors";
 import { getSettings } from "../settings/settings";
@@ -25,7 +26,7 @@ export async function assignPerson(
   userId: string,
   opts: { overrideReason?: string; notify: boolean; now?: Date },
 ): Promise<Assignment> {
-  assertCan(actor, "assignment.assign");
+  assertCan(actor, "assignment.assign", { vendorId: await positionVendorId(tx, jobPositionId) });
   const now = opts.now ?? new Date();
   const override = opts.overrideReason?.trim() || undefined;
   await lockUser(tx, userId);
@@ -103,7 +104,7 @@ export async function assignPerson(
 }
 
 export async function removePerson(actor: Actor, tx: Tx, assignmentId: string, comment: string, now: Date = new Date()): Promise<Assignment> {
-  assertCan(actor, "assignment.remove");
+  assertCan(actor, "assignment.remove", { vendorId: await assignmentVendorId(tx, assignmentId) });
   const why = comment?.trim();
   if (!why) throw new ValidationError("A comment is required.");
   const after = await leaveAssignment(actor, tx, assignmentId, {

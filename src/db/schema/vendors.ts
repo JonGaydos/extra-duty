@@ -145,3 +145,23 @@ export const vendorContacts = pgTable(
   },
   (t) => [index("vendor_contacts_vendor_idx").on(t.vendorId)],
 );
+
+/**
+ * Deputies who manage a vendor's details for the agency (owner decision 2026-11-27): for these vendors only, they
+ * create and staff details, decide the vendor's requests and keep its locations and site contacts.
+ */
+export const vendorManagers = pgTable(
+  "vendor_managers",
+  {
+    id: pk(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    vendorId: text("vendor_id")
+      .notNull()
+      .references(() => vendors.id),
+    createdBy: text("created_by").references(() => users.id),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("vendor_managers_user_vendor_uq").on(t.userId, t.vendorId), index("vendor_managers_vendor_idx").on(t.vendorId)],
+);

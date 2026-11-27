@@ -30,13 +30,15 @@ export type Shot = {
   fresh?: boolean;
   /** Needs staging (signs in for real, switches to training, or looks a detail up in the database). */
   stagingOnly?: boolean;
+  /** Undoes what `go` set up in the database, after the picture (or a failure). */
+  after?: (ctx: ShotCtx) => Promise<void>;
 };
 
 const B: Size[] = ["phone", "desktop"];
 const P: Size[] = ["phone"];
 const D: Size[] = ["desktop"];
 
-type Opts = Partial<Pick<Shot, "target" | "fullPage" | "fresh" | "stagingOnly">>;
+type Opts = Partial<Pick<Shot, "target" | "fullPage" | "fresh" | "stagingOnly" | "after">>;
 const shots: Shot[] = [];
 function add(manual: ManualId, role: Shot["role"], chapter: string, step: number, sizes: Size[], go: Shot["go"], opts: Opts = {}) {
   shots.push({ manual, role, chapter, step, sizes, go, ...opts });
@@ -599,5 +601,39 @@ admin("27-agency-logo", 1, D, async (page) => {
 }, { target: card("Logo") });
 admin("27-agency-logo", 2, D, visit("/coordinate"), { target: (page) => page.locator('[data-shell="top-nav"]') });
 admin("27-agency-logo", 3, P, visit("/coordinate"));
+
+// Vendor managers (owner decision 2026-11-27): the practice deputy manages a demo school (else the vendor with the most
+// upcoming details) for these shots only; `after` takes it away again, so no other picture shows the Manage tab.
+const BUSIEST_VENDOR = `select j.vendor_id as id from jobs j join vendors v on v.id = j.vendor_id where j.state = 'scheduled' and j.start_at > now()
+  group by j.vendor_id, v.name order by (v.name ilike '%school%')::int desc, count(*) desc, j.vendor_id limit 1`;
+async function manageAsDeputy(ctx: ShotCtx): Promise<{ vendorId: string; deputyId: string }> {
+  const vendor = await one<{ id: string }>(ctx, BUSIEST_VENDOR);
+  const deputyRow = await one<{ id: string }>(ctx, `select id from users where email = '${DEPUTY}'`);
+  await ctx.query!(`insert into vendor_managers (id, user_id, vendor_id) values (gen_random_uuid()::text, $1, $2) on conflict do nothing`, [deputyRow.id, vendor.id]);
+  return { vendorId: vendor.id, deputyId: deputyRow.id };
+}
+const stopManaging = async (ctx: ShotCtx) => {
+  await ctx.query?.(`delete from vendor_managers where user_id = (select id from users where email = $1)`, [DEPUTY]);
+};
+deputy("24-managing-vendors", 1, P, async (page, ctx) => {
+  await manageAsDeputy(ctx);
+  await page.goto("/manage");
+}, { stagingOnly: true, after: stopManaging });
+deputy("24-managing-vendors", 2, D, async (page, ctx) => {
+  const { vendorId } = await manageAsDeputy(ctx);
+  if (!ctx.query) throw new Error("needs the staging database");
+  const [row] = await ctx.query<{ number: number }>(
+    `select j.number from jobs j where j.vendor_id = $1 and j.state = 'scheduled' and j.start_at > now()
+     order by (exists (select 1 from assignments a where a.job_id = j.id and a.status = 'signed_up'))::int desc, j.start_at limit 1`,
+    [vendorId],
+  );
+  if (!row) throw new Error("no upcoming detail for the managed vendor");
+  await page.goto(`/jobs/${row.number}?tab=manage`);
+}, { stagingOnly: true, after: stopManaging });
+coord("34-vendor-managers", 1, D, async (page, ctx) => {
+  const { deputyId } = await manageAsDeputy(ctx);
+  await page.goto(`/admin/users/${deputyId}`);
+  await top(main(page).locator("#managed-vendors"));
+}, { stagingOnly: true, after: stopManaging, target: (page) => main(page).locator("#managed-vendors") });
 
 export const SHOTS: Shot[] = shots;

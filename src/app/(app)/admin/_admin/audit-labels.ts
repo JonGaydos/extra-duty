@@ -4,6 +4,7 @@ const EXACT: Record<string, string> = {
   "settings.update": "Settings changed",
   "jobs.release_recompute": "Release dates recalculated",
   "user.qualification_grant": "Special flag granted",
+  "user.managed_vendors": "Vendors this person manages changed",
   "user.qualification_revoke": "Special flag revoked",
   "user.suspension_lift": "Suspension lifted",
   "assignment.suspension_remove": "Sign-up removed by suspension",

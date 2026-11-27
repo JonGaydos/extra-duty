@@ -14,6 +14,9 @@ import { HideVendorButton } from "../../_personnel/HideVendorButton";
 import { personnelActor } from "../../_personnel/session";
 import { TabLinks } from "../../_personnel/TabLinks";
 import { parseDetailNumber, visibleJobIdByNumber, visibleJobNumber } from "@/domain/jobs/detail-number";
+import { isVendorManager, managesVendor } from "@/domain/auth/policy";
+import { jobVendorId } from "@/domain/auth/scope";
+import type { Actor } from "@/domain/actor";
 import { loadJobPage } from "./load";
 import { ManageDetail } from "./_manage/ManageDetail";
 import { ActivityCard, AboutCard, FactsCard, NotesCard, OpsPlanCard, SafetyCard, StaffingCard } from "./sections";
@@ -38,13 +41,13 @@ function queryOf(sp: Record<string, string | string[] | undefined>): string {
  * Manage. `?tab=` picks one.
  */
 async function staffTab(id: string, asked: string | string[] | undefined): Promise<Tab | null> {
-  if (asked === "detail" || asked === "manage") return asked;
   const [row] = await withTx((tx) => tx.select({ state: jobs.state }).from(jobs).where(eq(jobs.id, id)));
   if (!row) return null;
+  if (asked === "detail" || asked === "manage") return asked;
   return row.state === "requested" || row.state === "declined" ? "manage" : "detail";
 }
 
-/** Detail and Manage this detail, for coordinators and admins. */
+/** Detail and Manage this detail, for coordinators and admins, and for a vendor manager on their vendor's details. */
 function StaffTabs({ number, current }: Readonly<{ number: number; current: Tab }>) {
   return (
     <TabLinks
@@ -58,6 +61,11 @@ function StaffTabs({ number, current }: Readonly<{ number: number; current: Tab 
   );
 }
 
+/** A vendor manager gets Manage this detail on their vendors' details (owner decision 2026-11-27). */
+async function managesDetail(actor: Actor, id: string): Promise<boolean> {
+  return isVendorManager(actor) && managesVendor(actor, await withTx((tx) => jobVendorId(tx, id)));
+}
+
 const BackLink = () => (
   <Link href="/jobs" className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-semibold">
     <Icon name="chevronLeft" size={18} />
@@ -67,7 +75,8 @@ const BackLink = () => (
 
 /**
  * One detail, the same page for everyone: facts, officer safety, about, staffing and roster, notes, sign-up and
- * activity. Coordinators and admins also get a Manage this detail tab with every staff control on the detail.
+ * activity. Coordinators and admins also get a Manage this detail tab with every staff control on the detail, and so
+ * does a vendor manager on their vendors' details, without the coordinator-only controls.
  */
 export default async function JobPage({ params, searchParams }: Readonly<Props>) {
   const { id: ref } = await params;
@@ -92,25 +101,26 @@ export default async function JobPage({ params, searchParams }: Readonly<Props>)
   const id = await withTx((tx) => visibleJobIdByNumber(actor, tx, number));
   if (!id) notFound();
   const staff = actor.role === "coordinator" || actor.role === "admin";
+  const manages = staff || (await managesDetail(actor, id));
   const now = new Date();
-  const tab = staff ? await staffTab(id, sp.tab) : "detail";
+  const tab = manages ? await staffTab(id, sp.tab) : "detail";
   if (!tab) notFound();
   if (tab === "manage") {
     return (
       <div className="flex flex-col gap-4.5">
         <BackLink />
         <StaffTabs number={number} current="manage" />
-        <ManageDetail actor={actor} id={id} now={now} />
+        <ManageDetail actor={actor} id={id} now={now} coordinator={staff} />
       </div>
     );
   }
   const data = await loadJobPage(actor, id, now);
   if (!data) notFound();
-  return <DetailView data={data} staff={staff} userId={actor.userId} now={now} />;
+  return <DetailView data={data} staff={staff} manages={manages} userId={actor.userId} now={now} />;
 }
 
 /** The Detail tab: what everyone sees. */
-function DetailView({ data, staff, userId, now }: Readonly<{ data: NonNullable<Awaited<ReturnType<typeof loadJobPage>>>; staff: boolean; userId: string; now: Date }>) {
+function DetailView({ data, staff, manages, userId, now }: Readonly<{ data: NonNullable<Awaited<ReturnType<typeof loadJobPage>>>; staff: boolean; manages: boolean; userId: string; now: Date }>) {
   const { job, card, settings, mine, roster } = data;
 
   const started = now.getTime() >= job.startAt.getTime();
@@ -123,7 +133,7 @@ function DetailView({ data, staff, userId, now }: Readonly<{ data: NonNullable<A
   return (
     <div className="flex flex-col gap-4.5">
       <BackLink />
-      {staff ? <StaffTabs number={job.number} current="detail" /> : null}
+      {manages ? <StaffTabs number={job.number} current="detail" /> : null}
 
       <div className="grid gap-4.5 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:items-start md:gap-6">
         {/* Phone order follows the mockup: facts, safety, then sign-up; on desktop sign-up stays beside them. */}

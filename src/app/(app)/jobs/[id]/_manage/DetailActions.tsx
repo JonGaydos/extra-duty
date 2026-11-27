@@ -217,6 +217,7 @@ export function EditDetail({ jobId, initial, date, options, seriesLater, started
             onReason={(v) => set("rateOverrideReason", v)}
             canApprove={scope === "one"}
             approved={approved && d.rate === initial.rate}
+            approver={options.canApproveRate}
           />
         </div>
         {scope === "one" && !started ? (
@@ -382,8 +383,8 @@ export function AssignForm({ positions, people }: Readonly<{ positions: Array<{ 
   );
 }
 
-/** Remove, no-show and Incident Commander for one roster row. */
-export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc }: Readonly<{ assignmentId: string; jobId: string; userId: string; name: string; status: string; started: boolean; canNameIc: boolean }>) {
+/** Remove, no-show and Incident Commander for one roster row. A vendor manager (`coordinator` false) can only remove. */
+export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc, coordinator = true }: Readonly<{ assignmentId: string; jobId: string; userId: string; name: string; status: string; started: boolean; canNameIc: boolean; coordinator?: boolean }>) {
   const [mode, setMode] = useState<"remove" | "noshow" | null>(null);
   const [text, setText] = useState("");
   const { run, busy } = useCoordAction();
@@ -416,12 +417,12 @@ export function RosterRowActions({ assignmentId, jobId, userId, name, status, st
       <Button size="sm" variant="secondary" onClick={() => setMode("remove")} aria-label={`Remove, ${name}`}>
         Remove
       </Button>
-      {started && status === "signed_up" ? (
+      {coordinator && started && status === "signed_up" ? (
         <Button size="sm" variant="secondary" onClick={() => setMode("noshow")} aria-label={`No-show, ${name}`}>
           No-show
         </Button>
       ) : null}
-      {canNameIc && status === "signed_up" ? (
+      {coordinator && canNameIc && status === "signed_up" ? (
         <Button size="sm" variant="secondary" busy={busy} onClick={() => run(() => nameIcAction({ jobId, userId }))} aria-label={`Name Incident Commander, ${name}`}>
           Name IC
         </Button>

@@ -7,7 +7,7 @@
 
    ![Users](../images/coordinator-admin/24-users-and-ranks-1-desktop.webp)
 
-3. Open a person to edit them, grant **Special flags** (such as Incident Commander), review or upload their **W-9** (see [W-9 review and requests](32-w9-review-and-requests.md)), **Resend invite**, suspend them, or **Deactivate user**. Only admins can change admin accounts. Nothing is deleted; history stays.
+3. Open a person to edit them, grant **Special flags** (such as Incident Commander), choose the vendors a deputy manages (see [Vendor managers](34-vendor-managers.md)), review or upload their **W-9** (see [W-9 review and requests](32-w9-review-and-requests.md)), **Resend invite**, suspend them, or **Deactivate user**. Only admins can change admin accounts. Nothing is deleted; history stays.
 
 ## When someone leaves
 

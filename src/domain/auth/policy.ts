@@ -5,23 +5,28 @@ type Level = "personnel" | "coordinator" | "admin";
 type Rule =
   | { min: Level }
   | { min: Level; ownerScoped: true }
-  | { min: Level; vendorScoped: true }
+  | { min: Level; vendorScoped?: true; managerScoped?: true }
   | { vendorOnly: true };
+
+/**
+ * `managerScoped`: a deputy who manages the vendor in `ctx.vendorId` may do it for that vendor only (owner decision
+ * 2026-11-27). Every caller passes the vendor of the detail, request, location or contact it acts on.
+ */
 
 // Admin includes coordinator powers; coordinator includes personnel powers.
 // Vendors hold no tier and act only through vendor-scoped rules.
 const RULES = {
   "job.read": { min: "personnel", vendorScoped: true },
-  "job.create": { min: "coordinator" },
-  "job.update": { min: "coordinator" },
-  "job.cancel": { min: "coordinator" },
-  "job.reactivate": { min: "coordinator" },
+  "job.create": { min: "coordinator", managerScoped: true },
+  "job.update": { min: "coordinator", managerScoped: true },
+  "job.cancel": { min: "coordinator", managerScoped: true },
+  "job.reactivate": { min: "coordinator", managerScoped: true },
   "job.signup": { min: "personnel" },
   "job.backup": { min: "personnel" },
   "job.watch": { min: "personnel" },
   "assignment.cancelOwn": { min: "personnel", ownerScoped: true },
-  "assignment.assign": { min: "coordinator" },
-  "assignment.remove": { min: "coordinator" },
+  "assignment.assign": { min: "coordinator", managerScoped: true },
+  "assignment.remove": { min: "coordinator", managerScoped: true },
   "assignment.noShow": { min: "coordinator" },
   "assignment.writeOff": { min: "coordinator" },
   "invoice.billOwn": { min: "personnel", ownerScoped: true },
@@ -43,12 +48,12 @@ const RULES = {
   "qualification.manage": { min: "coordinator" },
   "qualification.request": { min: "personnel" },
   "vendor.manage": { min: "coordinator" },
-  "vendor.read": { min: "coordinator", vendorScoped: true },
+  "vendor.read": { min: "coordinator", vendorScoped: true, managerScoped: true },
   "vendor.paymentHold": { min: "coordinator" },
-  "vendorLocation.manageOwn": { min: "coordinator", vendorScoped: true },
-  "vendorContact.manage": { min: "coordinator", vendorScoped: true },
+  "vendorLocation.manageOwn": { min: "coordinator", vendorScoped: true, managerScoped: true },
+  "vendorContact.manage": { min: "coordinator", vendorScoped: true, managerScoped: true },
   "vendorRequest.submit": { min: "coordinator", vendorScoped: true },
-  "vendorRequest.decide": { min: "coordinator" },
+  "vendorRequest.decide": { min: "coordinator", managerScoped: true },
   "vendorJob.view": { min: "coordinator", vendorScoped: true },
   "vendorJob.edit": { min: "coordinator", vendorScoped: true },
   "vendorJob.cancel": { min: "coordinator", vendorScoped: true },
@@ -91,10 +96,21 @@ function vendorMatches(actor: Actor, ctx?: PolicyContext): boolean {
   return actor.vendorId !== null && ctx?.vendorId !== undefined && ctx.vendorId === actor.vendorId;
 }
 
+/** True when the actor is a deputy who manages this vendor. Coordinators and admins manage every vendor already. */
+export function managesVendor(actor: Actor, vendorId: string | null | undefined): boolean {
+  return actor.role === "personnel" && !!vendorId && (actor.managedVendorIds ?? []).includes(vendorId);
+}
+
+/** A deputy who manages at least one vendor. */
+export function isVendorManager(actor: Actor): boolean {
+  return actor.role === "personnel" && (actor.managedVendorIds?.length ?? 0) > 0;
+}
+
 export function can(actor: Actor, action: Action, ctx?: PolicyContext): boolean {
   const rule: Rule = RULES[action];
   if ("vendorOnly" in rule) return actor.role === "vendor" && vendorMatches(actor, ctx);
-  if (actor.role === "vendor") return "vendorScoped" in rule && vendorMatches(actor, ctx);
+  if (actor.role === "vendor") return "vendorScoped" in rule && rule.vendorScoped === true && vendorMatches(actor, ctx);
+  if ("managerScoped" in rule && managesVendor(actor, ctx?.vendorId)) return true;
   if (LEVEL[actor.role] < MIN[rule.min]) return false;
   if ("ownerScoped" in rule && actor.role === "personnel") {
     return ctx?.ownerUserId !== undefined && ctx.ownerUserId === actor.userId;

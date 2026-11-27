@@ -4,6 +4,7 @@ import { jobAttachments, jobPositions, jobSeries, jobs } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
+import { jobVendorId } from "../auth/scope";
 import { NotFoundError, ValidationError } from "../errors";
 import { getSettings } from "../settings/settings";
 import { agencyDayKey } from "../time/agency-time";
@@ -45,7 +46,7 @@ async function createOne(actor: Actor, tx: Tx, date: string, input: JobInput, se
  * from its start and end (see previewBulk).
  */
 export async function createJobsOnDates(actor: Actor, tx: Tx, input: JobInput, dates: string[], overrides?: TimeOverrides, opts: BulkOptions = {}): Promise<Job[]> {
-  if (!opts.create?.authorized) assertCan(actor, "job.create");
+  if (!opts.create?.authorized) assertCan(actor, "job.create", { vendorId: input.vendorId });
   const unique = [...new Set(dates)].sort(byText);
   if (unique.length === 0) throw new ValidationError("Choose at least one date.");
   if (unique.length > MAX_BULK_DATES) throw new ValidationError(`At most ${MAX_BULK_DATES} dates can be created at once.`);
@@ -149,7 +150,7 @@ export type CopyOptions = {
  * empty roster under the normal release rules.
  */
 export async function copyJob(actor: Actor, tx: Tx, sourceId: string, selection: DateSelection, opts: CopyOptions = {}): Promise<CopyResult> {
-  assertCan(actor, "job.create");
+  assertCan(actor, "job.create", { vendorId: await jobVendorId(tx, sourceId) });
   const now = opts.now ?? new Date();
   const { job, input } = await loadSource(tx, sourceId);
   const firstDate = agencyDayKey(job.startAt);
@@ -195,7 +196,7 @@ async function keepDifferentials(tx: Tx, sourceId: string, copies: Job[]): Promi
  * and its attachments with the source's rate differentials, never the people, and refuses past dates.
  */
 export async function createRecurringJobs(actor: Actor, tx: Tx, sourceId: string, r: Recurrence, now: Date = new Date()): Promise<Job[]> {
-  assertCan(actor, "job.create");
+  assertCan(actor, "job.create", { vendorId: await jobVendorId(tx, sourceId) });
   const { job, input } = await loadSource(tx, sourceId);
   const firstDate = agencyDayKey(job.startAt);
   const dates = expandDates({ kind: "pattern", recurrence: r }, firstDate).filter((d) => d !== firstDate);

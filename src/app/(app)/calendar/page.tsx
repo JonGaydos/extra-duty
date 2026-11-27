@@ -44,7 +44,7 @@ const start = (a: Ymd) => agencyInstant(a.y, a.m, a.d, 0, 0);
 const weekday = (a: Ymd) => new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay();
 const LIST_DAYS = 60;
 
-function DayList({ days, byDay, empty }: Readonly<{ days: Ymd[]; byDay: Map<string, CalEntry[]>; empty: string }>) {
+function DayList({ days, byDay, empty, managed }: Readonly<{ days: Ymd[]; byDay: Map<string, CalEntry[]>; empty: string; managed: ReadonlySet<string> }>) {
   const shown = days.filter((day) => byDay.has(key(day)));
   if (shown.length === 0)
     return (
@@ -64,7 +64,7 @@ function DayList({ days, byDay, empty }: Readonly<{ days: Ymd[]; byDay: Map<stri
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {list.map((e) => (
                 <li key={e.id}>
-                  <EntryRow e={e} />
+                  <EntryRow e={e} manage={managed.has(e.vendorId)} />
                 </li>
               ))}
             </ul>
@@ -259,6 +259,8 @@ function CountLine({ count, filters, truncated }: Readonly<{ count: number; filt
 export default async function CalendarPage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const staff = actor.role === "coordinator" || actor.role === "admin";
+  // A vendor manager gets Manage on their vendors' details (owner decision 2026-11-27); staff manage from the detail.
+  const managed: ReadonlySet<string> = new Set(staff ? [] : (actor.managedVendorIds ?? []));
   const sp = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const view: View = VIEWS.includes(one(sp.view) as View) ? (one(sp.view) as View) : "month";
@@ -301,7 +303,7 @@ export default async function CalendarPage({ searchParams }: Readonly<Props>) {
   else
     body = (
       <>
-        <DayList days={days} byDay={byDay} empty={EMPTY_TITLE[view]} />
+        <DayList days={days} byDay={byDay} empty={EMPTY_TITLE[view]} managed={managed} />
         <Legend staff={staff} />
       </>
     );

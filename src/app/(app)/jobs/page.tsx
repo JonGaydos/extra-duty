@@ -7,7 +7,8 @@ import { editBlockReason } from "@/domain/jobs/bulk-edit";
 import { parseDetailNumber, visibleJobIdByNumber } from "@/domain/jobs/detail-number";
 import type { JobCard } from "@/domain/personnel/views";
 import { listHiddenVendors } from "@/domain/planning/preferences";
-import { Button, ButtonLink } from "@/ui/components/Button";
+import { ActionLink, Button, ButtonLink } from "@/ui/components/Button";
+import { isVendorManager, managesVendor } from "@/domain/auth/policy";
 import { FormField, Input } from "@/ui/components/FormField";
 import { Card } from "@/ui/components/Card";
 import { Chip } from "@/ui/components/Chip";
@@ -117,12 +118,17 @@ async function loadUpcoming(actor: Actor, staff: boolean, filters: DetailFilters
   }));
   // Staff Upcoming leaves vendor requests and canceled details to their own views.
   const cards = staff ? data.cards.filter((c) => c.state === "scheduled" || c.state === "active") : data.cards;
-  const hide = (c: JobCard) =>
-    c.mine ? undefined : (
-      <span className="ml-auto">
+  const hide = (c: JobCard) => {
+    // A vendor manager gets Manage on their vendors' details (owner decision 2026-11-27).
+    const manage = !staff && managesVendor(actor, c.vendorId) ? <ManageLink number={c.number} /> : null;
+    if (c.mine) return manage ?? undefined;
+    return (
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        {manage}
         <HideVendorButton vendorId={c.vendorId} vendorName={c.vendorName} compact />
       </span>
     );
+  };
   const own = (c: JobCard): SelectableItem => (staff ? staffRow(c, now, hide(c)) : { ...cardRow(c, now), blocked: null, selectable: false, extra: hide(c) });
   const gone = data.gone.map(
     (d): SelectableItem => ({
@@ -163,6 +169,15 @@ async function loadStaffView(actor: Actor, view: Exclude<View, "upcoming">, filt
   const summary = [plural(rows.length, "detail"), filtered ? "filtered" : null, data.truncated ? "only the first 2,000 are read; narrow the filters" : null].filter(Boolean).join(", ");
   const empty = <EmptyState title="No details here">{filtered ? "Nothing matches these filters." : "Details you post show up here."}</EmptyState>;
   return { items: rows.map((e) => entryRow(e, now)), summary, options: data.options, empty };
+}
+
+/** A vendor manager's way into Manage this detail, on their vendors' rows. */
+function ManageLink({ number }: Readonly<{ number: number }>) {
+  return (
+    <ActionLink href={`/jobs/${number}?tab=manage`} icon="sliders" aria-label={`Manage detail #${number}`}>
+      Manage
+    </ActionLink>
+  );
 }
 
 /** "Go to detail #": type a detail's number to open it. */
@@ -240,7 +255,7 @@ export default async function JobsPage({ searchParams }: Readonly<Props>) {
                 { key: "map", label: "Map", href: `/map?${fq}` },
               ]}
             />
-            {staff ? (
+            {staff || isVendorManager(actor) ? (
               <ButtonLink href="/jobs/new">
                 <Icon name="plus" size={20} />
                 New detail

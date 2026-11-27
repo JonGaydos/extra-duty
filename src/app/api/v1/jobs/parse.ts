@@ -1,6 +1,6 @@
 import type { JobInput, JobSort } from "@/domain/jobs/jobs";
 import type { Actor } from "@/domain/actor";
-import { assertCan, type Action } from "@/domain/auth/policy";
+import { assertCan, isVendorManager, type Action } from "@/domain/auth/policy";
 import { ValidationError } from "@/domain/errors";
 import { resolveSafetyPins } from "@/domain/jobs/safety";
 import type { JobState } from "@/domain/release/release";
@@ -58,7 +58,8 @@ type Wire = Omit<Partial<JobInput>, "startAt" | "endAt" | "opsPlanDueAt" | "flex
 
 /** JSON body to JobInput fields: ISO strings become Dates and safety pins are looked up before any transaction opens. */
 export async function parseJobBody(actor: Actor, action: Action, body: Wire): Promise<Partial<JobInput>> {
-  assertCan(actor, action);
+  // A vendor manager is checked against the detail's vendor by the service; anyone else is refused before any lookup.
+  if (!isVendorManager(actor)) assertCan(actor, action);
   const { startAt, endAt, opsPlanDueAt, flex, safety, ...rest } = body;
   const out: Partial<JobInput> = { ...rest };
   if (startAt !== undefined) out.startAt = parseDate(startAt, "Start time");

@@ -115,3 +115,20 @@ describe("coordinators and admins have everything a deputy has", () => {
     expect(vendor.home).toBe("/vendor");
   });
 });
+
+describe("vendor managers (owner decision 2026-11-27)", () => {
+  const manager = navFor("personnel", { manager: true });
+
+  test("keep the deputy tabs and add Manage after them", () => {
+    expect(manager.desktop).toEqual(navFor("personnel").desktop);
+    expect(manager.phone).toEqual(navFor("personnel").phone);
+    expect(labels(manager.staff)).toEqual(["Manage"]);
+    expect(hrefs(manager.staff)).toEqual(["/manage"]);
+    expect(currentTab(manager, "/manage/vendors/3")).toBe("/more");
+  });
+
+  test("coordinators and admins never get Manage; they have every staff tab", () => {
+    expect(labels(navFor("coordinator", { manager: true }).staff)).not.toContain("Manage");
+    expect(navFor("vendor", { manager: true }).staff).toEqual([]);
+  });
+});

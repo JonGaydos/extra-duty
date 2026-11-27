@@ -45,6 +45,12 @@ export type DetailContext = {
   closed: boolean;
   releaseStatus: string;
   initial: DetailWire;
+  /**
+   * Coordinators and admins. A vendor manager (false) gets the same page without the coordinator-only controls:
+   * the vendor record, the invoice hold, waiving late-cancel pay, no-shows, naming the Incident Commander and rate
+   * exceptions (owner decision 2026-11-27).
+   */
+  coordinator: boolean;
 };
 
 type Job = DetailData["job"];
@@ -104,7 +110,7 @@ export function DetailHeader({ c }: Readonly<{ c: DetailContext }>) {
       </div>
       <h1 className="m-0 text-2xl font-bold md:text-3xl">{job.title}</h1>
       <p className="m-0 text-muted">
-        <Link href={`/coordinate/vendors/${job.vendorId}`}>{admin.vendorName}</Link>
+        <Link href={c.coordinator ? `/coordinate/vendors/${job.vendorId}` : `/manage/vendors/${job.vendorId}`}>{admin.vendorName}</Link>
         {admin.locationName ? `, ${admin.locationName}` : ""}
       </p>
     </div>
@@ -134,6 +140,7 @@ export function QuickEditCard({ c }: Readonly<{ c: DetailContext }>) {
           started={c.started}
           range={options.rateRange}
           approved={!!c.d.rateOverride}
+          approver={c.coordinator}
         />
       )}
     </Card>
@@ -154,9 +161,9 @@ export function ManageCard({ c }: Readonly<{ c: DetailContext }>) {
       {!closed && job.state !== "requested" && !started ? (
         <HoldRelease jobId={job.id} held={job.held} opensLater={!!job.releaseAt && job.releaseAt.getTime() > c.now.getTime()} seriesLater={admin.laterInSeries} status={c.releaseStatus} />
       ) : null}
-      {live ? <DetailInvoiceHold jobId={job.id} current={job.waitForAllDeputies} agency={c.d.agencyWait} /> : null}
+      {live && c.coordinator ? <DetailInvoiceHold jobId={job.id} current={job.waitForAllDeputies} agency={c.d.agencyWait} /> : null}
       {c.d.reactivation ? <ReactivateDetail jobId={job.id} preview={c.d.reactivation} /> : null}
-      {job.state === "canceled" && admin.lateCanceled > 0 && !job.lateCancelWaivedReason ? (
+      {c.coordinator && job.state === "canceled" && admin.lateCanceled > 0 && !job.lateCancelWaivedReason ? (
         <>
           <Notice tone="warning">{plural(admin.lateCanceled, "person is", "people are")} paid for this late cancellation.</Notice>
           <WaiveLateCancel jobId={job.id} />
@@ -331,7 +338,7 @@ function HistoryRow({ r, c, canNameIc }: Readonly<{ r: RosterRow; c: DetailConte
           </span>
         ) : null}
       </span>
-      {!c.closed && r.active ? <RosterRowActions assignmentId={r.assignmentId} jobId={c.d.job.id} userId={r.userId} name={r.name} status={r.status} started={c.started} canNameIc={canNameIc} /> : null}
+      {!c.closed && r.active ? <RosterRowActions assignmentId={r.assignmentId} jobId={c.d.job.id} userId={r.userId} name={r.name} status={r.status} started={c.started} canNameIc={canNameIc} coordinator={c.coordinator} /> : null}
     </li>
   );
 }
@@ -475,7 +482,13 @@ export function AttachmentsCard({ c }: Readonly<{ c: DetailContext }>) {
           None on this detail.{" "}
           {job.contractStatus === "missing" ? (
             <>
-              No vendor contract is on file either. Attach one to this detail below, or <Link href={`/coordinate/vendors/${job.vendorId}#documents`}>add one on the vendor record</Link>.
+              No vendor contract is on file either. Attach one to this detail below
+              {c.coordinator ? (
+                <>
+                  , or <Link href={`/coordinate/vendors/${job.vendorId}#documents`}>add one on the vendor record</Link>
+                </>
+              ) : null}
+              .
             </>
           ) : (
             "The vendor's contract on file covers it."
@@ -493,7 +506,13 @@ export function AttachmentsCard({ c }: Readonly<{ c: DetailContext }>) {
       )}
       {job.attachments.length > 0 && job.contractStatus === "missing" ? (
         <p className="m-0 text-sm text-muted">
-          None of these is a contract, and no vendor contract is on file. Attach one below, or <Link href={`/coordinate/vendors/${job.vendorId}#documents`}>add one on the vendor record</Link>.
+          None of these is a contract, and no vendor contract is on file. Attach one below
+          {c.coordinator ? (
+            <>
+              , or <Link href={`/coordinate/vendors/${job.vendorId}#documents`}>add one on the vendor record</Link>
+            </>
+          ) : null}
+          .
         </p>
       ) : null}
       <AttachContract key={job.contractStatus ?? "none"} jobId={job.id} missing={job.contractStatus === "missing"} maxBytes={MAX_FILE_BYTES} />

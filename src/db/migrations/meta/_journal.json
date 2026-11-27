@@ -295,6 +295,13 @@
       "when": 1795804458031,
       "tag": "0041_vendor_current_year_w9",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795810004456,
+      "tag": "0042_vendor_managers",
+      "breakpoints": true
     }
   ]
 }

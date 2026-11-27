@@ -5,6 +5,7 @@ import { Card } from "@/ui/components/Card";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
 import { navFor, type NavItem } from "@/ui/shell/nav";
+import { isVendorManager } from "@/domain/auth/policy";
 import { appEnvFromProcess } from "@/lib/env";
 import { trainingConfigured } from "@/db/client";
 import { PRACTICE_ROLE_LABELS } from "@/domain/training/mode";
@@ -40,11 +41,13 @@ function Rows({ items, label }: Readonly<{ items: NavItem[]; label?: string }>) 
 export default async function MorePage() {
   const shell = await loadShell();
   if (!shell) redirect("/sign-in");
-  const nav = navFor(shell.actor.role, { outbox: shell.mode === "training" || appEnvFromProcess() === "staging" });
+  const nav = navFor(shell.actor.role, { outbox: shell.mode === "training" || appEnvFromProcess() === "staging", manager: isVendorManager(shell.actor) });
   const training = shell.mode === "training";
   const canTrain = (shell.userRole === "coordinator" || shell.userRole === "admin") && trainingConfigured();
   if (nav.more.length === 0 && !canTrain) redirect(nav.home);
   const items = nav.more;
+  // A vendor manager's Manage tab is their only extra section.
+  const staffGroup = shell.actor.role === "personnel" ? "Vendor manager" : "Staff";
   return (
     <div className="flex flex-col gap-5">
       <h1 className="m-0 text-2xl font-bold md:text-3xl">More</h1>
@@ -70,9 +73,9 @@ export default async function MorePage() {
       {nav.staff.length ? (
         <section aria-labelledby="more-staff" className="flex max-w-140 flex-col gap-2">
           <h2 id="more-staff" className="m-0 text-title font-semibold">
-            Staff
+            {staffGroup}
           </h2>
-          <Rows items={nav.staff} label="Staff" />
+          <Rows items={nav.staff} label={staffGroup} />
         </section>
       ) : null}
     </div>

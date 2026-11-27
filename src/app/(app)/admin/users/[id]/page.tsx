@@ -16,7 +16,7 @@ import { PageTitle } from "../../../_personnel/TabLinks";
 import { dateLabel, dateTime, dayLabel } from "../../../_personnel/format";
 import { ROLE_LABEL } from "../../_admin/labels";
 import { managementActor } from "../../_admin/session";
-import { AccessActions, EditAccount, GrantFlag, LiftSuspension, ReactivateForm, RevokeFlag, SuspendForm, WriteOffDetail } from "../UserActions";
+import { AccessActions, EditAccount, GrantFlag, ManagedVendors, LiftSuspension, ReactivateForm, RevokeFlag, SuspendForm, WriteOffDetail } from "../UserActions";
 import { UNPAID_STATUS_LABEL } from "../departure-labels";
 import { ActionLink, ButtonLink } from "@/ui/components/Button";
 import { dollars } from "@/ui/components/PayLabel";
@@ -27,6 +27,8 @@ import { W9_FORM_REVISIONS, w9History, type W9HistoryRow } from "@/domain/w9/w9"
 import { signedText, W9StatusChip } from "../../../_shared/w9";
 import { W9Upload } from "../../../profile/forms";
 import { W9Review } from "../W9Review";
+import { managedVendorIdsOf } from "@/domain/vendors/managers";
+import { vendorDirectory } from "@/domain/coordinator/views";
 
 export const metadata: Metadata = { title: "User" };
 
@@ -182,6 +184,30 @@ function FlagsCard({ rec, flags }: Readonly<{ rec: UserRec; flags: Array<{ id: s
   );
 }
 
+/**
+ * Vendors this deputy manages (owner decision 2026-11-27): for these only they create and staff details, decide the
+ * vendor's requests and keep its locations and site contacts.
+ */
+function ManagedVendorsCard({ rec, vendors, managed }: Readonly<{ rec: UserRec; vendors: Array<{ id: string; name: string; active: boolean }>; managed: string[] }>) {
+  const u = rec.user;
+  const names = vendors.filter((v) => managed.includes(v.id)).map((v) => v.name);
+  // Inactive vendors are offered only when already chosen, so they can be cleared.
+  const choices = vendors.filter((v) => v.active || managed.includes(v.id)).map((v) => ({ id: v.id, name: v.active ? v.name : `${v.name} (inactive)` }));
+  return (
+    <Card id="managed-vendors" className="scroll-mt-24">
+      <CardTitle>Vendor manager</CardTitle>
+      <p className="m-0 max-w-[70ch] text-sm text-muted">
+        For the vendors chosen here, {u.name} creates, edits and staffs details, decides the vendor&apos;s requests and keeps its locations and site contacts. Everything else stays as for any deputy.
+      </p>
+      {rec.canChange && u.active ? (
+        <ManagedVendors userId={u.id} vendors={choices} initial={managed} />
+      ) : (
+        <p className="m-0">{names.length ? names.join(", ") : "No vendors."}</p>
+      )}
+    </Card>
+  );
+}
+
 /** The person's W-9s, newest first: review the latest while it is pending, download it (logged) or upload one for them. */
 function W9Card({ rec, history, today }: Readonly<{ rec: UserRec; history: W9HistoryRow[]; today: string }>) {
   const u = rec.user;
@@ -272,14 +298,16 @@ export default async function UserPage({ params }: Readonly<Props>) {
       // Turning an admin off stops the API keys they made: an admin deactivating them sees which.
       const apiKeys = actor.role === "admin" && rec.user.role === "admin" && rec.user.active ? await activeApiKeysOf(actor, tx, id, now) : [];
       const w9 = rec.user.role === "vendor" ? [] : await w9History(actor, tx, id);
-      return { rec, apiKeys, w9, ranks: (await listRanks(tx)).filter((r) => r.active), flags: (await listQualifications(actor, tx)).filter((f) => f.active) };
+      const vendorList = rec.user.role === "personnel" ? await vendorDirectory(actor, tx, now) : [];
+      const managed = rec.user.role === "personnel" ? await managedVendorIdsOf(tx, id) : [];
+      return { rec, apiKeys, w9, vendorList, managed, ranks: (await listRanks(tx)).filter((r) => r.active), flags: (await listQualifications(actor, tx)).filter((f) => f.active) };
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;
     }
   });
   if (!data || data.rec.user.role === "vendor") notFound();
-  const { rec, apiKeys, ranks, flags, w9 } = data;
+  const { rec, apiKeys, ranks, flags, w9, vendorList, managed } = data;
   const u = rec.user;
 
   return (
@@ -295,6 +323,7 @@ export default async function UserPage({ params }: Readonly<Props>) {
         <div className="flex flex-col gap-4.5">
           <AccountCard rec={rec} ranks={ranks} canPickAdmin={actor.role === "admin"} />
           <FlagsCard rec={rec} flags={flags} />
+          {u.role === "personnel" ? <ManagedVendorsCard rec={rec} vendors={vendorList} managed={managed} /> : null}
           <W9Card rec={rec} history={w9} today={agencyDayKey(now)} />
         </div>
         {rec.canChange && u.active && u.id !== actor.userId ? <ManageCards rec={rec} today={agencyDayKey(now)} apiKeys={apiKeys} /> : null}

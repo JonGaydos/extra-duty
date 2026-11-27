@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ActionLink } from "@/ui/components/Button";
 import { MapsLink } from "@/ui/components/MapsLink";
 import { STATUS_LABEL, type CalEntry, type CalStatus } from "@/domain/calendar/calendar";
 import { Chip } from "@/ui/components/Chip";
@@ -61,8 +62,8 @@ export function CompactEntry({ e }: Readonly<{ e: CalEntry }>) {
   );
 }
 
-/** One entry in the day, week and list views. */
-export function EntryRow({ e }: Readonly<{ e: CalEntry }>) {
+/** One entry in the day, week and list views. `manage`: a vendor manager's own vendor, with a link to Manage this detail. */
+export function EntryRow({ e, manage = false }: Readonly<{ e: CalEntry; manage?: boolean }>) {
   return (
     <div className="flex flex-col rounded-md border border-line bg-surface">
       <Link href={entryHref(e)} data-card-link className="group flex items-stretch gap-3 rounded-md py-2.5 pr-3 pl-2.5 text-ink no-underline hover:bg-subtle hover:text-ink">
@@ -83,9 +84,14 @@ export function EntryRow({ e }: Readonly<{ e: CalEntry }>) {
           <PayLabel variant="plain" totalCents={e.pay.totalCents} rateCents={e.pay.rateCents} upTo={{ totalCents: e.pay.maxTotalCents, rateCents: e.pay.maxRateCents }} />
         </span>
       </Link>
-      {e.address || e.lat !== null ? (
-        <span className="flex border-t border-divider pr-3 pl-5">
-          <MapsLink address={e.address} lat={e.lat} lng={e.lng} />
+      {e.address || e.lat !== null || manage ? (
+        <span className="flex flex-wrap items-center gap-x-4 border-t border-divider pr-3 pl-5">
+          {e.address || e.lat !== null ? <MapsLink address={e.address} lat={e.lat} lng={e.lng} /> : null}
+          {manage ? (
+            <ActionLink href={`/jobs/${e.number}?tab=manage`} icon="sliders" aria-label={`Manage detail #${e.number}`}>
+              Manage
+            </ActionLink>
+          ) : null}
         </span>
       ) : null}
     </div>

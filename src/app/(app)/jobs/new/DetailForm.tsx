@@ -329,7 +329,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Re
           <FormField label="Rate per hour" hint={vendor?.defaultRateCents ? `Blank uses the vendor's ${dollars(vendor.defaultRateCents)}/hr.` : "Blank uses the agency default."}>
             <Input inputMode="decimal" value={d.rate} onChange={(e) => set("rate", e.target.value)} placeholder={vendor?.defaultRateCents ? String(vendor.defaultRateCents / 100) : undefined} className="max-w-40" />
           </FormField>
-          <RateRangeNotice rateCents={rateCents} range={options.rateRange} reason={d.rateOverrideReason ?? ""} onReason={(v) => set("rateOverrideReason", v)} canApprove={chosen.length <= 1 && !fromJobId} />
+          <RateRangeNotice rateCents={rateCents} range={options.rateRange} reason={d.rateOverrideReason ?? ""} onReason={(v) => set("rateOverrideReason", v)} canApprove={chosen.length <= 1 && !fromJobId} approver={options.canApproveRate} />
         </Card>
 
         <Card>

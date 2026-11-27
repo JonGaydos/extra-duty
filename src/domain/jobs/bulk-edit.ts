@@ -126,9 +126,11 @@ function problemOf(e: unknown): string {
 }
 
 async function run(actor: Actor, tx: Tx, ids: string[], patch: EditPatch, now: Date, save: boolean): Promise<{ rows: EditRow[]; changes: JobChange[]; unresolved: boolean }> {
-  assertCan(actor, "job.update");
   if (isEmpty(patch)) throw new ValidationError("Change at least one thing.");
   const targets = await loadTargets(tx, ids);
+  // Every detail must be the actor's to edit (a vendor manager: only their vendors' details).
+  if (targets.length === 0) assertCan(actor, "job.update");
+  for (const t of targets) assertCan(actor, "job.update", { vendorId: t.job.vendorId });
   const allowOverride = targets.length === 1;
   const normalized = await normalizeForEdit(tx, patch.positions);
   const rows: EditRow[] = [];

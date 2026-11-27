@@ -5,6 +5,7 @@ import { withTx } from "@/ui/shell/request";
 import { unreadAlertCount } from "@/domain/notifications/inbox";
 import { loadShell } from "@/ui/shell/load-shell";
 import { navFor } from "@/ui/shell/nav";
+import { isVendorManager } from "@/domain/auth/policy";
 import { PhoneHeader } from "@/ui/shell/PhoneHeader";
 import { ScrollMemory } from "@/ui/shell/ScrollMemory";
 import { TabBar } from "@/ui/shell/TabBar";
@@ -35,7 +36,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   // Coordinators and admins switch from the top bar while live; in training the banner takes them back.
   const canSwitch = !training && (userRole === "coordinator" || userRole === "admin") && trainingConfigured();
   const cookieTheme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-  const nav = navFor(actor.role, { outbox: mode === "training" || appEnvFromProcess() === "staging" });
+  const nav = navFor(actor.role, { outbox: mode === "training" || appEnvFromProcess() === "staging", manager: isVendorManager(actor) });
   const staff = actor.role === "coordinator" || actor.role === "admin";
   const { unreadAlerts, settings, logo } = await withTx(async (tx) => ({
     unreadAlerts: await unreadAlertCount(actor, tx),

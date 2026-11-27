@@ -84,4 +84,21 @@ describe("the About a detail link on a message", () => {
     }
     expect(await get().db.select().from(messageRecipients).where(eq(messageRecipients.userId, other.userId))).toHaveLength(0);
   });
+
+  test("the roster audience follows the same rule, in the service and the API", async () => {
+    const roster = (actor: Actor, jobId: string) =>
+      get().db.transaction((tx) => sendMessage(actor, tx, { audiences: [{ kind: "job", jobId }], subject: "Roster", body: "Hello." }, NOW));
+    await expect(roster(deputy, theirs.jobId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(roster(deputy, past.jobId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(roster(deputy, backupOnly.jobId)).rejects.toBeInstanceOf(ForbiddenError);
+    expect((await roster(f.coord, theirs.jobId)).recipientCount).toBe(1);
+    const token = await sessionToken(get().db, deputy.userId);
+    const res = await call(postMessage, "/api/v1/messages", {
+      method: "POST",
+      headers: { ...bearer(token), "content-type": "application/json" },
+      body: JSON.stringify({ audiences: [{ kind: "job", jobId: theirs.jobId }], subject: "Roster", body: "Hello." }),
+    });
+    expect(res.status).toBe(403);
+    expect(await get().db.select().from(messageRecipients).where(eq(messageRecipients.userId, other.userId))).toHaveLength(1);
+  });
 });

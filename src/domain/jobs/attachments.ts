@@ -20,8 +20,8 @@ export type ContractAttachmentInput = {
  * for that date). Exactly one of a file or an https link. Audited.
  */
 export async function attachContractToJob(actor: Actor, tx: Tx, jobId: string, input: ContractAttachmentInput): Promise<JobAttachment> {
-  assertCan(actor, "job.update");
-  const [job] = await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId));
+  const [job] = await tx.select({ id: jobs.id, vendorId: jobs.vendorId }).from(jobs).where(eq(jobs.id, jobId));
+  assertCan(actor, "job.update", { vendorId: job?.vendorId });
   if (!job) throw new NotFoundError("Job not found.");
   const label = typeof input.label === "string" ? input.label.trim() : "";
   if (!label) throw new ValidationError("A label is required.");

@@ -24,7 +24,9 @@ import { agencyDateOnly, agencyDayKey } from "@/domain/time/agency-time";
 import { approveJobChange, approveRequest, declineJobChange, declineRequest, waiveLateCancelPay } from "@/domain/vendor-portal/requests";
 import { addLocation, addVendorDocument, createVendor, createVendorLogin, placePaymentHold, resolvePaymentHold, setLocationActive, updateVendor, type LocationInput, type VendorInput } from "@/domain/vendors/vendors";
 import { addVendorContact, addVendorContactForJob } from "@/domain/vendors/contacts";
-import { assertCan } from "@/domain/auth/policy";
+import { assertCan, isVendorManager } from "@/domain/auth/policy";
+import { jobVendorId } from "@/domain/auth/scope";
+import type { Actor } from "@/domain/actor";
 import { withTx } from "@/ui/shell/request";
 import { act, actOutsideTx, type ActionResult } from "../../_personnel/result";
 import { detailInput, onDay, overrideSpanOn, parseDollars, type DetailWire } from "./detail-input";
@@ -39,11 +41,16 @@ const keyDay = (key: string) => KEY_DAY.format(new Date(`${key}T12:00:00Z`));
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Staff, or a vendor manager (whose vendor is checked when the detail is saved). */
+function assertCanCreateSome(actor: Actor): void {
+  if (!isVendorManager(actor)) assertCan(actor, "job.create");
+}
+
 /** Dates for a Range or Repeat selection, as a JSON list of agency date keys. */
 export async function expandDatesAction(selection: DateSelection, firstDate: string): Promise<ActionResult> {
   // act() takes a promise-returning callback; nothing here waits, so the result is returned already resolved.
   return act((actor) => {
-    assertCan(actor, "job.create");
+    assertCanCreateSome(actor);
     return Promise.resolve({ ok: true, value: JSON.stringify(expandSelection(selection, firstDate)) });
   });
 }
@@ -51,7 +58,7 @@ export async function expandDatesAction(selection: DateSelection, firstDate: str
 /** Last year's agreed plan for a repeat event, as JSON (or nothing). */
 export async function suggestPlanAction(input: { vendorId: string; title: string; date: string }): Promise<ActionResult> {
   return act(async (actor, tx) => {
-    assertCan(actor, "job.create");
+    assertCan(actor, "job.create", { vendorId: input.vendorId || undefined });
     if (!input.vendorId || !input.title.trim() || !DATE.test(input.date)) return { ok: true };
     const s = await suggestPriorPlan(tx, { vendorId: input.vendorId, title: input.title, startAt: onDay(input.date, "12:00", "Date") });
     return { ok: true, value: s ? JSON.stringify({ year: s.year, title: s.jobTitle, versionId: s.versionId, filename: s.filename }) : undefined };
@@ -64,7 +71,7 @@ export async function suggestPlanAction(input: { vendorId: string; title: string
  */
 export async function createDetailsAction(input: { detail: DetailWire; dates: string[]; overrides: Record<string, { startTime?: string; endTime?: string }>; fromJobId?: string }): Promise<ActionResult> {
   return actOutsideTx(async (actor) => {
-    assertCan(actor, "job.create");
+    assertCan(actor, "job.create", { vendorId: input.detail.vendorId || undefined });
     const dates = [...new Set(input.dates)].sort(byText);
     if (dates.length === 0) throw new ValidationError("Choose at least one date.");
     let base = detailInput(input.detail, dates[0]);
@@ -127,7 +134,7 @@ export async function updateDetailAction(input: { jobId: string; detail: DetailW
 
 export async function saveSafetyAction(input: { jobId: string; notes: string; addresses: Array<{ address: string; description: string; lat?: number | null; lng?: number | null; source?: "auto" | "manual" }> }): Promise<ActionResult> {
   return actOutsideTx(async (actor) => {
-    assertCan(actor, "job.update");
+    assertCan(actor, "job.update", { vendorId: await withTx((tx) => jobVendorId(tx, input.jobId)) });
     const safety = await resolveSafetyPins({ notes: input.notes, addresses: input.addresses.filter((a) => a.address.trim()) });
     return withTx(async (tx) => {
       await updateJob(actor, tx, input.jobId, { safety }, "one");

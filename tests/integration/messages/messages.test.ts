@@ -118,9 +118,11 @@ describe("message center", () => {
     expect(await get().db.select().from(messages)).toHaveLength(before);
   });
 
-  test("the job audience is signed-up, pending short and backup people only, for any personnel", async () => {
+  test("the job audience is signed-up, pending short and backup people only", async () => {
     const deputy = await person();
-    const { job, positionId } = await f.mkJob({ count: 5 });
+    const { job, positionId } = await f.mkJob({ count: 6 });
+    // A deputy may message the roster only of a detail they are on (the About a detail rule).
+    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: deputy.userId, status: "signed_up" });
     const put = async (status: (typeof assignments.$inferInsert)["status"]) => {
       const p = await person();
       await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: p.userId, status });
@@ -140,11 +142,23 @@ describe("message center", () => {
     await expect(send(deputy, [{ kind: "job", jobId: "00000000-0000-7000-8000-000000000000" }])).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  test("a deputy cannot message the roster of a detail they are not on; staff can", async () => {
+    const deputy = await person();
+    const onIt = await person();
+    const { job, positionId } = await f.mkJob({ count: 2 });
+    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: onIt.userId, status: "signed_up" });
+    await expect(send(deputy, [{ kind: "job", jobId: job.id }])).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await recipients((await send(f.coord, [{ kind: "job", jobId: job.id }])).id)).toEqual([onIt.userId]);
+  });
+
   test("a person picked by name who is also on a picked roster gets one copy and one alert", async () => {
     const deputy = await person();
     const onJob = await person();
     const { job, positionId } = await f.mkJob({ count: 2 });
-    await get().db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: onJob.userId, status: "signed_up" });
+    await get().db.insert(assignments).values([
+      { jobId: job.id, jobPositionId: positionId, userId: onJob.userId, status: "signed_up" },
+      { jobId: job.id, jobPositionId: positionId, userId: deputy.userId, status: "signed_up" },
+    ]);
     const m = await send(deputy, [{ kind: "job", jobId: job.id }, { kind: "users", userIds: [onJob.userId] }]);
     expect(await recipients(m.id)).toEqual([onJob.userId]);
     const alerts = await get().db.select().from(notifications).where(and(eq(notifications.userId, onJob.userId), eq(notifications.link, `/messages/${m.id}`)));

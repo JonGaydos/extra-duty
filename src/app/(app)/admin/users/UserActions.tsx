@@ -19,6 +19,7 @@ import {
   reactivateUserAction,
   resendInviteAction,
   revokeFlagAction,
+  setManagedVendorsAction,
   suspendUserAction,
   updateUserAction,
   writeOffDetailAction,
@@ -203,6 +204,27 @@ export function RevokeFlag({ userId, qualificationId, label }: Readonly<{ userId
     <Button size="sm" variant="secondary" busy={busy} aria-label={`Revoke ${label}`} onClick={() => run(() => revokeFlagAction({ userId, qualificationId }))}>
       Revoke
     </Button>
+  );
+}
+
+/** Vendors this person manages: tick the vendors and save. Saving an empty list clears it. */
+export function ManagedVendors({ userId, vendors, initial }: Readonly<{ userId: string; vendors: Option[]; initial: string[] }>) {
+  const [picked, setPicked] = useState(initial);
+  const { run, busy } = useCoordAction();
+  const changed = picked.length !== initial.length || picked.some((id) => !initial.includes(id));
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(() => setManagedVendorsAction({ userId, vendorIds: picked }));
+      }}
+    >
+      <CheckGroup legend="Vendors this person manages" options={vendors} value={picked} onChange={setPicked} />
+      <Button type="submit" variant="secondary" busy={busy} disabled={!changed} className="w-full md:w-fit">
+        Save vendors
+      </Button>
+    </form>
   );
 }
 

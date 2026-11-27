@@ -115,7 +115,7 @@ export type QuickEditInitial = { rate: string; startTime: string; endTime: strin
  * Quick edit on the detail page: rate, start and end time, positions and description in place, saved together.
  * On a series it applies to this detail or to this and the later ones; times apply on each detail's own date.
  */
-export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, started, range, approved }: Readonly<{ jobId: string; initial: QuickEditInitial; types: Option[]; defaultTypeId: string; seriesLater: number; started: boolean; range: RateRange; approved: boolean }>) {
+export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, started, range, approved, approver = true }: Readonly<{ jobId: string; initial: QuickEditInitial; types: Option[]; defaultTypeId: string; seriesLater: number; started: boolean; range: RateRange; approved: boolean; approver?: boolean }>) {
   const [v, setV] = useState(initial);
   const [scope, setScope] = useState<"one" | "series">("one");
   const [reason, setReason] = useState("");
@@ -180,7 +180,7 @@ export function QuickEdit({ jobId, initial, types, defaultTypeId, seriesLater, s
           <Input type="time" value={v.endTime} onChange={(e) => change({ ...v, endTime: e.target.value })} disabled={started} required />
         </FormField>
       </div>
-      <RateRangeNotice rateCents={typedCents(v.rate)} range={range} reason={reason} onReason={setReason} canApprove={scope === "one"} approved={approved && v.rate === initial.rate} />
+      <RateRangeNotice rateCents={typedCents(v.rate)} range={range} reason={reason} onReason={setReason} canApprove={scope === "one"} approved={approved && v.rate === initial.rate} approver={approver} />
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-muted">Positions</span>
         <PositionsEditor value={v.positions} onChange={(positions) => change({ ...v, positions })} types={types} defaultTypeId={defaultTypeId} idPrefix="quick" />

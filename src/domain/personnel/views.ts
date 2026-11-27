@@ -23,7 +23,7 @@ import {
   vendors,
 } from "@/db/schema";
 import type { Actor } from "../actor";
-import { assertCan } from "../auth/policy";
+import { assertCan, managesVendor } from "../auth/policy";
 import { canReportNonPayment } from "../payment-issues/issues";
 import { responsibleDueAt, type Party } from "../billing/payments";
 import { loadUnbilled } from "../billing/lock";
@@ -466,9 +466,11 @@ export async function jobActivity(actor: Actor, tx: Tx, jobId: string, limit = 3
     ? await tx.select({ id: assignments.id, name: users.name, userId: users.id }).from(assignments).innerJoin(users, eq(users.id, assignments.userId)).where(inArray(assignments.id, assignmentIds))
     : [];
   const ownerById = new Map(owners.map((o) => [o.id, o]));
-  const staff = actor.role === "admin" || actor.role === "coordinator";
+  const coordinator = actor.role === "admin" || actor.role === "coordinator";
+  const [job] = coordinator ? [] : await tx.select({ state: jobs.state, vendorId: jobs.vendorId }).from(jobs).where(eq(jobs.id, jobId));
+  // A vendor manager sees their vendor's detail as staff do.
+  const staff = coordinator || managesVendor(actor, job?.vendorId);
   // Once a detail is back on, personnel are not told who canceled or reactivated it.
-  const [job] = staff ? [] : await tx.select({ state: jobs.state }).from(jobs).where(eq(jobs.id, jobId));
   const anonymous = !staff && job?.state !== "canceled";
   return rows.map((r) => {
     if (r.entityType === "job") {

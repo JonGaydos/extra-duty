@@ -66,6 +66,7 @@ const EXPORTED = [
   "vendor_documents",
   "vendor_holds",
   "vendor_locations",
+  "vendor_managers",
   "vendor_restrictions",
   "vendor_types",
   "vendor_users",

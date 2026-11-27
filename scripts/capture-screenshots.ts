@@ -67,6 +67,7 @@ async function captureShot(context: BrowserContext, access: Access, shot: Shot, 
   } finally {
     await page.close();
     if (shot.fresh) await context.close();
+    await shot.after?.({ size, source: access.source, query });
   }
 }
 

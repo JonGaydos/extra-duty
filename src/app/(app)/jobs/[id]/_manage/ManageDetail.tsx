@@ -25,11 +25,11 @@ const hhmm = (d: Date) => {
 };
 
 /**
- * Manage this detail (coordinators and admins, on the shared detail page): request decision, quick edit and edit
+ * Manage this detail (coordinators and admins, and a vendor manager on their vendor's details, on the shared detail page): request decision, quick edit and edit
  * (one or series), hold and release, cancel and reactivate, the roster and sign-up history with assign and remove,
  * officer safety, the ops plan review, attachments and contract, activity, copy and repeat.
  */
-export async function ManageDetail({ actor, id, now }: Readonly<{ actor: Actor; id: string; now: Date }>) {
+export async function ManageDetail({ actor, id, now, coordinator }: Readonly<{ actor: Actor; id: string; now: Date; coordinator: boolean }>) {
   const data = await loadDetail(actor, id, now);
   if (!data) notFound();
   const { job, ops } = data;
@@ -59,6 +59,7 @@ export async function ManageDetail({ actor, id, now }: Readonly<{ actor: Actor; 
     closed: job.state === "canceled" || job.state === "declined",
     releaseStatus: releaseStatusText(job, now),
     initial,
+    coordinator,
   };
 
   return (

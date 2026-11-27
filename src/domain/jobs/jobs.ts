@@ -5,7 +5,8 @@ import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { jobAudience, vendorAudience } from "../notifications/audiences";
 import { emit } from "../notifications/notify";
-import { assertCan } from "../auth/policy";
+import { assertCan, managesVendor } from "../auth/policy";
+import { jobVendorId } from "../auth/scope";
 import { NotFoundError, RuleViolation, ValidationError } from "../errors";
 import { cleanChangedContactName, cleanContactName } from "../contact-name";
 import { cleanChangedPhone, cleanPhone } from "../phone";
@@ -195,7 +196,7 @@ export type CreateOptions = { authorized?: boolean; state?: "requested"; request
 
 /** createJob's body, shared with bulk creation, which puts every job in one series. */
 export async function createJobInSeries(actor: Actor, tx: Tx, input: JobInput, seriesId: string | null, opts: CreateOptions = {}): Promise<Job> {
-  if (!opts.authorized) assertCan(actor, "job.create");
+  if (!opts.authorized) assertCan(actor, "job.create", { vendorId: input.vendorId });
   const title = input.title?.trim();
   if (!title) throw new ValidationError("A title is required.");
   const settings = await getSettings(tx);
@@ -307,7 +308,7 @@ export async function normalizeForEdit(tx: Tx, positions: PositionInput[] | unde
  * time-or-rate alert is returned instead of sent, so the caller can send one alert per person.
  */
 export async function editOne(actor: Actor, tx: Tx, before: Job, patch: Partial<JobInput>, positions: Normalized[] | null, scope: "one" | "series"): Promise<{ job: Job; change: JobChange | null; conflicts: ScheduleConflict[]; resolved: boolean }> {
-  assertCan(actor, "job.update");
+  assertCan(actor, "job.update", { vendorId: before.vendorId });
   let change: JobChange | null = null;
   let conflicts: ScheduleConflict[] = [];
   let resolved = true;
@@ -574,7 +575,7 @@ async function updateOne(
 
   // New times are checked against every deputy holding a spot: overlap with their other details and their caps.
   const conflicts = await editConflicts(tx, patch, before, next, settings);
-  const conflictReason = conflicts.length ? overrideReason(actor, conflicts, patch.conflictOverride) : null;
+  const conflictReason = conflicts.length ? overrideReason(actor, before.vendorId, conflicts, patch.conflictOverride) : null;
   onConflicts?.(conflicts, !conflicts.length || !!conflictReason);
   if (conflicts.length && !conflictReason && !collectConflicts) throw new ScheduleConflictError(conflicts);
 
@@ -602,7 +603,7 @@ async function updateOne(
  * a job with sign-ups write audit rows. A change to the rate, times, location or officer safety alerts the job's audience.
  */
 export async function updateJob(actor: Actor, tx: Tx, id: string, patch: Partial<JobInput>, scope: "one" | "series"): Promise<Job[]> {
-  assertCan(actor, "job.update");
+  assertCan(actor, "job.update", { vendorId: await jobVendorId(tx, id) });
   return updateJobUnchecked(actor, tx, id, patch, scope);
 }
 
@@ -639,7 +640,7 @@ export type CancelOptions = {
 };
 
 export async function cancelJob(actor: Actor, tx: Tx, id: string, reason: string, opts: CancelOptions = {}): Promise<Job> {
-  assertCan(actor, "job.cancel");
+  assertCan(actor, "job.cancel", { vendorId: await jobVendorId(tx, id) });
   return cancelJobUnchecked(actor, tx, id, reason, opts);
 }
 
@@ -714,7 +715,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
     link: `/jobs/${id}`,
   });
   // Staff canceling tell the vendor's logins; a vendor canceling its own detail already knows. No reason is given.
-  if (actor.role === "coordinator" || actor.role === "admin") {
+  if (actor.role === "coordinator" || actor.role === "admin" || managesVendor(actor, after.vendorId)) {
     await emit(tx, { recipients: await vendorAudience(tx, after.vendorId), type: "job.canceled", title: "Detail canceled", body: `Detail #${after.number} on ${dayText(after.startAt)} was canceled.`, link: `/jobs/${id}` });
   }
   return after;
@@ -736,7 +737,7 @@ async function reactivationTarget(actor: Actor, tx: Tx, jobId: string, lock = fa
   const q = tx.select().from(jobs).where(eq(jobs.id, jobId));
   const [job] = lock ? await q.for("update") : await q;
   if (!job || (actor.role === "vendor" && actor.vendorId !== job.vendorId)) throw new NotFoundError("Job not found.");
-  assertCan(actor, "job.reactivate");
+  assertCan(actor, "job.reactivate", { vendorId: job.vendorId });
   return job;
 }
 
@@ -856,7 +857,7 @@ async function scopeTargets(tx: Tx, id: string, scope: "one" | "series"): Promis
  * sign-ups; people already on it keep their spots and are not alerted. Already held or closed details are skipped.
  */
 export async function holdJob(actor: Actor, tx: Tx, id: string, scope: "one" | "series"): Promise<Job[]> {
-  assertCan(actor, "job.update");
+  assertCan(actor, "job.update", { vendorId: await jobVendorId(tx, id) });
   const out: Job[] = [];
   // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, scope)) {
@@ -877,7 +878,7 @@ export async function holdJob(actor: Actor, tx: Tx, id: string, scope: "one" | "
  * opens at once: releaseAt becomes now, so watchers are alerted by the release tick as for any release.
  */
 export async function releaseJob(actor: Actor, tx: Tx, id: string, opts: { scope: "one" | "series"; now: boolean }, at: Date = new Date()): Promise<Job[]> {
-  assertCan(actor, "job.update");
+  assertCan(actor, "job.update", { vendorId: await jobVendorId(tx, id) });
   const out: Job[] = [];
   // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, opts.scope)) {
@@ -920,12 +921,12 @@ export type JobDetail = Job & {
 export async function getJob(actor: Actor, tx: Tx, id: string): Promise<JobDetail> {
   const job = await getRow(tx, id);
   if (actor.role === "vendor" && actor.vendorId !== job.vendorId) throw new NotFoundError("Job not found.");
-  // Personnel never see a vendor request before a coordinator approves it, or one that was declined.
-  if (actor.role === "personnel" && HIDDEN_FROM_PERSONNEL.includes(job.state)) throw new NotFoundError("Job not found.");
+  // Personnel never see a vendor request before it is approved, or one that was declined, unless they manage the vendor.
+  if (actor.role === "personnel" && HIDDEN_FROM_PERSONNEL.includes(job.state) && !managesVendor(actor, job.vendorId)) throw new NotFoundError("Job not found.");
   assertCan(actor, "job.read", { vendorId: job.vendorId });
   const positions = await tx.select().from(jobPositions).where(eq(jobPositions.jobId, id)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id));
   const attachments = await tx.select().from(jobAttachments).where(eq(jobAttachments.jobId, id)).orderBy(asc(jobAttachments.createdAt), asc(jobAttachments.id));
-  const staff = actor.role === "admin" || actor.role === "coordinator";
+  const staff = actor.role === "admin" || actor.role === "coordinator" || managesVendor(actor, job.vendorId);
   const seesContracts = staff || actor.role === "vendor";
   return {
     ...jobFieldsFor(actor, job),
@@ -945,7 +946,7 @@ export async function getJob(actor: Actor, tx: Tx, id: string): Promise<JobDetai
  * that hands job rows to non-staff goes through here.
  */
 export function jobFieldsFor<T extends Job>(actor: Actor, job: T): T {
-  if (actor.role === "admin" || actor.role === "coordinator") return job;
+  if (actor.role === "admin" || actor.role === "coordinator" || managesVendor(actor, job.vendorId)) return job;
   const staffOnly = { rateOverrideReason: null, rateOverrideBy: null, rateOverrideAt: null, lateCancelWaivedReason: null };
   if (job.state === "canceled" || job.state === "declined") return { ...job, ...staffOnly };
   return { ...job, ...staffOnly, cancelReason: null, canceledAt: null, canceledByVendor: false };
@@ -1054,6 +1055,9 @@ function filterConds(actor: Actor, tx: Tx, filter: JobFilter): SQL[] {
   const conds: SQL[] = [startWindow(filter)];
   if (actor.role === "vendor" && actor.vendorId) conds.push(eq(jobs.vendorId, actor.vendorId));
   if (filter.status?.length) conds.push(inArray(jobs.state, filter.status));
+  const managed = actor.role === "personnel" ? [...(actor.managedVendorIds ?? [])] : [];
+  // A vendor manager also sees their vendors' held details in the lists (owner decision 2026-11-27); requests stay on Manage.
+  const theirVendors = managed.length ? inArray(jobs.vendorId, managed) : undefined;
   if (actor.role === "personnel") conds.push(notInArray(jobs.state, HIDDEN_FROM_PERSONNEL));
   if (filter.typeIds?.length) conds.push(inArray(jobs.typeId, filter.typeIds));
   if (filter.vendorIds?.length) conds.push(inArray(jobs.vendorId, filter.vendorIds));
@@ -1061,7 +1065,7 @@ function filterConds(actor: Actor, tx: Tx, filter: JobFilter): SQL[] {
   const match = q ? textMatch(q) : undefined;
   if (match) conds.push(match);
   const visible = actor.role === "personnel" && !filter.mine ? openListVisibility(tx, actor.userId) : undefined;
-  if (visible) conds.push(visible);
+  if (visible) conds.push(theirVendors ? or(visible, theirVendors)! : visible);
   return conds;
 }
 
