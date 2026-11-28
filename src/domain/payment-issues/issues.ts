@@ -18,7 +18,7 @@ import { coordinatorAudience } from "@/domain/notifications/audiences";
 import { agencyAllows, emit } from "@/domain/notifications/notify";
 import { getSettings } from "@/domain/settings/settings";
 import { queueEmail } from "@/jobs/boss";
-import { simpleEmail } from "@/lib/email/format";
+import { buildEmail } from "../email-messages/store";
 import type { OutgoingEmail } from "@/lib/email/types";
 import { formatMoney } from "@/lib/pdf/invoice-pdf";
 
@@ -160,32 +160,31 @@ async function invoiceSummary(tx: Tx, inv: Invoice, prefix: string) {
   };
 }
 
+/** The email message each vendor email uses. */
+const VENDOR_MESSAGE = { "payment_issue.waiting_on": "payment_issue.vendor", "invoice.vendor_payment_reminder": "invoice.vendor_payment_reminder" } as const;
+
 /**
- * Plain email to a vendor's billing addresses, from the agency (sender settings) with the billing reply-to. `key`
- * is its entry in the notification list: when the agency turned vendor email off for it, nothing is sent ("off").
+ * Plain email to a vendor's billing addresses, from the agency (sender settings) with the billing reply-to, built from
+ * the agency's email message. `key` is its entry in the notification list: when the agency turned vendor email off for
+ * it, nothing is sent ("off"). `note` is the coordinator's note to the vendor, if any.
  */
-export async function vendorEmail(
-  tx: Tx,
-  inv: Invoice,
-  key: "payment_issue.waiting_on" | "invoice.vendor_payment_reminder",
-  subject: string,
-  intro: string,
-  extra: string[] = [],
-): Promise<"sent" | "no_email" | "off"> {
+export async function vendorEmail(tx: Tx, inv: Invoice, key: keyof typeof VENDOR_MESSAGE, note: string | null = null): Promise<"sent" | "no_email" | "off"> {
   if (!(await agencyAllows(tx, key, "vendor", "email"))) return "off";
   const s = await getSettings(tx);
   const [vendor] = await tx.select({ billingEmails: vendors.billingEmails }).from(vendors).where(eq(vendors.id, inv.vendorId));
   const to = vendor?.billingEmails ?? [];
   if (to.length === 0) return "no_email";
   const sum = await invoiceSummary(tx, inv, s.invoiceNumberPrefix);
-  const base = simpleEmail(to[0], subject, [
-    `${s.agency.name}: ${intro}`,
-    `Invoice: ${sum.number}`,
-    `Job: ${sum.job}`,
-    `Amount: ${sum.amount}`,
-    `Payee: ${sum.payee}`,
-    ...extra,
-  ]);
+  const [vendorRow] = await tx.select({ name: vendors.name }).from(vendors).where(eq(vendors.id, inv.vendorId));
+  const base = await buildEmail(tx, VENDOR_MESSAGE[key], to, {
+    "agency.name": s.agency.name,
+    "vendor.name": vendorRow?.name ?? "",
+    "invoice.number": sum.number,
+    "invoice.detail": sum.job,
+    "invoice.amount": sum.amount,
+    "invoice.payee": sum.payee,
+    "invoice.note": note ?? "",
+  });
   const msg: OutgoingEmail = { ...base, to, replyTo: s.billingReplyToEmail || s.agency.email || undefined };
   await queueEmail(tx, msg);
   return "sent";
@@ -227,7 +226,7 @@ export async function setIssueWaitingOn(
   const number = formatInvoiceNumber(s.invoiceNumberPrefix, inv.number);
   const link = `/invoices/${inv.id}`;
   if (party === "vendor") {
-    await vendorEmail(tx, inv, "payment_issue.waiting_on", `Payment issue: invoice ${number}`, "A payment issue on this invoice is waiting on you.", text ? [`Note: ${text}`] : []);
+    await vendorEmail(tx, inv, "payment_issue.waiting_on", text);
   } else {
     const recipients = party === "deputy" ? [inv.payeeUserId] : (await coordinatorAudience(tx)).filter((id) => id !== actor.userId);
     await emit(

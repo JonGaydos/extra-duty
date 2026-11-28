@@ -52,6 +52,18 @@ describe("buildDemoData", () => {
     for (const j of data.jobs) expect(Number.isInteger(j.rateCents)).toBe(true);
   });
 
+  test.each(DATES.map((d) => [d.toISOString(), d] as const))("for %s an upcoming confidential detail is never released, has the practice deputy assigned and an audited reason", (_label, today) => {
+    const data = buildDemoData(today);
+    const practice = data.users.find((u) => u.email === PRACTICE_USER_EMAILS.deputy)!;
+    const secret = data.jobs.filter((j) => j.confidential && j.startAt.getTime() > today.getTime());
+    expect(secret.length).toBeGreaterThan(0);
+    for (const j of secret) {
+      expect(j).toMatchObject({ held: false, releaseAt: null });
+      expect(data.assignments.some((a) => a.jobId === j.id && a.userId === practice.id && a.status === "signed_up")).toBe(true);
+      expect(data.audit.some((a) => a.action === "job.confidential_on" && a.entityId === j.id && a.reason)).toBe(true);
+    }
+  });
+
   test("the made-up agency has about 20 vendors, about 30 deputies across every rank, a dispatcher, coordinators and an admin", () => {
     const data = buildDemoData(DATES[0]);
     expect(data.vendors.length).toBeGreaterThanOrEqual(18);

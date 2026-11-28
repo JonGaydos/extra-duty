@@ -63,7 +63,8 @@ async function getJobRow(tx: Tx, id: string): Promise<Job> {
 
 /** A vendor user reaching for another vendor's job gets NotFound (no hint it exists); then the policy applies. */
 function authorizeJob(actor: Actor, job: Job, action: Action): void {
-  if (actor.role === "vendor" && actor.vendorId !== job.vendorId) throw new NotFoundError("Job not found.");
+  // A confidential detail is hidden from its own vendor too (owner decision 2026-11-27).
+  if (actor.role === "vendor" && (actor.vendorId !== job.vendorId || job.confidential)) throw new NotFoundError("Job not found.");
   assertCan(actor, action, { vendorId: job.vendorId });
 }
 

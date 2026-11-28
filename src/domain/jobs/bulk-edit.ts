@@ -205,6 +205,7 @@ export async function applyEdit(actor: Actor, tx: Tx, ids: string[], patch: Edit
       title: one ? `Detail changed: #${list[0].number} ${list[0].title}` : `${list.length} of your details changed`,
       body: one ? list[0].details.join(" ") : list.map((c) => `#${c.number} ${c.title}, ${DAY.format(c.startAt)}: ${c.details.join(" ")}`).join("\n"),
       link: one ? `/jobs/${list[0].jobId}` : "/calendar?mine=1",
+      jobIds: list.map((c) => c.jobId),
     });
   }
   return rows;

@@ -352,6 +352,7 @@ Tactile and plain: solid blue for the action, quiet outlined for the rest.
 
 ### Chips
 - **Style** (`Chip`): full pill, 3 px by 9 px, 12 px 600, soft fill with matching ink. Tones: success, warning, danger, attention, info, coordinator, neutral.
+- **Leading icon:** a chip may carry one 14 px line icon before its words when the icon names the meaning; the only one is the lock on **Confidential** (coordinator tone, first among a detail's chips, on the detail page, Manage, every list row and calendar entry). The words always carry the meaning; the icon is decorative.
 - **Filter chips** (planned, Jobs and Payments screens): 32 to 34 px tall, full radius, 1 px line, surface fill; selected is ink fill with surface text and 600 weight. They are toggle buttons with `aria-pressed`.
 
 ### Cards / Containers
@@ -425,6 +426,9 @@ The agency Calendar (every detail the person may see; vendors use their portal) 
 
 ### Notices
 `Notice` is a short tinted message inside a card: an info icon and 13 px text on a soft fill (warning, danger, success, info), 12 px radius, 10 by 12 px padding. Form results sit in an always-present `role="status"` region so each new message is announced.
+
+### Action banners
+`ActionBanner` heads Home when something waits on the person and cannot be put off: a message to acknowledge, worked details to bill, invoices that need them. A tinted card with a 2 px border in the status tone (attention for a message to acknowledge, warning for billing, danger once the billing lock is active), a 20 px line icon, a bold one-line title that states the facts ("You have 2 worked details to bill. Billing them keeps your sign-ups open."), an optional 13 px line, and one primary `ButtonLink` (full width on phones). It has no close button: it goes away by itself once nothing needs action. On every other page a message to acknowledge also shows as `AckBar`, a 44 px attention strip under the header that links to the message and says what it is; Home leaves the strip out because the banner is there.
 
 ### Signed-out pages
 `AuthShell` frames sign-in, code entry, invite acceptance and password resets:

@@ -84,6 +84,19 @@ test("a wide logo takes the wide slot on sign-in, in the header and on the invoi
   }
   expect((await rows<{ value: { agency: { logoWidth: number; logoHeight: number } } }>("select value from settings limit 1"))[0].value.agency).toMatchObject({ logoWidth: 512, logoHeight: 171, logoTransparent: true });
 
+  // On the admin page the preview and the upload form stay inside the Logo card beside a wide logo.
+  for (const viewport of [PHONE, DESKTOP]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/admin/agency");
+    const logoCard = page.getByRole("heading", { name: "Logo", exact: true }).locator("xpath=..");
+    const cardBox = (await logoCard.boundingBox())!;
+    for (const part of [logoCard.locator("figcaption"), logoCard.locator('input[type="file"]'), logoCard.getByRole("button", { name: "Upload logo" })]) {
+      const box = (await part.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+    }
+  }
+  await page.setViewportSize(DESKTOP);
+
   // The app header: desktop top nav and the staff phone header, in night mode with no plate behind a transparent logo.
   const staff = await browser.newContext({ colorScheme: "dark" });
   await signInAs(staff, "coordinator");

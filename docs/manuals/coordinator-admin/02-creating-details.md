@@ -23,16 +23,20 @@
 
    ![Officer safety](../images/coordinator-admin/02-creating-details-5-desktop.webp)
 
-6. Under **Ops plan and release**, tick **Ops plan required** if the Incident Commander must submit a plan, or **Hold: do not release until I release it** to keep it unreleased. Add **Notes for deputies** if needed.
+6. Under **Reminders**, choose how the people assigned are reminded before it starts. **Agency times** uses the times set under **Management**, **Reminders and locks** (72 and 24 hours before, unless the agency changed them). **Different times for this detail** lets you tick 72, 48, 24 or 2 hours before. **No reminders for this detail** turns them off. Add a **Reminder note**, for example "Check in at the north gate", to put it in every reminder. You can change all of this later in **Edit detail**.
+
+   ![Reminders](../images/coordinator-admin/02-creating-details-8-desktop.webp)
+
+7. Under **Ops plan and release**, tick **Ops plan required** if the Incident Commander must submit a plan, or **Hold: do not release until I release it** to keep it unreleased. Coordinators and admins can tick **Confidential** for a detail only staff and the people assigned may see (see [Confidential details](35-confidential-details.md)). Add **Notes for deputies** if needed.
 
    ![Ops plan and release](../images/coordinator-admin/02-creating-details-6-desktop.webp)
 
-7. Check the **Summary** and choose **Create detail**. No alert goes out when it posts. Deputies find it in the app once it is released.
+8. Check the **Summary** and choose **Create detail**. No alert goes out when it posts. Deputies find it in the app once it is released.
 
 ## Copying a detail
 
 On a detail's page, **Copy to other dates** makes copies. Pick the dates and choose **Make copy**. **Copy and change details** opens a new detail filled in from this one.
 
-A copy carries the detail itself: the vendor, location and pin, title, description, notes, positions with their rate differentials, the rate, flexible times, officer safety notes and addresses with their pins, the site contact, and the attachments, contract included. It never carries people. Nobody signed up, on the backup list or working the original is copied, and nobody gets an alert. Each copy starts with an empty roster and releases under the normal rules. The same holds for the later dates of a **Repeat** series.
+A copy carries the detail itself: the vendor, location and pin, title, description, notes, positions with their rate differentials, the rate, flexible times, officer safety notes and addresses with their pins, the site contact, the reminder times and note, and the attachments, contract included. It never carries people. Nobody signed up, on the backup list or working the original is copied, and nobody gets an alert. Each copy starts with an empty roster and releases under the normal rules. The same holds for the later dates of a **Repeat** series.
 
 ![Copy to other dates](../images/coordinator-admin/02-creating-details-7-desktop.webp)

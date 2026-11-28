@@ -26,6 +26,8 @@ function passLabel(c: CheckResult, windowHours: number): string {
       return "Billing is up to date";
     case "w9":
       return "Your W-9 is approved";
+    case "message_ack":
+      return "Messages acknowledged";
     case "overlap":
       return "No overlap with your other details";
     case "cap_rolling":
@@ -57,6 +59,7 @@ export function positionChoices(d: JobPageData): PositionChoice[] {
       id: e.jobPositionId,
       name: pos?.name ?? "Position",
       open: pos ? Math.max(0, pos.count - pos.filled) : 0,
+      offered: pos?.offered ?? 0,
       canSignUp: e.canSignUp,
       canBackup: e.canBackup,
       checks: shownChecks(e.checks).map((c) => ({ label: c.ok ? passLabel(c, settings.rollingCapWindowHours) : c.message, ok: c.ok, cap: c.check in capUse, detail: capDetail(c) })),

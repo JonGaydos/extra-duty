@@ -10,10 +10,12 @@ import type { Assignment } from "./signup";
 export { claimSpot } from "./backups";
 
 const STARTED = "This detail has started. Ask a coordinator to remove you.";
+const GIVE_AWAY = "You are signed up for this spot. Give it away instead: you stay on the detail until another deputy takes it.";
 
 /**
- * Cancels a sign-up, a backup place or a pending shorter request before the job starts. Only a signed_up
- * cancellation opens a spot.
+ * Leaves a backup place or withdraws a pending shorter request before the job starts. A signed-up deputy is never
+ * removed this way: they give the spot away (offerSpot) and stay on it until someone takes it over (owner decision
+ * 2026-11-27).
  */
 export async function cancelSignup(actor: Actor, tx: Tx, assignmentId: string, reason: string, now: Date = new Date()): Promise<Assignment> {
   const [row] = await tx.select().from(assignments).where(eq(assignments.id, assignmentId));
@@ -26,7 +28,8 @@ export async function cancelSignup(actor: Actor, tx: Tx, assignmentId: string, r
     auditAction: "assignment.cancel",
     reason: why,
     now,
-    guard: (_before, job) => {
+    guard: (before, job) => {
+      if (before.status === "signed_up") throw new ValidationError(GIVE_AWAY);
       if (now.getTime() >= job.startAt.getTime()) throw new ValidationError(STARTED);
     },
   };

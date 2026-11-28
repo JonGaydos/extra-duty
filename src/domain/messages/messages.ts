@@ -8,6 +8,8 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../errors";
 import { coordinatorAudience, jobAudience } from "../notifications/audiences";
 import { emit } from "../notifications/notify";
 import { getSettings } from "../settings/settings";
+import { confidentialVisible, maySeeJobId } from "../jobs/confidential";
+import { ackColumns, type AckOptions } from "./acknowledgements";
 
 export type Audience =
   | { kind: "all" }
@@ -17,7 +19,15 @@ export type Audience =
   | { kind: "coordinators" };
 
 export type Message = typeof messages.$inferSelect;
-export type SendInput = { audiences: Audience[]; subject: string; body: string; jobId?: string; replyToMessageId?: string };
+export type SendInput = {
+  audiences: Audience[];
+  subject: string;
+  body: string;
+  jobId?: string;
+  replyToMessageId?: string;
+  /** Staff only: every recipient must acknowledge it (owner decision 2026-11-27). */
+  ack?: AckOptions;
+};
 
 export const MESSAGE_PAGE_SIZE = 25;
 const SNIPPET_LENGTH = 140;
@@ -143,7 +153,7 @@ export async function linkableDetails(actor: Actor, tx: Tx, now: Date = new Date
     .from(assignments)
     .innerJoin(jobs, eq(jobs.id, assignments.jobId))
     .innerJoin(vendors, eq(vendors.id, jobs.vendorId))
-    .where(and(eq(assignments.userId, actor.userId), mine, live))
+    .where(and(eq(assignments.userId, actor.userId), mine, live, confidentialVisible(tx, actor)))
     .orderBy(asc(jobs.startAt), asc(jobs.number));
 }
 
@@ -197,6 +207,7 @@ export async function sendMessage(actor: Actor, tx: Tx, input: SendInput, now: D
 async function deliver(actor: Actor, tx: Tx, input: SendInput, now: Date = new Date()): Promise<Message> {
   const { subject, body } = checkSendInput(input);
   const audiences = input.audiences;
+  const ack = ackColumns(actor, input.ack, now);
 
   const { ids, everyone } = await resolve(actor, tx, audiences, now);
   if (input.replyToMessageId !== undefined) {
@@ -215,6 +226,7 @@ async function deliver(actor: Actor, tx: Tx, input: SendInput, now: Date = new D
       recipientCount: recipientIds.length,
       jobId: input.jobId ?? null,
       replyToMessageId: input.replyToMessageId ?? null,
+      ...ack,
     })
     .returning();
   await tx.insert(messageRecipients).values(recipientIds.map((userId) => ({ messageId: message.id, userId })));
@@ -231,7 +243,11 @@ async function deliver(actor: Actor, tx: Tx, input: SendInput, now: Date = new D
     action: "message.send",
     entityType: "message",
     entityId: message.id,
-    after: { audiences: [...new Set(audiences.map((a) => a.kind))], recipientCount: recipientIds.length },
+    after: {
+      audiences: [...new Set(audiences.map((a) => a.kind))],
+      recipientCount: recipientIds.length,
+      ...(ack.requiresAck ? { requiresAck: true, ackDueAt: ack.ackDueAt?.toISOString() ?? null, ackLocksSignups: ack.ackLocksSignups } : {}),
+    },
   });
   return message;
 }
@@ -243,7 +259,7 @@ export async function messageCoordinators(actor: Actor, tx: Tx, input: { jobId: 
     typeof input.jobId === "string" && UUID.test(input.jobId)
       ? await tx.select({ id: jobs.id, number: jobs.number, title: jobs.title }).from(jobs).where(eq(jobs.id, input.jobId))
       : [];
-  if (!job) throw new NotFoundError("Job not found.");
+  if (!job || !(await maySeeJobId(tx, actor, job.id))) throw new NotFoundError("Job not found.");
   const prefix = `Question about Detail #${job.number}: `;
   // A question from the detail's own page: any detail the person can open, so the link is not the compose page's rule.
   return deliver(actor, tx, {

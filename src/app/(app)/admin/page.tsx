@@ -14,6 +14,7 @@ import { managementActor } from "./_admin/session";
 import { listW9Requests } from "@/domain/w9/requests";
 import { pendingW9Reviews } from "@/domain/w9/w9";
 import { PROVIDER_LABEL } from "./system/labels";
+import { reminderSummary } from "@/domain/jobs/reminder-choices";
 
 export const metadata: Metadata = { title: "Management" };
 
@@ -33,6 +34,11 @@ function usersMeta(active: number, suspended: number): string {
 function ranksMeta(ladder: string[], outside: string[]): string {
   const rest = outside.length ? `. Outside the ladder: ${outside.join(", ")}` : "";
   return `${ladder.join(", ")}${rest}`;
+}
+
+/** "Detail reminders 72 and 24 hours before. Billing lock on". */
+function remindersMeta(hours: number[], billingLock: boolean): string {
+  return `Detail reminders ${hours.length ? reminderSummary(hours) : "off"}. Billing lock ${billingLock ? "on" : "off"}`;
 }
 
 function Group({ title, links }: Readonly<{ title: string; links: Link[] }>) {
@@ -126,7 +132,7 @@ export default async function ManagementPage() {
             title="Billing"
             links={[
               { title: "Billing and invoices", href: "/admin/settings/billing", meta: `Minimum ${hoursText(s.minimumBillableMinutes)}. Invoice numbers start ${s.invoiceNumberPrefix || "with no prefix"}` },
-              { title: "Reminders and locks", href: "/admin/settings/reminders", meta: `Billing lock ${s.billingLockEnabled ? "on" : "off"}. Accounts lock after ${s.inactivityLockDays} unused days` },
+              { title: "Reminders and locks", href: "/admin/settings/reminders", meta: `${remindersMeta(s.detailReminderHours, s.billingLockEnabled)}. Email messages` },
             ]}
           />
         </div>

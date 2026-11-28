@@ -5,6 +5,7 @@ import { useEmailQueue } from "../../setup/email-queue";
 import { assignments, jobWatches, notifications, spotOffers } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
 import { cancelSignup } from "@/domain/assignments/cancel";
+import { offerSpot } from "@/domain/assignments/giveaway";
 import { jobActivity } from "@/domain/personnel/views";
 import { claimSpot, claimablePositionId } from "@/domain/assignments/backups";
 import { restrictFromVendor } from "@/domain/assignments/coordinator";
@@ -31,7 +32,9 @@ describe("cancellation, backup offers and watch alerts", () => {
 
   const sign = (a: Actor, positionId: string, now: Date) => f.run((tx) => signUp(a, tx, positionId, { ...warn, now }));
   const backup = (a: Actor, positionId: string, now: Date) => f.run((tx) => joinBackup(a, tx, positionId, { ...warn, now }));
-  const cancel = (a: Actor, id: string, now: Date) => f.run((tx) => cancelSignup(a, tx, id, "Plans changed", now));
+  /** A signed-up deputy gives the spot away (it opens to others at once); a backup or pending request leaves. */
+  const cancel = async (a: Actor, id: string, now: Date) =>
+    (await row(id)).status === "signed_up" ? f.run((tx) => offerSpot(a, tx, id, "Plans changed", now)) : f.run((tx) => cancelSignup(a, tx, id, "Plans changed", now));
   const claim = (a: Actor, positionId: string, now: Date) => f.run((tx) => claimSpot(a, tx, positionId, { ...warn, now }));
   const row = async (id: string) => (await get().db.select().from(assignments).where(eq(assignments.id, id)))[0];
   const offers = (positionId: string) => get().db.select().from(spotOffers).where(eq(spotOffers.jobPositionId, positionId)).orderBy(asc(spotOffers.createdAt), asc(spotOffers.id));
@@ -58,24 +61,25 @@ describe("cancellation, backup offers and watch alerts", () => {
     return { job, positionId, holder, first, backups, cancelAt };
   }
 
-  test("cancel opens the spot and the canceled person stays on the roster", async () => {
-    const s = await withBackups(0);
-    const done = await cancel(s.holder, s.first.id, s.cancelAt);
-    expect(done.status).toBe("canceled");
-    expect((await row(s.first.id)).status).toBe("canceled");
-    const next = await f.person();
-    expect((await sign(next, s.positionId, s.cancelAt)).status).toBe("signed_up");
-  });
-
-  test("the activity reads 'You canceled your sign-up' for the person, and names them for everyone else", async () => {
+  test("giving a spot away opens it, and the deputy stays on until someone takes it", async () => {
     const s = await withBackups(0);
     await cancel(s.holder, s.first.id, s.cancelAt);
+    expect((await row(s.first.id)).status).toBe("signed_up");
+    const next = await f.person();
+    expect((await sign(next, s.positionId, s.cancelAt)).status).toBe("signed_up");
+    expect((await row(s.first.id)).status).toBe("canceled");
+  });
+
+  test("the activity reads 'You offered your spot' for the person, and names them for everyone else", async () => {
+    const s = await withBackups(0);
+    await cancel(s.holder, s.first.id, s.cancelAt);
+    await sign(await f.person(), s.positionId, s.cancelAt);
     const own = (await f.run((tx) => jobActivity(s.holder, tx, s.job.id))).map((r) => r.text);
-    expect(own).toContain("You canceled your sign-up");
-    expect(own.some((t) => t.includes("their sign-up"))).toBe(false);
+    expect(own).toEqual(expect.arrayContaining(["You offered your spot to someone else", "You gave your spot away"]));
+    expect(own.some((t) => t.includes("their spot"))).toBe(false);
     const other = await f.person();
     const theirs = (await f.run((tx) => jobActivity(other, tx, s.job.id))).map((r) => r.text);
-    expect(theirs.some((t) => /^.+ canceled their sign-up$/.test(t) && !t.startsWith("You"))).toBe(true);
+    expect(theirs.some((t) => /^.+ gave their spot away$/.test(t) && !t.startsWith("You"))).toBe(true);
   });
 
   test("self-cancel one minute before start works, one minute after is refused, a coordinator can still remove", async () => {
@@ -322,11 +326,13 @@ describe("cancellation, backup offers and watch alerts", () => {
     expect(await inbox(me.userId, "job.watch_opened")).toBe(2);
   });
 
-  test("the canceled person stays on the job's records with status canceled", async () => {
+  test("the deputy who gave the spot away stays on the job's records with status canceled", async () => {
     const s = await withBackups(0);
     await cancel(s.holder, s.first.id, s.cancelAt);
-    const all = await get().db.select().from(assignments).where(eq(assignments.jobId, s.job.id));
-    expect(all.map((a) => a.status)).toEqual(["canceled"]);
+    const next = await f.person();
+    await sign(next, s.positionId, s.cancelAt);
+    const all = await get().db.select().from(assignments).where(eq(assignments.jobId, s.job.id)).orderBy(asc(assignments.requestedAt));
+    expect(all.map((a) => a.status)).toEqual(["canceled", "signed_up"]);
   });
 
   test("a watcher is not alerted when the only free spot is held by an offer", async () => {

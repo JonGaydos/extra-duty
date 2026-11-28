@@ -15,3 +15,5 @@ Switch Email and Push on or off for each kind of alert and each group: vendors, 
 - When a switch is off, their Profile shows that box greyed out with **Turned off by your agency**.
 - The in-app inbox always keeps a record.
 - Sign-in codes, invites, password resets and the invoice email itself are always on.
+
+To change what an email says, rather than whether it goes, see [Email messages](36-email-messages.md).

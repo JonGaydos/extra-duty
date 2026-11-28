@@ -8,6 +8,7 @@ import { getSettings } from "@/domain/settings/settings";
 import { agencyDayKey, agencyMonthKey } from "@/domain/time/agency-time";
 import type { Cents, Minutes } from "@/domain/types";
 import { centsText, toCsv } from "@/lib/csv";
+import { CONFIDENTIAL_TITLE } from "@/domain/jobs/confidential";
 
 export type HistoryFilter = {
   /** Inclusive bounds on the job's start. */
@@ -71,7 +72,7 @@ async function loadRows(actor: Actor, tx: Tx, filter: HistoryFilter): Promise<Hi
     payeeUserId: inv.payeeUserId,
     payeeName,
     jobNumber: job.number,
-    jobTitle: job.title,
+    jobTitle: job.confidential && !staff ? CONFIDENTIAL_TITLE : job.title,
     vendorId: inv.vendorId,
     vendorName,
     jobStartAt: job.startAt,

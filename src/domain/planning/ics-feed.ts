@@ -4,6 +4,7 @@ import type { Tx } from "@/db/client";
 import { assignments, calendarTokens, jobs, users, vendorLocations, vendors } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
+import { CONFIDENTIAL_TITLE } from "../jobs/confidential";
 import { assertOwn } from "./schedule";
 
 const DAY_MS = 86_400_000;
@@ -87,9 +88,24 @@ const LABEL: Record<(typeof FEED_STATUSES)[number], string> = {
   backup: "Backup",
 };
 
+type FeedRow = { backupPosition: number | null; job: { number: number; title: string; confidential: boolean }; vendorName: string; locationName: string | null; address: string | null };
+
+/**
+ * An entry's words. A confidential detail shows its times only: "Confidential detail", with no title, vendor, number,
+ * location or description (owner decision 2026-11-27).
+ */
+function eventText(r: FeedRow, status: (typeof FEED_STATUSES)[number]): { summary: string; description: string | null; where: string | null } {
+  if (r.job.confidential) return { summary: CONFIDENTIAL_TITLE, description: null, where: null };
+  const label = status === "backup" && r.backupPosition ? `Backup #${r.backupPosition}` : LABEL[status];
+  const suffix = status === "signed_up" ? "" : ` (${label})`;
+  const where = [r.locationName, r.address].filter((v): v is string => Boolean(v?.trim())).join(", ");
+  return { summary: `${r.vendorName}: ${r.job.title}${suffix}`, description: `Detail #${r.job.number}. ${label}.`, where: where || null };
+}
+
 /**
  * The .ics feed for a live token, or null. Lists only the token owner's own pending shorter, signed up and
- * backup details: vendor, title, their planned times and the location. Nothing about other people.
+ * backup details: vendor, title, their planned times and the location. Nothing about other people. A confidential
+ * detail is "Confidential detail" with the times only.
  */
 export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Date()): Promise<string | null> {
   if (typeof token !== "string" || token.length < 16 || token.length > 200) return null;
@@ -109,7 +125,7 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
       plannedStartAt: assignments.plannedStartAt,
       plannedEndAt: assignments.plannedEndAt,
       backupPosition: assignments.backupPosition,
-      job: { id: jobs.id, number: jobs.number, title: jobs.title, startAt: jobs.startAt, endAt: jobs.endAt, updatedAt: jobs.updatedAt },
+      job: { id: jobs.id, number: jobs.number, title: jobs.title, startAt: jobs.startAt, endAt: jobs.endAt, updatedAt: jobs.updatedAt, confidential: jobs.confidential },
       vendorName: vendors.name,
       locationName: vendorLocations.name,
       address: vendorLocations.address,
@@ -130,11 +146,7 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Signal 90//Personal details//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:Signal 90"];
   for (const r of rows) {
     const status = r.status as (typeof FEED_STATUSES)[number];
-    const label = status === "backup" && r.backupPosition ? `Backup #${r.backupPosition}` : LABEL[status];
-    const where = [r.locationName, r.address].filter((v): v is string => Boolean(v?.trim())).join(", ");
-    const suffix = status === "signed_up" ? "" : ` (${label})`;
-    const summary = `${r.vendorName}: ${r.job.title}${suffix}`;
-    const description = `Detail #${r.job.number}. ${label}.`;
+    const text = eventText(r, status);
     lines.push(
       "BEGIN:VEVENT",
       `UID:${r.job.id}@extra-duty`,
@@ -142,9 +154,9 @@ export async function calendarFeedFor(tx: Tx, token: string, now: Date = new Dat
       `LAST-MODIFIED:${stamp(r.job.updatedAt)}`,
       `DTSTART:${stamp(r.plannedStartAt ?? r.job.startAt)}`,
       `DTEND:${stamp(r.plannedEndAt ?? r.job.endAt)}`,
-      `SUMMARY:${esc(summary)}`,
-      `DESCRIPTION:${esc(description)}`,
-      ...(where ? [`LOCATION:${esc(where)}`] : []),
+      `SUMMARY:${esc(text.summary)}`,
+      ...(text.description ? [`DESCRIPTION:${esc(text.description)}`] : []),
+      ...(text.where ? [`LOCATION:${esc(text.where)}`] : []),
       `STATUS:${status === "signed_up" ? "CONFIRMED" : "TENTATIVE"}`,
       "END:VEVENT",
     );

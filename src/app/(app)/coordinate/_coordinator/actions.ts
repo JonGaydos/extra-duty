@@ -1,6 +1,7 @@
 "use server";
 
 import { assignPerson, liftVendorRestriction, markNoShow, removePerson, restrictFromVendor } from "@/domain/assignments/coordinator";
+import { assignReplacement, cancelOffer } from "@/domain/assignments/giveaway";
 import { overrideBillingLock } from "@/domain/billing/lock";
 import { coordinatorCloseInvoice } from "@/domain/billing/payments";
 import { editDeputyNote, retireDeputyNote, reviewDeputyNote } from "@/domain/deputy-notes/deputy-notes";
@@ -9,6 +10,7 @@ import { sendInvoiceBatch, setWaitForAllDeputies } from "@/domain/invoices/batch
 import { approveInvoice, editInvoice, resendInvoice, sendApprovedInvoice, sendBackInvoice } from "@/domain/invoices/review";
 import type { SendSchedule } from "@/domain/invoices/send-schedule";
 import { copyJob, createJobsOnDates, createRecurringJobs } from "@/domain/jobs/copy";
+import { setConfidential } from "@/domain/jobs/confidential";
 import { cancelJob, createJob, holdJob, reactivateJob, releaseJob, updateJob, type JobInput } from "@/domain/jobs/jobs";
 import { applyEdit, previewEdit, seriesIds, type EditPatch } from "@/domain/jobs/bulk-edit";
 import { decideQualificationRequest } from "@/domain/jobs/qualifications";
@@ -165,6 +167,19 @@ export async function holdDetailAction(input: { jobId: string; scope: "one" | "s
   });
 }
 
+/** Confidential on or off, with the reason (coordinators and admins; audited). */
+export async function setConfidentialAction(input: { jobId: string; on: boolean; reason: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await setConfidential(actor, tx, input.jobId, input.on, input.reason);
+    return {
+      ok: true,
+      message: input.on
+        ? "Marked confidential. Only coordinators, admins and the people assigned can see it."
+        : "No longer confidential. It releases on the normal schedule.",
+    };
+  });
+}
+
 /** "Released. Open for sign-up now.", or when the released details open. */
 function releasedMessage(count: number, now: boolean): string {
   const what = count === 1 ? "Released" : `${count} details released`;
@@ -236,6 +251,22 @@ export async function removeAction(input: { assignmentId: string; comment: strin
   return act(async (actor, tx) => {
     await removePerson(actor, tx, input.assignmentId, input.comment);
     return { ok: true, message: "Removed. The person was told." };
+  });
+}
+
+/** Staff cancel a deputy's offer to give their spot away: the deputy keeps it and is told. */
+export async function cancelOfferAction(input: { assignmentId: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await cancelOffer(actor, tx, input.assignmentId);
+    return { ok: true, message: "Offer canceled. The deputy keeps the spot and was told." };
+  });
+}
+
+/** Staff assign a replacement for an offered spot: the person is assigned and the deputy who offered it comes off. */
+export async function assignReplacementAction(input: { assignmentId: string; userId: string; overrideReason: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await assignReplacement(actor, tx, input.assignmentId, input.userId, { overrideReason: input.overrideReason });
+    return { ok: true, message: "Replacement assigned. Both people were told." };
   });
 }
 

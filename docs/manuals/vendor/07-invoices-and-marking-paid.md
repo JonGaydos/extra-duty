@@ -2,7 +2,7 @@
 
 Deputies bill you directly after each detail. The agency never handles the money. Pay each deputy, then mark the invoice paid.
 
-1. Open **Invoices**. **Sent to you** lists the invoices to pay and the total. Each card shows the deputy, the detail and the amount. Pay the deputy directly, by the address on the invoice.
+1. Open **Invoices**. **Sent to you** lists the invoices to pay and the total. Each card shows the deputy, the detail and the amount. A detail the agency keeps confidential is named "Confidential detail" here and is not listed under your details. Pay the deputy directly, by the address on the invoice.
 
    ![The Invoices page](../images/vendor/07-invoices-and-marking-paid-1-phone.webp)
 

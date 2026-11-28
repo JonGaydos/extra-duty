@@ -49,6 +49,8 @@ export type DetailFilters = {
   flex: boolean;
   workable: boolean;
   sort: JobSort;
+  /** Staff only: list only confidential details, or hide them (owner decision 2026-11-27). Others never see the choice. */
+  confidential?: "only" | "hide" | null;
 };
 
 export const JOB_SORTS = ["date", "total_pay", "rate", "vendor"] as const satisfies readonly JobSort[];
@@ -87,6 +89,8 @@ export type CalEntry = {
   state: (typeof jobs.$inferSelect)["state"];
   status: CalStatus;
   held: boolean;
+  /** Confidential: shown to staff and the people assigned only, with a Confidential chip. */
+  confidential: boolean;
   /** The viewer holds a spot or a place in line. */
   mine: boolean;
   /** The viewer's own assignment status when `mine`. */
@@ -182,6 +186,7 @@ function keptByFilters(f: DetailFilters, q: string, job: typeof jobs.$inferSelec
   if (!picked) return false;
   if (f.personId && !e.on.some((p) => p.userId === f.personId && p.status !== "late_canceled")) return false;
   if (f.jobNumber !== null && job.number !== f.jobNumber) return false;
+  if (f.confidential && job.confidential !== (f.confidential === "only")) return false;
   return matchesText(q, job, e.vendorName, e.locationName);
 }
 
@@ -246,6 +251,7 @@ export async function calendarEntries(actor: Actor, tx: Tx, range: DetailRange, 
       state: job.state,
       status,
       held: job.held,
+      confidential: job.confidential,
       mine,
       myStatus: own?.status ?? null,
       needed,
@@ -366,6 +372,7 @@ const filtersSchema = z.object({
   flex: z.boolean().default(false),
   workable: z.boolean().default(false),
   sort: z.enum(JOB_SORTS).default("date"),
+  confidential: z.enum(["only", "hide"]).nullable().optional(),
 });
 const personalSchema = z.object({
   openOnly: z.boolean().default(false),

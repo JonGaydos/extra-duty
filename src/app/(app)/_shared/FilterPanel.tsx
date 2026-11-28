@@ -143,6 +143,15 @@ export function FilterPanel({ path, keep, filters, options, remember, active, st
                 </Select>
               </FormField>
             ) : null}
+            {staff ? (
+              <FormField label="Confidential details">
+                <Select name="conf" defaultValue={filters.confidential ?? ""}>
+                  <option value="">Show</option>
+                  <option value="only">Only confidential</option>
+                  <option value="hide">Hide</option>
+                </Select>
+              </FormField>
+            ) : null}
             <label className="flex min-h-11 items-center gap-2 text-sm">
               <input type="checkbox" name="remember" value="1" defaultChecked={remember} className={box} />Remember my filters
             </label>

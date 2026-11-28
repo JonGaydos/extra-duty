@@ -11,7 +11,7 @@ const asList = (v: Param): string[] => {
 const many = (v: Param) => asList(v).flatMap((x) => x.split(",")).filter(Boolean).slice(0, 500);
 const one = (v: Param) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-const KEYS = ["vendor", "vtype", "type", "loc", "status", "person", "num", "q", "mine", "open", "week", "flex", "workable", "sort"] as const;
+const KEYS = ["vendor", "vtype", "type", "loc", "status", "person", "num", "q", "mine", "open", "week", "flex", "workable", "sort", "conf"] as const;
 
 export function filtersFromParams(p: Params): DetailFilters {
   const num = /^#?(\d{1,9})$/.exec(one(p.num).trim());
@@ -30,6 +30,8 @@ export function filtersFromParams(p: Params): DetailFilters {
     flex: one(p.flex) === "1",
     workable: one(p.workable) === "1",
     sort: (JOB_SORTS as readonly string[]).includes(one(p.sort)) ? (one(p.sort) as DetailFilters["sort"]) : "date",
+    // Staff only, and only when chosen, so a filter set without it reads the same as before.
+    ...(one(p.conf) === "only" || one(p.conf) === "hide" ? { confidential: one(p.conf) as "only" | "hide" } : {}),
   };
 }
 
@@ -63,11 +65,12 @@ export function filterParams(f: DetailFilters): URLSearchParams {
   if (f.flex) q.set("flex", "1");
   if (f.workable) q.set("workable", "1");
   if (f.sort !== "date") q.set("sort", f.sort);
+  if (f.confidential) q.set("conf", f.confidential);
   return q;
 }
 
 /** How many of the view's own filters are on, for the phone's Filters button. */
 export function activeCount(f: DetailFilters, personal: boolean): number {
   if (!personal) f = sharedOnly(f);
-  return [f.vendorIds.length, f.vendorTypeIds.length, f.typeIds.length, f.locationIds.length, f.statuses.length, f.personId ? 1 : 0, f.jobNumber !== null ? 1 : 0, f.q ? 1 : 0, f.mine ? 1 : 0, f.openOnly ? 1 : 0, f.week ? 1 : 0, f.flex ? 1 : 0, f.workable ? 1 : 0, f.sort !== "date" ? 1 : 0].filter((n) => n > 0).length;
+  return [f.vendorIds.length, f.vendorTypeIds.length, f.typeIds.length, f.locationIds.length, f.statuses.length, f.personId ? 1 : 0, f.jobNumber !== null ? 1 : 0, f.q ? 1 : 0, f.mine ? 1 : 0, f.openOnly ? 1 : 0, f.week ? 1 : 0, f.flex ? 1 : 0, f.workable ? 1 : 0, f.sort !== "date" ? 1 : 0, f.confidential ? 1 : 0].filter((n) => n > 0).length;
 }

@@ -2,10 +2,10 @@ import { PHONE, agencyAt, expect, one, test } from "../fixtures";
 import { byText } from "@/lib/sort";
 
 /**
- * Flow (b): a deputy cancels a full detail, the spot goes to backup #1 for the backup window, the window runs out on
+ * Flow (b): a deputy gives away a spot on a full detail, the spot goes to backup #1 for the backup window, the window runs out on
  * the clock, backup #2 gets their turn and takes the spot.
  */
-test("cancel, backup window, backup claims", async ({ agency, session, mail, clock }) => {
+test("give away, backup window, backup takes over", async ({ agency, session, mail, clock }) => {
   const title = `Harbor fireworks ${agency.tag}`;
   const job = await agency.detail({ title, startAt: agencyAt(3, 18) });
   const kai = await agency.addDeputy(`Kai Benton ${agency.tag}`);
@@ -24,16 +24,19 @@ test("cancel, backup window, backup claims", async ({ agency, session, mail, clo
     await expect(second.getByRole("status").filter({ hasText: "You are backup #2." })).toBeVisible();
   });
 
-  await test.step("Drew cancels; the spot is offered to backup #1 only", async () => {
+  await test.step("Drew gives the spot away; it is offered to backup #1 only, and Drew stays on it meanwhile", async () => {
     await drew.goto(`/jobs/${job.id}`);
-    await drew.getByLabel("Reason for canceling").fill("Family emergency");
-    await drew.getByRole("button", { name: "Cancel my sign-up" }).click();
-    await expect(drew.getByRole("status").filter({ hasText: "Your sign-up is canceled." })).toBeVisible();
-    expect((await one<{ status: string }>("select status from assignments where id = $1", [holder])).status).toBe("canceled");
-    // While backup #1's window runs, nobody else can take the spot, Drew included, and the panel says why up front.
-    await expect(drew.getByText("Backups have first chance at this spot")).toBeVisible();
-    await expect(drew.getByRole("button", { name: /^All checks passed/ })).toHaveCount(0);
-    await expect(drew.getByRole("button", { name: "Sign up for Deputy Sheriff" })).toBeDisabled();
+    await drew.getByRole("button", { name: "Give away this spot" }).click();
+    await drew.getByLabel("Reason").fill("Family emergency");
+    await drew.getByRole("button", { name: "Give away this spot" }).click();
+    await expect(drew.getByTestId("sign-up-state")).toHaveText(/Offered: waiting for someone to take over\./);
+    expect((await one<{ status: string }>("select status from assignments where id = $1", [holder])).status).toBe("signed_up");
+    // While backup #1's window runs, nobody else can take the spot, and the panel says why up front.
+    const outsider = await session(await agency.addDeputy(`Ola Reed ${agency.tag}`), { viewport: PHONE });
+    await outsider.goto(`/jobs/${job.id}`);
+    await expect(outsider.getByText("Backups have first chance at this spot")).toBeVisible();
+    await expect(outsider.getByRole("button", { name: /^All checks passed/ })).toHaveCount(0);
+    await expect(outsider.getByRole("button", { name: "Take over this spot" })).toBeDisabled();
 
     const since = mail.mark();
     await clock.deliver();
@@ -62,6 +65,8 @@ test("cancel, backup window, backup claims", async ({ agency, session, mail, clo
     await second.getByRole("button", { name: "Take the open spot" }).click();
     await expect(second.getByRole("status").filter({ hasText: "You are signed up." })).toBeVisible();
     await expect(second.getByText("You are signed up for this detail.")).toBeVisible();
+    await drew.reload();
+    await expect(drew.getByTestId("sign-up-state")).toHaveText(new RegExp(`Taken over by Noor Haddad ${agency.tag}`));
   });
 
   const roster = await one<{ statuses: string }>(

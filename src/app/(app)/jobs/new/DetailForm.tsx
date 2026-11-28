@@ -16,6 +16,7 @@ import type { DetailWire } from "../../coordinate/_coordinator/detail-input";
 import { useCoordAction } from "../../coordinate/_coordinator/status";
 import { AddPositionRow } from "../../coordinate/_coordinator/EditPanel";
 import { RateRangeNotice } from "../../coordinate/_coordinator/RateRangeNotice";
+import { ReminderFields } from "../../coordinate/_coordinator/ReminderFields";
 import { SiteContactFields } from "../../coordinate/_coordinator/SiteContactFields";
 import { addPosition, changePositionType, detailSummary, spanMinutes } from "../../coordinate/_coordinator/detail-summary";
 import { useRowKeys } from "@/ui/use-row-keys";
@@ -36,9 +37,47 @@ function typedRate(rate: string, fallback: number): number {
   return fallback;
 }
 
+/**
+ * Confidential on a new detail (coordinators and admins): only staff and the people assigned see it, it is never
+ * released, and turning it on needs a reason, which is audited.
+ */
+function ConfidentialFields({ on, reason, onChange }: Readonly<{ on: boolean; reason: string; onChange: (on: boolean, reason: string) => void }>) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex min-h-11 items-start gap-2 py-2.5">
+        <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked, reason)} className="mt-0.5 size-4.5 shrink-0 accent-accent" />
+        <span className="flex flex-col">
+          <span>Confidential</span>
+          <span className="text-sm text-muted">For example VIP or dignitary protection. Only coordinators, admins and the people you assign see it. It is never released for sign-up.</span>
+        </span>
+      </label>
+      {on ? (
+        <FormField label="Reason for making it confidential" hint="Saved in the audit log.">
+          <Input value={reason} onChange={(e) => onChange(true, e.target.value)} required maxLength={500} />
+        </FormField>
+      ) : null}
+    </div>
+  );
+}
+
+/** Hold, and for coordinators and admins Confidential (which leaves no hold: a confidential detail is never released). */
+function ReleaseChoices({ d, setD, coordinator }: Readonly<{ d: DetailWire; setD: React.Dispatch<React.SetStateAction<DetailWire>>; coordinator: boolean }>) {
+  return (
+    <>
+      {d.confidential ? null : (
+        <label className="flex min-h-11 items-center gap-2">
+          <input type="checkbox" checked={d.held} onChange={(e) => setD((x) => ({ ...x, held: e.target.checked }))} className="size-4.5 accent-accent" />Hold: do not release until I release it
+        </label>
+      )}
+      {coordinator ? <ConfidentialFields on={d.confidential === true} reason={d.confidentialReason ?? ""} onChange={(on, reason) => setD((x) => ({ ...x, confidential: on, confidentialReason: reason, held: on ? false : x.held }))} /> : null}
+    </>
+  );
+}
+
 /** When the first date opens for sign-up. */
-function releaseLine(held: boolean, release: string | undefined): string {
-  if (held) return "Held until you release it";
+function releaseLine(d: Pick<DetailWire, "held" | "confidential">, release: string | undefined): string {
+  if (d.confidential) return "Never released: a coordinator assigns people";
+  if (d.held) return "Held until you release it";
   if (!release) return "Choose a date";
   const at = RELEASE.format(new Date(release));
   return new Date(release).getTime() <= Date.now() ? `Opens now (released ${at})` : `Opens ${at}`;
@@ -106,7 +145,7 @@ function SummaryCard({ releaseText, summary, n, overrides, chosen, busy }: Reado
  * New detail: vendor and place, when (times plus the Dates step and a preview of every date), positions, pay,
  * officer safety, ops plan and release. One save creates every date as a single series, or nothing.
  */
-export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Readonly<{ options: DetailFormOptions; initial: DetailWire; today: string; fromJobId?: string; fromTitle?: string }>) {
+export function DetailForm({ coordinator = false, options, initial, today, fromJobId, fromTitle }: Readonly<{ coordinator?: boolean; options: DetailFormOptions; initial: DetailWire; today: string; fromJobId?: string; fromTitle?: string }>) {
   const router = useRouter();
   const [d, setD] = useState<DetailWire>(initial);
   const positionKeys = useRowKeys(d.positions);
@@ -156,7 +195,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Re
   const defaultType = options.defaultPositionTypeId ?? options.positionTypes[0]?.id ?? "";
   const people = d.positions.reduce((n, p) => n + (Number(p.count) || 0), 0);
   const release = chosen[0] ? options.releaseByMonth[chosen[0].slice(0, 7)] : undefined;
-  const releaseText = releaseLine(d.held, release);
+  const releaseText = releaseLine(d, release);
   const n = chosen.length;
 
   const submit = (e: React.SubmitEvent) => {
@@ -341,6 +380,11 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Re
         </Card>
 
         <Card>
+          <CardTitle>Reminders</CardTitle>
+          <ReminderFields value={d.reminders ?? { mode: "agency", hours: [] }} note={d.reminderNote ?? ""} agencyHours={options.reminderHours} onChange={(v) => set("reminders", v)} onNote={(v) => set("reminderNote", v)} />
+        </Card>
+
+        <Card>
           <CardTitle>Ops plan and release</CardTitle>
           <label className="flex min-h-11 items-center gap-2">
             <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className="size-4.5 accent-accent" />Ops plan required (the Incident Commander submits it before the start)
@@ -354,9 +398,7 @@ export function DetailForm({ options, initial, today, fromJobId, fromTitle }: Re
               to start from it.
             </Notice>
           ) : null}
-          <label className="flex min-h-11 items-center gap-2">
-            <input type="checkbox" checked={d.held} onChange={(e) => set("held", e.target.checked)} className="size-4.5 accent-accent" />Hold: do not release until I release it
-          </label>
+          <ReleaseChoices d={d} setD={setD} coordinator={coordinator} />
           {fromJobId ? (
             <label className="flex min-h-11 items-center gap-2">
               <input type="checkbox" checked={copyAttachments} onChange={(e) => setCopyAttachments(e.target.checked)} className="size-4.5 accent-accent" />Copy attachments, contract included

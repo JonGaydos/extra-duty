@@ -3,12 +3,11 @@ import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
-import { setupFixture } from "../assignments/helpers";
+import { legacyCancel, setupFixture } from "../assignments/helpers";
 import { auditLog, calendarTokens, users, vendorLocations, jobs } from "@/db/schema";
 import { deactivateUser } from "@/domain/users/users";
 import type { Actor } from "@/domain/actor";
 import { joinBackup, signUp } from "@/domain/assignments/signup";
-import { cancelSignup } from "@/domain/assignments/cancel";
 import { ForbiddenError } from "@/domain/errors";
 import { calendarFeedFor, calendarTokenStatus, revokeCalendarToken, rotateCalendarToken } from "@/domain/planning/ics-feed";
 
@@ -43,7 +42,7 @@ describe("personal calendar feed", () => {
 
     const c = await f.mkJob();
     const mine = await f.run((tx) => signUp(me, tx, c.positionId, { warningVersion: 1, now: NOW }));
-    await f.run((tx) => cancelSignup(me, tx, mine.id, "Court date", NOW));
+    await legacyCancel(get().db, me, mine.id, "Court date");
     canceledJob = c.job.id;
   });
 

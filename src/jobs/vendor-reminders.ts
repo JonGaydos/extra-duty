@@ -50,14 +50,7 @@ export async function responseDeadlinesTick(now: Date): Promise<number> {
         const number = formatInvoiceNumber(s.invoiceNumberPrefix, inv.number);
         let note: string | null = null;
         if (party === "vendor" && s.vendorReminderEnabled) {
-          const sent = await vendorEmail(
-            tx,
-            inv,
-            "invoice.vendor_payment_reminder",
-            `Payment reminder: invoice ${number}`,
-            "This invoice has not been marked paid and is past its response time.",
-            ["If you have already paid, please mark it paid in the vendor portal."],
-          );
+          const sent = await vendorEmail(tx, inv, "invoice.vendor_payment_reminder");
           note = REMINDER_NOTE[sent];
         }
         await tx.insert(invoiceEvents).values({ invoiceId: id, event: "overdue", party, note, vendorVisible: false, at: now });

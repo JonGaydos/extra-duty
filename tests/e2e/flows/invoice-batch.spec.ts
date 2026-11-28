@@ -4,7 +4,9 @@ import { DESKTOP, PHONE, agencyAt, expect, one, pdfText, sql, test } from "../fi
 /**
  * Invoice batching: the vendor is sent invoices weekly. One deputy's invoice is approved and queued; another deputy
  * was paid at the detail, so after review that invoice is closed as paid and rides along. The coordinator sends the
- * batch in one email with a cover sheet, where the paid invoice reads Paid and adds $0.00 to the total due.
+ * batch in one email with a cover sheet, where the paid invoice reads Paid and adds $0.00 to the total due. A W-9 goes
+ * only with the invoice whose deputy ticked "Attach my W-9", which starts unticked; the batch's "Attach W-9s for every deputy"
+ * is off.
  */
 test("weekly batch: approved and queued, sent together with a cover sheet; a paid invoice adds nothing", async ({ agency, session, mail, clock }) => {
   const title = `Beach cleanup lot ${agency.tag}`;
@@ -24,8 +26,9 @@ test("weekly batch: approved and queued, sent together with a cover sheet; a pai
     await expect(page.getByRole("heading", { level: 1, name: "Bill this detail" })).toBeVisible();
   };
 
-  await test.step("Kai was paid in cash at the detail and stayed 30 minutes; the invoice goes to review", async () => {
+  await test.step("Kai was paid in cash at the detail and stayed 30 minutes, without the W-9; the invoice goes to review", async () => {
     await bill(paidDeputy);
+    await expect(paidDeputy.getByLabel("Attach my W-9"), "a W-9 on file is not attached by default").not.toBeChecked();
     const end = paidDeputy.getByLabel("End", { exact: true });
     await end.fill(laterLocalInput(await end.inputValue(), 30));
     await paidDeputy.getByRole("button", { name: "Vendor asked me to stay" }).click();
@@ -42,8 +45,10 @@ test("weekly batch: approved and queued, sent together with a cover sheet; a pai
     await expect(coordinator.getByRole("status").filter({ hasText: "Invoice was paid on the spot: closed as paid. The paid invoice goes out with the vendor's next invoice send." })).toBeVisible();
   });
 
-  await test.step("Drew bills as scheduled; needing no review, the invoice is approved and queued for the weekly send", async () => {
+  await test.step("Drew bills as scheduled with the W-9; needing no review, the invoice is approved and queued for the weekly send", async () => {
     await bill(drew);
+    await expect(drew.getByLabel("Attach my W-9")).not.toBeChecked();
+    await drew.getByLabel("Attach my W-9").check();
     await drew.getByRole("button", { name: "Send invoice" }).click();
     await expect(drew.getByRole("status").filter({ hasText: "Invoice approved. It goes out with the vendor's next invoice send." })).toBeVisible();
     await drew.goto("/billing?tab=waiting");
@@ -65,12 +70,13 @@ test("weekly batch: approved and queued, sent together with a cover sheet; a pai
     await expect(coordinator.getByRole("status").filter({ hasText: "2 invoices sent in one email." })).toBeVisible();
   });
 
-  await test.step("the vendor gets one email: a cover sheet and both invoices", async () => {
+  await test.step("the vendor gets one email: a cover sheet, both invoices and only Drew's W-9", async () => {
     const since = mail.mark();
     await clock.deliver();
     const sent = mail.find({ to: agency.vendor.billingEmail, since });
     expect(sent).toHaveLength(1);
-    expect(sent[0].attachments).toHaveLength(3);
+    expect(sent[0].attachments).toHaveLength(4);
+    expect(sent[0].attachments.filter((a) => a.startsWith("W-9"))).toEqual([`W-9 ${agency.deputy.name}.pdf`]);
     const cover = sent[0].files.find((f) => f.filename.startsWith("Invoice summary "));
     expect(cover, "the cover sheet").toBeTruthy();
     const text = await pdfText(cover!.content);

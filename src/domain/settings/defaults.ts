@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: AgencySettings = {
   responseDays: { vendor: 30, deputy: 30, coordinator: 7 },
   paymentAckLockMode: "vendor_reported",
   vendorReminderEnabled: false,
+  detailReminderHours: [72, 24],
   /** Training data goes back to the starting demo data every night at 2:00 AM agency time. */
   trainingNightlyReset: true,
   inactivityLockDays: 90,

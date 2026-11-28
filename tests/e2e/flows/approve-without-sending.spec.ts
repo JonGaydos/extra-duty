@@ -23,9 +23,9 @@ test("approve without sending then Send now, a paid invoice sent as paid, and a 
 
   await test.step("both deputies bill with changed hours; Drew attaches the W-9, Kai was paid by check at the detail", async () => {
     await drew.goto("/profile");
-    await drew.getByLabel("Upload your W-9").setInputFiles(pdf("W-9 Drew Fowler"));
+    await drew.getByLabel("Replace your W-9").setInputFiles(pdf("W-9 Drew Fowler"));
     await drew.getByRole("button", { name: "Upload W-9" }).click();
-    await expect(drew.getByRole("status").filter({ hasText: "W-9 uploaded." })).toBeVisible();
+    await expect(drew.getByRole("status").filter({ hasText: "W-9 uploaded. It waits for review." })).toBeVisible();
     for (const [page, paid] of [[drew, false], [paidDeputy, true]] as const) {
       await page.goto("/billing");
       await page.getByRole("article", { name: `${agency.vendor.name}, ${title}` }).getByRole("link", { name: "Review and send invoice" }).click();

@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "confidential" boolean DEFAULT false NOT NULL;

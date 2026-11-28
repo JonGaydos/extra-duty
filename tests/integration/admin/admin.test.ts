@@ -11,7 +11,8 @@ import { auditLog, qualificationRequests, qualifications, userQualifications } f
 import { seed } from "@/db/seed";
 import type { Actor } from "@/domain/actor";
 import { decideQualificationRequest, grantQualification, revokeQualification } from "@/domain/jobs/qualifications";
-import { accessReviewOverview, auditView, flagOverview, flagRecord, userDirectory, userRecord } from "@/domain/admin/views";
+import { accessReviewOverview, flagOverview, flagRecord, userDirectory, userRecord } from "@/domain/admin/views";
+import { searchAudit } from "@/domain/audit/search";
 import { ForbiddenError, ValidationError } from "@/domain/errors";
 import { agencyLogoInfo, readAgencyLogo, removeAgencyLogo, setAgencyLogo } from "@/domain/settings/logo";
 import { storeFile } from "@/domain/files/files";
@@ -107,14 +108,13 @@ describe("management read models and services", () => {
     expect(start.actorUserId).toBe(coordinator.userId);
   });
 
-  test("the audit view filters by record type and names the actor", async () => {
+  test("the audit search filters by record type and names the actor", async () => {
     const { db } = get();
-    const v = await db.transaction((tx) => auditView(coordinator, tx, { entityType: "user" }, 1));
+    const v = await db.transaction((tx) => searchAudit(coordinator, tx, { entityType: "user" }, 1));
     expect(v.rows.length).toBeGreaterThan(0);
     expect(v.rows.every((r) => r.entityType === "user")).toBe(true);
     expect(v.rows.find((r) => r.action === "user.suspend")?.actorName).toBe("coord");
-    expect(v.types).toContain("access_review");
-    expect(v.hasMore).toBe(false);
+    expect(v.pageCount).toBe(1);
   });
 
   test("a PNG logo is kept, an SVG is drawn to a PNG, and anything else is refused", async () => {

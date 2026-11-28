@@ -123,7 +123,8 @@ export function BillForm(p: Readonly<Props>) {
   const [start, setStart] = useState(p.plannedStart);
   const [end, setEnd] = useState(p.plannedEnd);
   const [reason, setReason] = useState("");
-  const [attachW9, setAttachW9] = useState(p.w9 !== null);
+  // A W-9 goes only when ticked (owner decision, batched sending): having one on file does not attach it.
+  const [attachW9, setAttachW9] = useState(false);
   const [paid, setPaid] = useState(false);
   const [methodId, setMethodId] = useState(p.methods[0]?.id ?? "");
   const [reference, setReference] = useState("");

@@ -11,6 +11,7 @@ import { ForbiddenError, ValidationError } from "../errors";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { agencyChannelsProblem, type AgencyChannels } from "../notifications/catalog";
 import { cleanChangedPhone } from "../phone";
+import { detailReminderHoursSchema } from "../jobs/reminder-choices";
 import { DEFAULT_POSITION_TYPE_NAME, settingsDefaults } from "./defaults";
 
 const int = z.number().int();
@@ -82,6 +83,8 @@ export const agencySettingsSchema = z.object({
   }),
   paymentAckLockMode: z.enum(["off", "vendor_reported", "all_invoices"]),
   vendorReminderEnabled: z.boolean(),
+  /** Hours before a detail starts to remind the people assigned; empty for no reminders. A detail can change it. */
+  detailReminderHours: detailReminderHoursSchema,
   trainingNightlyReset: z.boolean(),
   inactivityLockDays: int.min(1).max(3650),
   accessReviewMonthDay: z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/),

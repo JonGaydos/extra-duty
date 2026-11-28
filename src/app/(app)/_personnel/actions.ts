@@ -1,6 +1,7 @@
 "use server";
 
 import { withTx } from "@/ui/shell/request";
+import { offerSpot, withdrawOffer } from "@/domain/assignments/giveaway";
 import { cancelSignup, claimSpot } from "@/domain/assignments/cancel";
 import { joinBackup, signUp, unwatchJob, watchJob } from "@/domain/assignments/signup";
 import { billAssignment } from "@/domain/billing/bill";
@@ -8,6 +9,7 @@ import { markPaid } from "@/domain/billing/payments";
 import { submitDeputyNote } from "@/domain/deputy-notes/deputy-notes";
 import { ValidationError } from "@/domain/errors";
 import { hideMessages, markRead, sendMessage, type Audience } from "@/domain/messages/messages";
+import { acknowledgeMessage, remindUnacknowledged, type AckOptions } from "@/domain/messages/acknowledgements";
 import { markAllAlertsRead } from "@/domain/notifications/inbox";
 import { markRead as markAlertsRead, setPreference, setQuietHours, subscribePush } from "@/domain/notifications/prefs";
 import { reportNonPayment } from "@/domain/payment-issues/issues";
@@ -58,10 +60,27 @@ export async function claimSpotAction(input: { jobId: string; jobPositionId: str
   });
 }
 
+/** Leaves a backup place or withdraws a pending shorter request. */
 export async function cancelSignupAction(input: { assignmentId: string; reason: string }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     await cancelSignup(actor, tx, input.assignmentId, input.reason);
-    return { ok: true, message: "Your sign-up is canceled." };
+    return { ok: true, message: "You are off this detail." };
+  });
+}
+
+/** Offers the person's spot to someone else; they stay on the detail until someone takes it over. */
+export async function offerSpotAction(input: { assignmentId: string; reason: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await offerSpot(actor, tx, input.assignmentId, input.reason);
+    return { ok: true, message: "Your spot is offered. You stay on this detail until someone takes it over." };
+  });
+}
+
+/** Withdraws the person's open offer: they keep the spot. */
+export async function withdrawOfferAction(input: { assignmentId: string }): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    await withdrawOffer(actor, tx, input.assignmentId);
+    return { ok: true, message: "Offer withdrawn. The spot is yours." };
   });
 }
 
@@ -229,10 +248,25 @@ export async function revokeFeedAction(): Promise<ActionResult> {
   });
 }
 
-export async function sendMessageAction(input: { audiences: Audience[]; subject: string; body: string; jobId?: string; replyToMessageId?: string }): Promise<ActionResult> {
+export async function sendMessageAction(input: { audiences: Audience[]; subject: string; body: string; jobId?: string; replyToMessageId?: string; ack?: AckOptions }): Promise<ActionResult> {
   return act(async (actor, tx) => {
     const m = await sendMessage(actor, tx, input);
     return { ok: true, message: `Sent to ${m.recipientCount} ${m.recipientCount === 1 ? "person" : "people"}.`, value: m.id };
+  });
+}
+
+export async function acknowledgeMessageAction(id: string): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const r = await acknowledgeMessage(actor, tx, id);
+    return { ok: true, message: `Acknowledged ${dateTime(r.acknowledgedAt)}.` };
+  });
+}
+
+export async function remindAckAction(id: string): Promise<ActionResult> {
+  return act(async (actor, tx) => {
+    const n = await remindUnacknowledged(actor, tx, id);
+    if (n === 0) return { ok: true, message: "Everyone has acknowledged it." };
+    return { ok: true, message: `Reminded ${n} ${n === 1 ? "person" : "people"}.` };
   });
 }
 

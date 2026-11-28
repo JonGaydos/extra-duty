@@ -1,7 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { PDFParse } from "pdf-parse";
 import { renderBatchCoverPdf } from "@/lib/pdf/batch-cover-pdf";
-import { invoiceBatchEmail } from "@/lib/email/templates/invoice-batch";
+import { MESSAGES } from "@/domain/email-messages/catalog";
+import { renderMessage } from "@/domain/email-messages/render";
+import { invoiceBatchValues, type InvoiceBatchEmailFields } from "@/lib/email/templates/invoice-batch";
+
+const invoiceBatchEmail = (f: InvoiceBatchEmailFields) => renderMessage(MESSAGES["invoice.batch"], invoiceBatchValues(f));
 import { agencyInstant } from "@/domain/time/agency-time";
 
 const agency = { name: "Bayside County Sheriff's Office", sheriffName: "Pat Lane", address: "", phone: "", website: "", logo: null };
@@ -52,13 +56,13 @@ describe("batch cover summary", () => {
   });
 
   test("the email names the count, the total and the W-9s attached", () => {
-    const msg = invoiceBatchEmail({ to: ["ap@x.example"], replyTo: "b@s.example", agencyName: "BCSO", vendorName: "Lakeside", count: 2, total: "$840.00", w9Names: ["Quinn Okafor"] });
+    const msg = invoiceBatchEmail({ agencyName: "BCSO", vendorName: "Lakeside", count: 2, total: "$840.00", w9Names: ["Quinn Okafor"] });
     expect(msg.subject).toBe("2 invoices from BCSO");
     expect(msg.text).toContain("$840.00");
     expect(msg.text).toContain("A summary and each invoice are attached");
     expect(msg.text).not.toContain("one-page");
     expect(msg.text).toContain("W-9 for Quinn Okafor is attached.");
     expect(msg.text).not.toMatch(/agency range/i);
-    expect(invoiceBatchEmail({ to: ["a@x.example"], replyTo: "b@s.example", agencyName: "BCSO", vendorName: "L", count: 1, total: "$1.00", w9Names: [] }).subject).toBe("1 invoice from BCSO");
+    expect(invoiceBatchEmail({ agencyName: "BCSO", vendorName: "L", count: 1, total: "$1.00", w9Names: [] }).subject).toBe("1 invoice from BCSO");
   });
 });

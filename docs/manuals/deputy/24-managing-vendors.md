@@ -29,4 +29,4 @@ Open one of your vendors' details and choose **Manage this detail**. There you c
 
 ![Managing a detail](../images/deputy/24-managing-vendors-2-desktop.webp)
 
-You get the alerts coordinators get about your vendors' details, such as a new request. Everything you do is kept in the audit log under your name. You do not see W-9s, other people's payments, other vendors, staff reports or **Management**.
+You get the alerts coordinators get about your vendors' details, such as a new request. To choose email or push for them, open **Profile** and find **Alerts**. Everything you do is kept in the audit log under your name. You do not see W-9s, other people's payments, other vendors, staff reports or **Management**.

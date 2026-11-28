@@ -28,9 +28,9 @@ export function LogoUpload({ logo, initials }: Readonly<{ logo: AgencyLogoData |
   const [chosen, setChosen] = useState(false);
   const { run, busy } = useCoordAction();
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-start">
+    <div className="flex flex-wrap items-start gap-4">
       {logo ? (
-        <figure className="m-0 flex shrink-0 flex-col items-start gap-1.5">
+        <figure className="m-0 flex max-w-full shrink-0 flex-col items-start gap-1.5">
           <AgencyLogo logo={logo} place="signIn" alt="Agency logo" />
           <figcaption className="text-xs text-muted" data-numeric>
             {logoShape(logo.width, logo.height) === "wide" ? "Wide logo: it gets the wider slot." : "Square slot."} {logo.width} by {logo.height} px after trimming.
@@ -46,7 +46,7 @@ export function LogoUpload({ logo, initials }: Readonly<{ logo: AgencyLogoData |
       )}
       <form
         ref={form}
-        className="flex flex-1 flex-col gap-3"
+        className="flex min-w-60 flex-1 flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
           const data = new FormData(e.currentTarget);

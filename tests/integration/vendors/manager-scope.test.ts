@@ -10,7 +10,7 @@ import { assignments, auditLog, jobChangeRequests, jobPositions, jobs, jobTypes,
 import type { Actor } from "@/domain/actor";
 import { assignPerson, markNoShow, removePerson } from "@/domain/assignments/coordinator";
 import { loadActiveActor } from "@/domain/auth/sign-in-policy";
-import { auditView } from "@/domain/admin/views";
+import { searchAudit } from "@/domain/audit/search";
 import { coordinatorTodo, detailFormOptions, jobAdmin, paymentsBoard, staffDirectory, vendorRecord } from "@/domain/coordinator/views";
 import { ForbiddenError, NotFoundError, RuleViolation, ValidationError } from "@/domain/errors";
 import { copyJob, createRecurringJobs } from "@/domain/jobs/copy";
@@ -231,7 +231,7 @@ describe("a vendor manager's scope (owner decision 2026-11-27)", () => {
     await expect(f.run((tx) => vendorRecord(sergeant, tx, f.vendorId, NOW))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(f.run((tx) => vendorRecord(sergeant, tx, f.otherVendorId, NOW))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(f.run((tx) => coordinatorTodo(sergeant, tx, NOW))).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(f.run((tx) => auditView(sergeant, tx, {}, 1))).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(f.run((tx) => searchAudit(sergeant, tx, {}, 1))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(f.run((tx) => runReport(sergeant, tx, { kind: "personnel_activity" } as never))).rejects.toBeInstanceOf(ForbiddenError);
     await expect(f.run((tx) => setManagedVendors(sergeant, tx, deputy.userId, [f.vendorId]))).rejects.toBeInstanceOf(ForbiddenError);
   });

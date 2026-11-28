@@ -484,6 +484,20 @@ describe("ops plans", () => {
       await expect(run((tx) => searchLibrary(vendorActor, tx, {}, 1))).rejects.toBeInstanceOf(ForbiddenError);
     });
 
+    test("a confidential detail's plan is in the library and downloads for staff and the people assigned only", async () => {
+      const a = await agreedPast("Library dignitary");
+      await get().db.update(jobs).set({ confidential: true }).where(eq(jobs.id, a.job.id));
+      const [version] = await get().db.select().from(opsPlanVersions).where(eq(opsPlanVersions.opsPlanId, a.plan.id));
+      const person = await fx.person();
+      const titles = async (who: Actor) => (await run((tx) => searchLibrary(who, tx, { text: "dignitary" }, 1))).map((r) => r.jobTitle);
+      expect(await titles(person)).toEqual([]);
+      expect(await titles(fx.coord)).toEqual(["Library dignitary"]);
+      expect(await titles(a.ic)).toEqual(["Library dignitary"]);
+      await expect(run((tx) => readOpsPlanVersion(person, tx, version.id, storage))).rejects.toBeInstanceOf(NotFoundError);
+      await expect(run((tx) => getJobOpsPlan(person, tx, a.job.id))).rejects.toBeInstanceOf(NotFoundError);
+      expect((await run((tx) => readOpsPlanVersion(a.ic, tx, version.id, storage))).row.filename).toBe("Library dignitary.pdf");
+    });
+
     test("personnel, coordinators and admins download any version; vendors never", async () => {
       const a = await agreedPast("Library download");
       const [version] = await get().db.select().from(opsPlanVersions).where(eq(opsPlanVersions.opsPlanId, a.plan.id));

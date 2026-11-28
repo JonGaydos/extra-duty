@@ -2,7 +2,7 @@
 
 After a detail ends, you bill the vendor from Signal 90. If you bill the scheduled hours, the invoice goes straight to the vendor. If you change the hours, a coordinator reviews it first. (Your agency can also choose to review every invoice; the button on the form tells you which will happen.)
 
-1. Open **Billing**. **To bill** lists your details that have ended. Home also shows **Ready to bill**. Choose **Review and send invoice**.
+1. Open **Billing**. **To bill** lists your details that have ended. Home also shows **Ready to bill**, and a banner at the top with **Go to billing** while anything is waiting to be billed. Choose **Review and send invoice**.
 
    ![Billing, To bill](../images/deputy/14-billing-a-detail-1-phone.webp)
 

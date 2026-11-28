@@ -64,6 +64,8 @@ export async function recomputeReleaseDates(
     .where(
       and(
         inArray(jobs.state, ["scheduled", "active"]),
+        // A confidential detail is never released.
+        eq(jobs.confidential, false),
         gt(jobs.startAt, now),
         or(isNull(jobs.releaseAt), gt(jobs.releaseAt, now)),
       ),

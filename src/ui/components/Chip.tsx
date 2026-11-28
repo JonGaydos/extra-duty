@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Icon, type IconName } from "@/ui/icons";
 
 /**
  * Status pill. Tones carry meaning, never decoration: success (open, paid,
@@ -18,11 +19,13 @@ const TONES: Record<ChipTone, string> = {
   coordinator: "bg-coordinator-soft text-coordinator-ink",
 };
 
-export function Chip({ tone = "neutral", children }: Readonly<{ tone?: ChipTone; children: ReactNode }>) {
+/** `icon`: a leading 14 px line icon for a chip whose meaning has one (the lock on Confidential). */
+export function Chip({ tone = "neutral", icon, children }: Readonly<{ tone?: ChipTone; icon?: IconName; children: ReactNode }>) {
   return (
     <span
-      className={`inline-flex w-fit items-center rounded-full px-2.25 py-0.75 text-xs font-semibold whitespace-nowrap ${TONES[tone]}`}
+      className={`inline-flex w-fit items-center gap-1 rounded-full px-2.25 py-0.75 text-xs font-semibold whitespace-nowrap ${TONES[tone]}`}
     >
+      {icon ? <Icon name={icon} size={14} /> : null}
       {children}
     </span>
   );

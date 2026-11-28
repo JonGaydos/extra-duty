@@ -30,7 +30,30 @@ export type DetailWire = {
   safetyAddresses: Array<{ address: string; description: string; lat?: number | null; lng?: number | null; source?: "auto" | "manual" }>;
   /** Approval reason when the rate is outside the agency range (one detail only). */
   rateOverrideReason?: string;
+  /** New details only (coordinators and admins): Confidential, with the reason it is turned on. */
+  confidential?: boolean;
+  confidentialReason?: string;
+  /** Reminders before the start: the agency's times, this detail's own, or none. Left out keeps them as they are. */
+  reminders?: ReminderWire;
+  reminderNote?: string;
 };
+
+/** The reminder choice on a detail form. `hours` is used only when `mode` is custom. */
+export type ReminderWire = { mode: "agency" | "custom" | "off"; hours: number[] };
+
+/** A detail's saved reminder times as the form shows them. */
+export function reminderWire(hours: number[] | null): ReminderWire {
+  if (hours === null) return { mode: "agency", hours: [] };
+  return hours.length ? { mode: "custom", hours } : { mode: "off", hours: [] };
+}
+
+/** The form's reminder choice as saved: null for the agency's times, an empty list for off. */
+function reminderHoursOf(r: ReminderWire): number[] | null {
+  if (r.mode === "agency") return null;
+  if (r.mode === "off") return [];
+  if (r.hours.length === 0) throw new ValidationError("Choose at least one reminder time, or turn reminders off for this detail.");
+  return r.hours;
+}
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -102,6 +125,9 @@ export function detailInput(w: DetailWire, date: string): JobInput {
     contactPhone: w.contactPhone,
     held: w.held,
     flex,
+    ...(w.confidential ? { confidential: true, confidentialReason: w.confidentialReason ?? "" } : {}),
+    ...(w.reminders ? { reminderHours: reminderHoursOf(w.reminders) } : {}),
+    ...(w.reminderNote === undefined ? {} : { reminderNote: w.reminderNote }),
     safety: w.safetyNotes.trim() || addresses.length ? { notes: w.safetyNotes, addresses: addresses.map((a) => ({ address: a.address, description: a.description, ...(a.lat !== undefined && a.lng !== undefined ? { lat: a.lat, lng: a.lng, source: a.source === "auto" ? ("auto" as const) : ("manual" as const) } : {}) })) } : undefined,
   };
 }

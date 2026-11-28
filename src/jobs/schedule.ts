@@ -2,6 +2,8 @@ import type { PgBoss } from "pg-boss";
 import { liveDb, runInMode, trainingConfigured, withTx, type DataMode } from "@/db/client";
 import { pruneThrottle } from "@/domain/auth/sign-in-policy";
 import { confirmPendingShortTick } from "@/domain/assignments/signup";
+import { giveawayRemindersTick } from "@/domain/assignments/giveaway";
+import { detailRemindersTick } from "@/domain/jobs/reminders";
 import { emit } from "@/domain/notifications/notify";
 import { invoiceBatchesDueTick } from "@/domain/invoices/batch";
 import { accessReviewReminderRecipients, accessReviewTick } from "@/domain/users/access-review";
@@ -70,6 +72,8 @@ export const SCHEDULE: readonly ScheduledTick[] = [
   { name: "confirm-pending-short", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => confirmPendingShortTick(now) },
   { name: "backup-offer", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => backupOfferTick(now) },
   { name: "watch-release", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => watchReleaseTick(now) },
+  { name: "giveaway-reminders", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => giveawayRemindersTick(now) },
+  { name: "detail-reminders", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => detailRemindersTick(now) },
   { name: "billing-ready", cron: EVERY_MINUTE, tz: AGENCY_TZ, run: (now) => billingReadyTick(now) },
   { name: "response-deadlines", cron: DAILY_7_10, tz: AGENCY_TZ, run: (now) => responseDeadlinesTick(now) },
   { name: "invoice-batches-due", cron: DAILY_7_20, tz: AGENCY_TZ, run: (now) => invoiceBatchesDueTick(now) },

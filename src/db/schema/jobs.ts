@@ -1,4 +1,4 @@
-import { boolean, doublePrecision, index, integer, jsonb, pgEnum, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, jsonb, pgEnum, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 import { pk, timestamps, tstz } from "./common";
 import { users } from "./users";
 import { assignments } from "./assignments";
@@ -66,7 +66,19 @@ export const jobs = pgTable(
     canceledByVendor: boolean("canceled_by_vendor").notNull().default(false),
     lateCancelWaivedReason: text("late_cancel_waived_reason"),
     held: boolean("held").notNull().default(false),
+    /**
+     * Confidential (owner decision 2026-11-27): only coordinators, admins and the people assigned see it. Never open
+     * for sign-up or released; staffed by assignment only.
+     */
+    confidential: boolean("confidential").notNull().default(false),
     releaseAt: tstz("release_at"),
+    /**
+     * Hours before the start to remind the people assigned (owner request 2026-11-27): null uses the agency setting,
+     * an empty list turns reminders off for this detail.
+     */
+    reminderHours: integer("reminder_hours").array(),
+    /** Added to each reminder, for example where to check in. */
+    reminderNote: text("reminder_note"),
     requestedByUserId: text("requested_by_user_id").references(() => users.id),
     cancelReason: text("cancel_reason"),
     ...timestamps,
@@ -221,4 +233,27 @@ export const jobChangeRequests = pgTable(
     ...timestamps,
   },
   (t) => [index("job_change_requests_job_idx").on(t.jobId)],
+);
+
+/**
+ * Each reminder time of a detail that has gone out: once per detail, hours and due time, so a worker restart never
+ * sends it twice. A reminder counts as sent for the detail's current time when it went out at or after its due time;
+ * a time change that moves the due time later arms it again. Slots passed over (only the latest due one is sent) are
+ * kept with `sent` false.
+ */
+export const detailReminderSends = pgTable(
+  "detail_reminder_sends",
+  {
+    id: pk(),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => jobs.id),
+    hoursBefore: integer("hours_before").notNull(),
+    dueAt: tstz("due_at").notNull(),
+    sentAt: tstz("sent_at").notNull(),
+    sent: boolean("sent").notNull(),
+    recipients: integer("recipients").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("detail_reminder_sends_slot_uq").on(t.jobId, t.hoursBefore, t.dueAt)],
 );

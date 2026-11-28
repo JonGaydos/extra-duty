@@ -5,7 +5,7 @@ import { useEmailQueue } from "../../setup/email-queue";
 import { assignments, auditLog, spotOffers, notifications, seasons, vendorRestrictions } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
 import { assignPerson, liftVendorRestriction, markNoShow, restrictFromVendor } from "@/domain/assignments/coordinator";
-import { cancelSignup } from "@/domain/assignments/cancel";
+import { offerSpot } from "@/domain/assignments/giveaway";
 import { joinBackup, signUp } from "@/domain/assignments/signup";
 import { ForbiddenError, RuleViolation } from "@/domain/errors";
 import { makeUser } from "../users/helpers";
@@ -55,7 +55,7 @@ describe("coordinator assignment actions", () => {
     const b1 = await f.person();
     const a = await f.run((tx) => signUp(holder, tx, positionId, { ...warn, now: t0 }));
     await f.run((tx) => joinBackup(b1, tx, positionId, { ...warn, now: t0 }));
-    await f.run((tx) => cancelSignup(holder, tx, a.id, "Plans changed", new Date(job.startAt.getTime() - 48 * HOUR)));
+    await f.run((tx) => offerSpot(holder, tx, a.id, "Plans changed", new Date(job.startAt.getTime() - 48 * HOUR)));
     const target = await f.person();
     await assign(positionId, target.userId, { notify: false });
     const [offer] = await get().db.select().from(spotOffers).where(eq(spotOffers.jobPositionId, positionId));

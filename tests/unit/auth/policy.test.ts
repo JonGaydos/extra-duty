@@ -20,6 +20,7 @@ const unscoped: Array<[Action, boolean, boolean, boolean, boolean]> = [
   ["job.update", true, true, false, false],
   ["job.cancel", true, true, false, false],
   ["job.reactivate", true, true, false, false],
+  ["job.confidential", true, true, false, false],
   ["job.signup", true, true, true, false],
   ["job.backup", true, true, true, false],
   ["job.watch", true, true, true, false],
@@ -53,6 +54,7 @@ const unscoped: Array<[Action, boolean, boolean, boolean, boolean]> = [
   ["report.run", true, true, false, false],
   ["message.send", true, true, true, false],
   ["message.sendAll", true, true, true, false],
+  ["message.requireAck", true, true, false, false],
   ["opsPlan.submit", true, true, true, false],
   ["deputyNote.submit", true, true, true, false],
   ["deputyNote.manage", true, true, false, false],
@@ -168,6 +170,10 @@ describe("vendor manager scope (owner decision 2026-11-27)", () => {
     "assignment.assign", "assignment.remove",
     "vendorRequest.decide", "vendorLocation.manageOwn", "vendorContact.manage", "vendor.read",
   ];
+
+  test("never marks a detail confidential, even for a vendor they manage", () => {
+    expect(can(manager, "job.confidential", { vendorId: "v1" })).toBe(false);
+  });
 
   test.each(managed)("%s: a deputy for the vendors they manage only", (action) => {
     expect(can(manager, action, { vendorId: "v1" })).toBe(true);

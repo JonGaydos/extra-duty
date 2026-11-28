@@ -12,6 +12,8 @@ import { SettingsForm } from "../../_admin/forms";
 import { managementActor } from "../../_admin/session";
 import { GROUPS, PAGE_GROUPS, groupValues } from "../../_admin/settings-groups";
 import { ROLE_LABEL } from "../../_admin/labels";
+import { EmailMessages } from "../../_admin/EmailMessages";
+import { listMessages } from "@/domain/email-messages/store";
 
 type Props = { params: Promise<{ group: string }> };
 
@@ -26,8 +28,10 @@ export default async function SettingsGroupPage({ params }: Readonly<Props>) {
   const actor = await managementActor();
   const group = groupOf((await params).group);
   if (!group) notFound();
-  const { settings, positions, reviewers } = await withTx(async (tx) => ({
+  const { settings, positions, reviewers, messages } = await withTx(async (tx) => ({
     settings: await getSettings(tx),
+    // Reminders and locks also holds the agency's email messages (owner decision 2026-11-27).
+    messages: group.slug === "reminders" ? await listMessages(actor, tx) : null,
     positions: group.fields.some((f) => f.kind === "positionType") ? (await listPositionTypes(actor, tx)).filter((p) => p.active) : [],
     reviewers: group.fields.some((f) => f.kind === "reviewers") ? await reviewerOptions(actor, tx) : [],
   }));
@@ -50,6 +54,7 @@ export default async function SettingsGroupPage({ params }: Readonly<Props>) {
           }}
         />
       </Card>
+      {messages ? <EmailMessages groups={messages} admin={actor.role === "admin"} /> : null}
     </div>
   );
 }

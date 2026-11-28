@@ -6,32 +6,18 @@ import { decodeNotifyJob, type NotifyJob } from "@/domain/notifications/notify";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { outboxActive } from "@/lib/email/outbox";
 import { getEmailSender } from "@/lib/email/sender";
-import { notificationEmail } from "@/lib/email/templates/notification";
+import { alertEmail } from "@/lib/email/alert-email";
+import { appLink } from "@/lib/app-link";
 import { isGone, pushConfigured, sendPush } from "@/lib/push/push";
 import { NOTIFY_EMAIL_QUEUE, NOTIFY_PUSH_QUEUE } from "./boss";
 import type { QueuedJob } from "./email-worker";
-import { trimTrailingSlashes } from "@/lib/text";
-
-let warnedNoBase = false;
-
-function appLink(link: string): string | null {
-  const base = process.env.APP_URL ?? process.env.BETTER_AUTH_URL;
-  if (!base) {
-    if (!warnedNoBase) {
-      warnedNoBase = true;
-      console.warn("Alert emails have no link: set APP_URL or BETTER_AUTH_URL.");
-    }
-    return null;
-  }
-  return `${trimTrailingSlashes(base)}${link}`;
-}
 
 /** Sends the alert to the address on file at send time. A failure throws, so the queue retries it. */
 export async function handleNotificationEmailJob(job: QueuedJob<NotifyJob>): Promise<void> {
   const c = decodeNotifyJob(job.data);
   const [user] = await db.select({ email: users.email, active: users.active }).from(users).where(eq(users.id, c.userId));
   if (!user?.active || !user.email) return;
-  await getEmailSender().send(notificationEmail(user.email, c.title, c.body, appLink(c.link)));
+  await getEmailSender().send(alertEmail(user.email, c, appLink(c.link)));
 }
 
 /**

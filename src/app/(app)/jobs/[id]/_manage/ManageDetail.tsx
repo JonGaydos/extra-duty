@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Actor } from "@/domain/actor";
 import { agencyDateParts } from "@/domain/time/agency-time";
-import type { DetailWire } from "../../../coordinate/_coordinator/detail-input";
+import { reminderWire, type DetailWire } from "../../../coordinate/_coordinator/detail-input";
 import { loadDetail } from "./load";
 import {
   AttachmentsCard,
@@ -15,6 +15,7 @@ import {
   SafetyCard,
   StaffingCard,
   VendorAsks,
+  ViewLogCard,
   releaseStatusText,
   type DetailContext,
 } from "./sections";
@@ -51,6 +52,8 @@ export async function ManageDetail({ actor, id, now, coordinator }: Readonly<{ a
     flex: job.flexEarliestStartAt && job.flexLatestEndAt ? { earliest: hhmm(job.flexEarliestStartAt), latest: hhmm(job.flexLatestEndAt), allowShorter: job.flexAllowShorter } : null,
     safetyNotes: "",
     safetyAddresses: [],
+    reminders: reminderWire(job.reminderHours),
+    reminderNote: job.reminderNote ?? "",
   };
   const c: DetailContext = {
     d: data,
@@ -81,6 +84,7 @@ export async function ManageDetail({ actor, id, now, coordinator }: Readonly<{ a
           {ops ? <OpsPlanCard c={c} ops={ops} /> : null}
           <AttachmentsCard c={c} />
           <NotesAndActivity c={c} />
+          <ViewLogCard c={c} />
         </div>
 
         <CopyAndRepeat c={c} />

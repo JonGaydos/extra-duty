@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { assertMaySeeJob, maySeeJob } from "../jobs/confidential";
 import type { Tx } from "@/db/client";
 import {
   assignments,
@@ -272,6 +273,7 @@ export async function getJobOpsPlan(actor: Actor, tx: Tx, jobId: string): Promis
   assertCan(actor, "job.read");
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
   if (!job) throw new NotFoundError("Job not found.");
+  await assertMaySeeJob(tx, actor, job);
   const [plan] = await tx.select().from(opsPlans).where(eq(opsPlans.jobId, jobId));
   const ic = await currentIcInfo(tx, jobId);
   const versions = plan
@@ -298,11 +300,12 @@ export async function getJobOpsPlan(actor: Actor, tx: Tx, jobId: string): Promis
 export async function readOpsPlanVersion(actor: Actor, tx: Tx, versionId: string, storage?: Storage): Promise<{ row: FileRow; body: Buffer }> {
   assertCan(actor, "job.read");
   const [v] = await tx
-    .select({ fileId: opsPlanVersions.fileId, jobState: jobs.state })
+    .select({ fileId: opsPlanVersions.fileId, jobState: jobs.state, jobId: jobs.id, confidential: jobs.confidential })
     .from(opsPlanVersions)
     .innerJoin(opsPlans, eq(opsPlans.id, opsPlanVersions.opsPlanId))
     .leftJoin(jobs, eq(jobs.id, opsPlans.jobId))
     .where(eq(opsPlanVersions.id, versionId));
   if (!v || (actor.role === "personnel" && v.jobState && HIDDEN_FROM_PERSONNEL.includes(v.jobState))) throw new NotFoundError("Ops plan version not found.");
+  if (v.jobId && !(await maySeeJob(tx, actor, { id: v.jobId, confidential: v.confidential === true }))) throw new NotFoundError("Ops plan version not found.");
   return readStoredFile(tx, v.fileId, storage);
 }

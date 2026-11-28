@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lte, max, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, max, notExists, sql } from "drizzle-orm";
 import { withTx, type Tx } from "@/db/client";
 import {
   assignments,
@@ -10,6 +10,7 @@ import {
   ranks,
   seasons,
   userQualifications,
+  spotGiveaways,
   spotOffers,
   users,
   vendors,
@@ -26,7 +27,11 @@ import { scheduleShiftsForCaps } from "../planning/schedule";
 import { getSettings, type AgencySettings } from "../settings/settings";
 import { validatePlannedTimes } from "../jobs/status";
 import { readW9Lock } from "../w9/requests";
+import { readAckLock } from "../messages/acknowledgements";
 import { isRestricted } from "./restrictions";
+import { assertMaySeeJob, maySeeJob } from "../jobs/confidential";
+import { vendorAudience } from "../notifications/audiences";
+import { AGENCY_TZ } from "../time/agency-time";
 
 export type Assignment = typeof assignments.$inferSelect;
 export type JobWatch = typeof jobWatches.$inferSelect;
@@ -108,12 +113,98 @@ async function tryLockUser(tx: Tx, userId: string): Promise<boolean> {
   return (res.rows[0] as { ok: boolean }).ok;
 }
 
+/** An open offer to give the sign-up's spot away (correlated with the outer assignments row). */
+const offeredAway = (tx: Tx) =>
+  tx
+    .select({ x: spotGiveaways.id })
+    .from(spotGiveaways)
+    .where(and(eq(spotGiveaways.assignmentId, assignments.id), eq(spotGiveaways.status, "open")));
+
+/**
+ * Spots on the position that are taken. A spot its deputy offers to give away counts as free: they stay signed up
+ * and responsible for it, but someone else may take it over (owner decision 2026-11-27).
+ */
 export async function signedUpCount(tx: Tx, positionId: string): Promise<number> {
   const rows = await tx
     .select({ id: assignments.id })
     .from(assignments)
-    .where(and(eq(assignments.jobPositionId, positionId), eq(assignments.status, "signed_up")));
+    .where(and(eq(assignments.jobPositionId, positionId), eq(assignments.status, "signed_up"), notExists(offeredAway(tx))));
   return rows.length;
+}
+
+export type SpotGiveaway = typeof spotGiveaways.$inferSelect;
+
+/** Open offers on the position whose sign-up still holds the spot, oldest first. */
+export async function openGiveaways(tx: Tx, positionId: string): Promise<SpotGiveaway[]> {
+  const rows = await tx
+    .select({ g: spotGiveaways })
+    .from(spotGiveaways)
+    .innerJoin(assignments, eq(assignments.id, spotGiveaways.assignmentId))
+    .where(and(eq(spotGiveaways.jobPositionId, positionId), eq(spotGiveaways.status, "open"), eq(assignments.status, "signed_up")))
+    .orderBy(asc(spotGiveaways.createdAt), asc(spotGiveaways.id));
+  return rows.map((r) => r.g);
+}
+
+const dayText = (d: Date) => new Intl.DateTimeFormat("en-US", { timeZone: AGENCY_TZ, dateStyle: "medium" }).format(d);
+
+/**
+ * After `taker` took a spot on the position (the caller holds the job lock): when more people are now signed up
+ * than the position holds, the deputy of the oldest open offer is replaced, or the one `giveawayId` names (staff
+ * assigning a replacement). Their sign-up ends as given away, which frees their hours and calendar. Both people are
+ * told, and the vendor too when vendors see who is assigned. Returns whether someone was replaced.
+ */
+export async function takeOverOffered(
+  actor: Actor | "system",
+  tx: Tx,
+  job: Job,
+  position: PositionInfo,
+  taker: Assignment,
+  now: Date,
+  giveawayId?: string,
+): Promise<boolean> {
+  if (taker.status !== "signed_up") return false;
+  const open = await openGiveaways(tx, position.id);
+  if (open.length === 0) return false;
+  const held = await tx
+    .select({ id: assignments.id })
+    .from(assignments)
+    .where(and(eq(assignments.jobPositionId, position.id), eq(assignments.status, "signed_up")));
+  const g = giveawayId ? open.find((x) => x.id === giveawayId) : open[0];
+  if (!g || (!giveawayId && held.length <= position.count)) return false;
+  const [giver] = await tx.select().from(assignments).where(eq(assignments.id, g.assignmentId));
+  const names = new Map(
+    (await tx.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, [giver.userId, taker.userId]))).map((u) => [u.id, u.name]),
+  );
+  const takerName = names.get(taker.userId) ?? "Another deputy";
+  const giverName = names.get(giver.userId) ?? "the deputy";
+  const by = actor === "system" ? null : actor.userId;
+  const [ended] = await tx
+    .update(spotGiveaways)
+    .set({ status: "taken", takenByAssignmentId: taker.id, endedAt: now, endedBy: by })
+    .where(eq(spotGiveaways.id, g.id))
+    .returning();
+  const [after] = await tx
+    .update(assignments)
+    .set({ status: "canceled", removalReason: `Taken over by ${takerName}`, updatedAt: now })
+    .where(eq(assignments.id, giver.id))
+    .returning();
+  await recordAudit(tx, {
+    actor: "system",
+    action: "assignment.taken_over",
+    entityType: "assignment",
+    entityId: giver.id,
+    before: giver,
+    after: { ...after, giveaway: ended },
+    reason: `Taken over by ${takerName}`,
+  });
+  const title = `#${job.number} ${job.title}`;
+  const link = `/jobs/${job.id}`;
+  await emit(tx, { recipients: [giver.userId], type: "giveaway.taken_over", title: `Your spot was taken over: ${title}`, body: `${takerName} took over your spot. You are no longer on this detail.`, link });
+  await emit(tx, { recipients: [taker.userId], type: "giveaway.taken_over", title: `You took over a spot: ${title}`, body: `You replace ${giverName} as ${position.name}. You are expected to work it.`, link });
+  if ((await getSettings(tx)).vendorSeesAssignedNames) {
+    await emit(tx, { recipients: await vendorAudience(tx, job.vendorId), type: "giveaway.taken_over", title: `Deputy changed: Detail #${job.number}`, body: `${takerName} replaces ${giverName} on Detail #${job.number} on ${dayText(job.startAt)}.`, link });
+  }
+  return true;
 }
 
 async function nextBackupPosition(tx: Tx, positionId: string): Promise<number> {
@@ -200,6 +291,7 @@ export async function buildContext(tx: Tx, a: ContextArgs): Promise<EligibilityC
       held: job.held,
       releaseAt: job.releaseAt,
       vendorOnPaymentHold: vendor?.paymentHold ?? false,
+      confidential: job.confidential,
     },
     position: {
       name: a.position.name,
@@ -224,6 +316,7 @@ export async function buildContext(tx: Tx, a: ContextArgs): Promise<EligibilityC
     })),
     billingLock: await readBillingLock(tx, a.userId, a.now),
     w9Lock: await readW9Lock(tx, a.userId, a.now),
+    ackLock: await readAckLock(tx, a.userId, a.now),
     caps,
     restrictedFromVendor: await isRestricted(tx, a.userId, job.vendorId),
     rollingWindowHours: settings.rollingCapWindowHours,
@@ -282,10 +375,12 @@ export type SignUpInput = {
 };
 
 /** Resolves the job with a light query, locks it, then reads the position so its count is read under the lock. */
-export async function loadLocked(tx: Tx, jobPositionId: string, expectJobId?: string) {
+export async function loadLocked(tx: Tx, jobPositionId: string, expectJobId?: string, actor?: Actor) {
   const [ref] = await tx.select({ jobId: jobPositions.jobId }).from(jobPositions).where(eq(jobPositions.id, jobPositionId));
   if (!ref || (expectJobId !== undefined && ref.jobId !== expectJobId)) throw new NotFoundError("Position not found.");
   const job = await lockJob(tx, ref.jobId);
+  // A confidential detail the actor may not see answers as a missing one.
+  if (actor && !(await maySeeJob(tx, actor, job))) throw new NotFoundError("Position not found.");
   const position = await loadPosition(tx, jobPositionId);
   return { position, job };
 }
@@ -311,7 +406,7 @@ export async function signUp(actor: Actor, tx: Tx, jobPositionId: string, input:
   assertCan(actor, "job.signup");
   const now = input.now ?? new Date();
   await lockUser(tx, actor.userId);
-  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId);
+  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId, actor);
   const settings = await getSettings(tx);
   assertWarning(settings, input.warningVersion);
   await settlePending(tx, job, settings, now);
@@ -344,6 +439,7 @@ export async function signUp(actor: Actor, tx: Tx, jobPositionId: string, input:
     });
   await endOpenWatches(tx, actor, job.id, now);
   await recordAudit(tx, { actor, action: "assignment.signup", entityType: "assignment", entityId: row.id, before: null, after: row });
+  await takeOverOffered(actor, tx, job, position, row, now);
   return row;
 }
 
@@ -356,7 +452,7 @@ export async function joinBackup(
   assertCan(actor, "job.backup");
   const now = input.now ?? new Date();
   await lockUser(tx, actor.userId);
-  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId);
+  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId, actor);
   const settings = await getSettings(tx);
   assertWarning(settings, input.warningVersion);
   await settlePending(tx, job, settings, now);
@@ -404,6 +500,7 @@ export async function eligibilityByPosition(actor: Actor, tx: Tx, jobId: string,
   assertCan(actor, "job.signup");
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
   if (!job || (actor.role === "personnel" && (job.state === "requested" || job.state === "declined"))) throw new NotFoundError("Job not found.");
+  await assertMaySeeJob(tx, actor, job);
   const positions = await tx
     .select({ id: jobPositions.id })
     .from(jobPositions)
@@ -431,7 +528,9 @@ export async function watchJob(actor: Actor, tx: Tx, jobId: string, now: Date = 
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
   if (!job) throw new NotFoundError("Job not found.");
   if (actor.role === "personnel" && job.state === "requested") throw new NotFoundError("Job not found.");
+  await assertMaySeeJob(tx, actor, job);
   if (job.state === "canceled" || job.state === "declined") throw new ValidationError("This detail is no longer available.");
+  if (job.confidential) throw new ValidationError("A confidential detail is never released, so it cannot be watched.");
   if (job.startAt.getTime() <= now.getTime()) throw new ValidationError("This detail has already started.");
   const [existing] = await tx
     .select()
@@ -515,6 +614,7 @@ export async function changePlannedTimes(
     .where(eq(assignments.id, before.id))
     .returning();
   await recordAudit(tx, { actor, action: "assignment.change_times", entityType: "assignment", entityId: before.id, before, after });
+  if (before.status === "pending_short") await takeOverOffered(actor, tx, job, position, after, now);
   return after;
 }
 
@@ -550,9 +650,10 @@ async function declineShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect
   await emit(tx, { recipients: [a.userId], type: "signup.short_declined", title: `Shorter shift declined: #${job.number} ${job.title}`, body: reason, link: `/jobs/${job.id}` });
 }
 
-async function confirmShort(tx: Tx, job: Job, a: typeof assignments.$inferSelect, now: Date): Promise<void> {
+async function confirmShort(tx: Tx, job: Job, position: PositionInfo, a: typeof assignments.$inferSelect, now: Date): Promise<void> {
   const [after] = await tx.update(assignments).set({ status: "signed_up", updatedAt: now }).where(eq(assignments.id, a.id)).returning();
   await recordAudit(tx, { actor: "system", action: "assignment.short_confirmed", entityType: "assignment", entityId: a.id, before: a, after });
+  await takeOverOffered("system", tx, job, position, after, now);
   await emit(tx, { recipients: [a.userId],
     type: "signup.short_confirmed",
     title: `Shorter shift confirmed: #${job.number} ${job.title}`,
@@ -588,7 +689,7 @@ async function confirmJob(tx: Tx, job: Job, settings: AgencySettings, now: Date)
       await declineShort(tx, job, a, reason, now);
       declined++;
     } else {
-      await confirmShort(tx, job, a, now);
+      await confirmShort(tx, job, position, a, now);
       confirmed++;
     }
   }

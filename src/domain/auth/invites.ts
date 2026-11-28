@@ -4,7 +4,7 @@ import { hashPassword } from "better-auth/crypto";
 import { uuidv7 } from "uuidv7";
 import { withTx, type Tx } from "@/db/client";
 import { accounts, invites, users } from "@/db/schema";
-import { inviteEmail } from "@/lib/email/templates/invite";
+import { buildEmail } from "../email-messages/store";
 import { queueEmail } from "@/jobs/boss";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
@@ -54,7 +54,8 @@ export async function createInvite(actor: Actor, tx: Tx, userId: string): Promis
   });
 
   const { agency } = await getSettings(tx);
-  await queueEmail(tx, inviteEmail(user.email, agency.name, `${appUrl()}/accept-invite?token=${token}`));
+  const msg = await buildEmail(tx, "auth.invite", user.email, { "agency.name": agency.name, "invite.link": `${appUrl()}/accept-invite?token=${token}` });
+  await queueEmail(tx, { ...msg, auth: true });
 }
 
 /** Sets the invited user's password and marks the invite used. Reused, expired or unknown tokens are refused. */

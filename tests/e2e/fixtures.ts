@@ -33,7 +33,7 @@ import { EMAIL_QUEUE, INVOICE_BATCH_QUEUE, INVOICE_EMAIL_QUEUE, NOTIFY_EMAIL_QUE
 import { handleEmailJob, handleInvoiceBatchJob, handleInvoiceEmailJob } from "@/jobs/email-worker";
 import { SCHEDULE, runTick } from "@/jobs/schedule";
 import { getEmailSender, setEmailSender } from "@/lib/email/sender";
-import { notificationEmail } from "@/lib/email/templates/notification";
+import { alertEmail } from "@/lib/email/alert-email";
 import { decodeNotifyJob, type NotifyJob } from "@/domain/notifications/notify";
 import { E2E } from "./env";
 import { signInEmail } from "./session";
@@ -330,6 +330,7 @@ const LINKED: Array<{ table: string; where: string }> = [
   { table: "job_watches", where: "job_id = $1" },
   { table: "job_change_requests", where: "job_id = $1" },
   { table: "spot_offers", where: "job_position_id in (select id from job_positions where job_id = $1)" },
+  { table: "spot_giveaways", where: "job_position_id in (select id from job_positions where job_id = $1)" },
   { table: "invoices", where: "assignment_id in (select id from assignments where job_id = $1)" },
   { table: "invoice_events", where: "invoice_id in (select i.id from invoices i join assignments a on a.id = i.assignment_id where a.job_id = $1)" },
   { table: "payment_issues", where: "invoice_id in (select i.id from invoices i join assignments a on a.id = i.assignment_id where a.job_id = $1)" },
@@ -349,7 +350,7 @@ async function handleAlertEmail(job: { data: NotifyJob }): Promise<void> {
   const c = decodeNotifyJob(job.data);
   const [u] = await appDb.select({ email: users.email, active: users.active }).from(users).where(eq(users.id, c.userId));
   if (!u?.active || !u.email) return;
-  await getEmailSender().send(notificationEmail(u.email, c.title, c.body, `${E2E.baseURL}${c.link}`));
+  await getEmailSender().send(alertEmail(u.email, c, `${E2E.baseURL}${c.link}`));
 }
 
 export class Clock {

@@ -21,5 +21,7 @@ export function emptyDetail(o: DetailFormOptions): DetailWire {
     flex: null,
     safetyNotes: "",
     safetyAddresses: [],
+    reminders: { mode: "agency", hours: [] },
+    reminderNote: "",
   };
 }

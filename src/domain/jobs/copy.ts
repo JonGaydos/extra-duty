@@ -123,6 +123,10 @@ async function loadSource(tx: Tx, id: string): Promise<{ job: Job; input: JobInp
       contactName: job.contactName,
       contactPhone: job.contactPhone,
       held: job.held,
+      reminderHours: job.reminderHours,
+      reminderNote: job.reminderNote,
+      // A copy or repeat of a confidential detail stays confidential, so it never reaches the open lists.
+      ...(job.confidential ? { confidential: true, confidentialReason: `Copy of confidential Detail #${job.number}` } : {}),
       flex:
         job.flexEarliestStartAt && job.flexLatestEndAt
           ? { earliestStartAt: job.flexEarliestStartAt, latestEndAt: job.flexLatestEndAt, allowShorter: job.flexAllowShorter }

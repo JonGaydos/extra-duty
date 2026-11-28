@@ -11,4 +11,4 @@ This report shows who works the most and who cancels the most. Coordinators and 
 
 ## How cancellations count
 
-Cancellations are split into **Gave away**, **Removed by coordinator**, **Removed by suspension**, **No-show** and **Vendor late cancel**. Only Gave away, Removed by coordinator and No-show count toward the total. A vendor's late cancel or a suspension removal never counts against the deputy.
+Cancellations are split into **Gave away** (a spot the deputy offered that someone else took over, or a sign-up canceled before Nov 27, 2026), **Removed by coordinator**, **Removed by suspension**, **No-show** and **Vendor late cancel**. Only Gave away, Removed by coordinator and No-show count toward the total. A vendor's late cancel or a suspension removal never counts against the deputy.

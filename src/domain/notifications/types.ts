@@ -1,3 +1,5 @@
+import type { PlaceholderValues } from "../email-messages/placeholders";
+
 /** Every alert type. Spec section 14's rows, plus the types already in use and the Task 26 additions. */
 export const NOTIFICATION_TYPES = [
   // Spec section 14
@@ -68,6 +70,14 @@ export const NOTIFICATION_TYPES = [
   "w9.rejected",
   "w9.renewal_requested",
   "w9.renewal_reminder",
+  // Giving a spot away (owner, 2026-11-27)
+  "giveaway.taken_over",
+  "giveaway.reminder",
+  "giveaway.canceled",
+  // Detail reminders (owner, 2026-11-27)
+  "job.reminder",
+  // Messages that require acknowledgement (owner, 2026-11-27)
+  "message.ack_reminder",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -106,4 +116,14 @@ export type NotificationEvent = {
   link: string;
   /** Coordinator-sent: ignores preferences and quiet hours. */
   mandatory?: boolean;
+  /**
+   * The details the alert is about, when the link does not name one (`/jobs/<id>` and `/invoices/<id>` links do).
+   * A confidential one changes who gets the alert and what its email and push say (owner decision 2026-11-27).
+   */
+  jobIds?: string[];
+  /**
+   * Values for the email message's placeholders beyond the alert's title and text (a detail reminder's facts). Never
+   * used for a confidential detail: its email says only the date and time.
+   */
+  vars?: PlaceholderValues;
 };

@@ -8,4 +8,4 @@ A held detail stays unreleased: deputies can see it is coming but cannot sign up
 
    ![Manage on a held detail](../images/coordinator-admin/10-hold-and-release-1-desktop.webp)
 
-> Holding a detail pays and tells no one. It only stops new sign-ups until you release it. A vendor's payment hold is different; see [Vendors and payment holds](16-vendors-and-payment-holds.md).
+> Holding a detail pays and tells no one. It only stops new sign-ups until you release it. A vendor's payment hold is different; see [Vendors and payment holds](16-vendors-and-payment-holds.md). A confidential detail is never released, so it has no **Hold** or **Release**; see [Confidential details](35-confidential-details.md).

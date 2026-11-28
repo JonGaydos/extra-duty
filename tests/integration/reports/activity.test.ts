@@ -4,14 +4,15 @@ import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { assignments, invoices, jobs, qualifications, userQualifications, users } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
-import { cancelSignup } from "@/domain/assignments/cancel";
+import { offerSpot } from "@/domain/assignments/giveaway";
+import { signUp } from "@/domain/assignments/signup";
 import { markNoShow, removePerson } from "@/domain/assignments/coordinator";
 import { ForbiddenError } from "@/domain/errors";
 import { cancelJob } from "@/domain/jobs/jobs";
 import { exportReport, runReport, type ReportSpec } from "@/domain/reports/engine";
 import { listSavedReports, saveReport } from "@/domain/reports/saved";
 import { agencyInstant } from "@/domain/time/agency-time";
-import { setupFixture } from "../assignments/helpers";
+import { HOUR, legacyCancel, setupFixture } from "../assignments/helpers";
 import { makeUser } from "../users/helpers";
 
 const FROM = agencyInstant(2035, 1, 1, 0, 0);
@@ -56,8 +57,9 @@ describe("personnel activity report", () => {
     await billed(a, 240, "sent");
     await billed(a, 120, "paid");
     await billed(a, 240, "sent", "late_cancel");
+    // Avery's was canceled before giving away replaced canceling: it stays canceled and counts as Gave away.
     const gave = await row(a, "signed_up", 2);
-    await fx.run((tx) => cancelSignup(a, tx, gave.asg.id, "Family event"));
+    await legacyCancel(db, a, gave.asg.id, "Family event");
     await db.insert(assignments).values({ jobId: gave.job.id, jobPositionId: gave.positionId, userId: a.userId, status: "signed_up" });
     const removed = await row(a, "signed_up");
     await fx.run((tx) => removePerson(fx.coord, tx, removed.asg.id, "Out of uniform"));
@@ -66,10 +68,14 @@ describe("personnel activity report", () => {
     const canceledJob = await row(a, "signed_up");
     await fx.run((tx) => cancelJob(fx.coord, tx, canceledJob.job.id, "Event called off"));
 
-    // Blake: one worked hour, one gave away, one late cancellation not billed yet.
+    // Blake: one worked hour, one given away (offered, then taken over by Drew), one late cancellation not billed yet.
     await billed(b, 60, "sent");
     const bGave = await row(b, "signed_up");
-    await fx.run((tx) => cancelSignup(b, tx, bGave.asg.id, "Sick"));
+    const t0 = new Date(bGave.job.startAt.getTime() - 48 * HOUR);
+    await fx.run((tx) => offerSpot(b, tx, bGave.asg.id, "Sick", t0));
+    const drew = await fx.person("Deputy Sheriff");
+    await db.update(users).set({ name: "Drew Act" }).where(eq(users.id, drew.userId));
+    await fx.run((tx) => signUp(drew, tx, bGave.positionId, { warningVersion: 1, now: t0 }));
     await row(b, "late_canceled");
 
     // Outside the period: never counted.
@@ -89,8 +95,10 @@ describe("personnel activity report", () => {
     expect(rows["Blake Act"]).toEqual([1, 1, 7000, 3, 1, 1, 0, 0, 1, 33.3]);
     // Active sworn personnel with nothing in the period still get a row.
     expect(rows["Casey Act"]).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, null]);
-    expect(r.totals).toMatchObject({ details_worked: 3, earned_cents: 77000, signups: 11, late_cancels: 2, cancellations: 4 });
-    expect(r.totals.cancellation_rate).toBeCloseTo(36.4, 10);
+    // Drew took over Blake's offered spot: one open sign-up.
+    expect(rows["Drew Act"]).toEqual([0, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
+    expect(r.totals).toMatchObject({ details_worked: 3, earned_cents: 77000, signups: 12, late_cancels: 2, cancellations: 4 });
+    expect(r.totals.cancellation_rate).toBeCloseTo(33.3, 1);
   });
 
   test("each row carries the person's id so the page can link to the deputy report", async () => {

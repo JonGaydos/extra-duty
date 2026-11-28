@@ -1,146 +1,100 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Disclosure } from "@/ui/components/Disclosure";
+import { asc } from "drizzle-orm";
 import { withTx } from "@/ui/shell/request";
-import { auditView } from "@/domain/admin/views";
-import { agencyDateOnly } from "@/domain/time/agency-time";
-import { Button, ButtonLink } from "@/ui/components/Button";
-import { Card } from "@/ui/components/Card";
-import { FormField, Input, Select } from "@/ui/components/FormField";
-import { Table } from "@/ui/components/Table";
+import { users, vendors } from "@/db/schema";
+import { LARGE_PRINT, whoText } from "@/domain/audit/records";
+import { auditQueryParams, parseAuditQuery, searchAudit, type AuditQuery } from "@/domain/audit/search";
+import { ActionLink } from "@/ui/components/Button";
 import { PageTitle } from "../../_personnel/TabLinks";
 import { dateTime } from "../../_personnel/format";
 import { managementActor } from "../_admin/session";
-import { auditLabel } from "../_admin/audit-labels";
+import { AuditFilters } from "./AuditFilters";
+import { AuditResults, type AuditListRow } from "./AuditResults";
 
 export const metadata: Metadata = { title: "Audit log" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-const str = (v: string | string[] | undefined) => (typeof v === "string" ? v.trim() : "");
-
-/** Before and after values, compact, for the expandable cell. */
-function changes(before: unknown, after: unknown): string {
-  const show = (v: unknown) => (v === null || v === undefined ? "none" : JSON.stringify(v, null, 2));
-  return `Before: ${show(before)}\n\nAfter: ${show(after)}`;
+/** How many filters are on, for the phone's Filters button. */
+function activeFilters(q: AuditQuery): number {
+  return [q.doneBy, q.about, q.groups?.length, q.detail, q.vendorId, q.invoice, q.preset, q.text, q.system === false, q.order === "oldest", q.entityType].filter(Boolean).length;
 }
 
-/** Every recorded change, newest first, filtered by record type, record id and dates (agency days). */
+const asRecord = (p: URLSearchParams) => {
+  const out: Record<string, string | string[]> = {};
+  for (const k of new Set(p.keys())) {
+    const all = p.getAll(k);
+    out[k] = all.length > 1 ? all : all[0];
+  }
+  return out;
+};
+
+/**
+ * Every recorded action, filtered by who did it, who it is about, action type, detail, vendor, invoice, dates and text,
+ * paged newest (or oldest) first. Entries can be selected, or all matching ones, and exported as CSV or printed as a
+ * formal Audit Record PDF.
+ */
 export default async function AuditPage({ searchParams }: Readonly<Props>) {
   const actor = await managementActor();
   const sp = await searchParams;
-  const type = str(sp.type);
-  const id = str(sp.id);
-  const from = str(sp.from);
-  const to = str(sp.to);
-  const page = Math.max(1, Number(str(sp.page)) || 1);
-  const view = await withTx((tx) =>
-    auditView(actor, tx, { entityType: type || undefined, entityId: id || undefined, from: agencyDateOnly(from, "start") ?? undefined, to: agencyDateOnly(to, "end") ?? undefined }, page),
-  );
-  const query = (p: number) => {
-    const q = new URLSearchParams();
-    if (type) q.set("type", type);
-    if (id) q.set("id", id);
-    if (from) q.set("from", from);
-    if (to) q.set("to", to);
-    if (p > 1) q.set("page", String(p));
-    const s = q.toString();
+  const q = parseAuditQuery(sp);
+  const page = Math.max(1, Number(typeof sp.page === "string" ? sp.page : "") || 1);
+  const { result, people, vendorList } = await withTx(async (tx) => ({
+    result: await searchAudit(actor, tx, q, page),
+    people: await tx.select({ id: users.id, name: users.name }).from(users).orderBy(asc(users.name)),
+    vendorList: await tx.select({ id: vendors.id, name: vendors.name }).from(vendors).orderBy(asc(vendors.name)),
+  }));
+  const params = auditQueryParams(q);
+  const href = (p: number) => {
+    const x = new URLSearchParams(params);
+    if (p > 1) x.set("page", String(p));
+    const s = x.toString();
     return s ? `/admin/audit?${s}` : "/admin/audit";
   };
-  const filtered = !!(type || id || from || to);
+  const rows: AuditListRow[] = result.rows.map((r) => ({
+    id: r.id,
+    when: dateTime(r.at),
+    who: whoText(r),
+    system: r.system,
+    label: r.label,
+    groupLabel: r.groupLabel,
+    subject: r.subject,
+    detailNumber: r.detailNumber,
+    entityType: r.entityType,
+    entityId: r.entityId,
+    reason: r.reason,
+    changes: r.changes,
+  }));
+  const filtered = activeFilters(q) > 0;
+  const n = result.total.toLocaleString("en-US");
+  const noun = result.total === 1 ? "entry" : "entries";
+  const totalLine = filtered ? `${n} matching ${noun}.` : `${n} ${noun}.`;
 
   return (
     <div className="flex flex-col gap-4.5">
-      <PageTitle sub="Who changed what, and when. Entries cannot be edited or removed.">Audit log</PageTitle>
-      <Card>
-        <form role="search" aria-label="Filter the audit log" action="/admin/audit" className="grid gap-3 md:grid-cols-[repeat(4,minmax(0,1fr))_auto] md:items-end">
-          <FormField label="Record type">
-            <Select name="type" defaultValue={type}>
-              <option value="">All types</option>
-              {view.types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Record id">
-            <Input name="id" defaultValue={id} autoComplete="off" />
-          </FormField>
-          <FormField label="From">
-            <Input type="date" name="from" defaultValue={from} />
-          </FormField>
-          <FormField label="To">
-            <Input type="date" name="to" defaultValue={to} />
-          </FormField>
-          <div className="flex gap-2">
-            <Button type="submit">Filter</Button>
-            {filtered ? (
-              <ButtonLink href="/admin/audit" variant="secondary">
-                Clear
-              </ButtonLink>
-            ) : null}
-          </div>
-        </form>
-      </Card>
-      <Table
-        caption={page > 1 ? `Changes, page ${page}` : "Changes"}
-        hideCaption
-        rows={view.rows}
-        rowKey={(r) => r.id}
-        empty={filtered ? "No changes match these filters." : "No changes recorded yet."}
-        columns={[
-          { header: "When", render: (r) => <span className="whitespace-nowrap" data-numeric>{dateTime(r.at)}</span> },
-          { header: "Who", render: (r) => r.actorName ?? (r.actorUserId ? "Unknown" : "System") },
-          {
-            header: "Action",
-            render: (r) => (
-              <span className="flex flex-col">
-                <span>{auditLabel(r.action)}</span>
-                <code className="text-xs text-muted">{r.action}</code>
-              </span>
-            ),
-          },
-          {
-            header: "Record",
-            render: (r) => (
-              <span className="flex flex-col">
-                <span>{r.entityType}</span>
-                {r.detailNumber === null ? null : <Link href={`/jobs/${r.detailNumber}`}>Detail #{r.detailNumber}</Link>}
-                {r.entityId ? (
-                  <Link href={`/admin/audit?type=${encodeURIComponent(r.entityType)}&id=${encodeURIComponent(r.entityId)}`} className="text-xs break-all" aria-label={`History of ${r.entityType} ${r.entityId}`}>
-                    {r.entityId}
-                  </Link>
-                ) : null}
-              </span>
-            ),
-          },
-          {
-            header: "Change",
-            render: (r) => (
-              <Disclosure label={r.reason ? `Reason: ${r.reason}` : "Show the change"} className="max-w-[36rem]">
-                <pre className="m-0 mt-2 max-h-80 overflow-auto rounded-sm bg-subtle p-2.5 text-xs whitespace-pre-wrap break-all">{changes(r.before, r.after)}</pre>
-              </Disclosure>
-            ),
-          },
-        ]}
-      />
-      {page > 1 || view.hasMore ? (
-        <nav aria-label="Pages" className="flex justify-between gap-2">
-          {page > 1 ? (
-            <ButtonLink href={query(page - 1)} variant="secondary">
-              Newer
-            </ButtonLink>
-          ) : (
-            <span />
-          )}
-          {view.hasMore ? (
-            <ButtonLink href={query(page + 1)} variant="secondary">
-              Older
-            </ButtonLink>
-          ) : null}
-        </nav>
-      ) : null}
+      <PageTitle
+        sub="Who did what, and when. Entries cannot be edited or removed."
+        action={actor.role === "admin" ? <ActionLink href="/admin/audit/verify">Verify a printed record</ActionLink> : undefined}
+      >
+        Audit log
+      </PageTitle>
+      <p className="m-0 text-sm text-muted" data-testid="audit-total">
+        {totalLine}
+      </p>
+      <div className="grid gap-4.5 md:grid-cols-[272px_minmax(0,1fr)] md:items-start">
+        <AuditFilters q={q} people={people} vendors={vendorList} active={activeFilters(q)} />
+        <AuditResults
+          rows={rows}
+          total={result.total}
+          query={asRecord(params)}
+          newer={result.page > 1 ? href(result.page - 1) : null}
+          older={result.page < result.pageCount ? href(result.page + 1) : null}
+          page={result.page}
+          pageCount={result.pageCount}
+          filtered={filtered}
+          largePrint={LARGE_PRINT}
+        />
+      </div>
     </div>
   );
 }

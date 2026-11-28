@@ -1,20 +1,30 @@
 import Link from "next/link";
 import type { JobCard } from "@/domain/personnel/views";
 import { Chip } from "@/ui/components/Chip";
+import type { IconName } from "@/ui/icons";
 import { MapsLink } from "@/ui/components/MapsLink";
 import { PayLabel } from "@/ui/components/PayLabel";
 import { detailTitle } from "@/domain/jobs/detail-name";
 import { dateTime, hoursText, plural, whenText } from "./format";
 
+/** The person's own place on the detail: signed up, offered to someone else, backup or pending a shorter shift. */
+function mineChip(c: JobCard): RowChip | null {
+  if (c.mine === "signed_up") return c.offered ? { tone: "warning", text: "Offered" } : { tone: "info", text: "Signed up" };
+  if (c.mine === "backup") return { tone: "warning", text: "Backup" };
+  if (c.mine === "pending_short") return { tone: "warning", text: "Pending shorter" };
+  return null;
+}
+
 /** The status words for a job card, each with its tone. Color always comes with words. */
-export function jobChips(c: JobCard): Array<{ tone: "success" | "warning" | "danger" | "attention" | "info" | "neutral"; text: string }> {
-  const chips: ReturnType<typeof jobChips> = [];
-  if (c.mine === "signed_up") chips.push({ tone: "info", text: "Signed up" });
-  else if (c.mine === "backup") chips.push({ tone: "warning", text: "Backup" });
-  else if (c.mine === "pending_short") chips.push({ tone: "warning", text: "Pending shorter" });
+export function jobChips(c: JobCard): RowChip[] {
+  const chips: RowChip[] = [];
+  if (c.confidential) chips.push(CONFIDENTIAL_CHIP);
+  const own = mineChip(c);
+  if (own) chips.push(own);
   if (c.availability === "canceled") chips.push({ tone: "danger", text: "Canceled" });
   else if (c.held && c.availability !== "started") chips.push({ tone: "warning", text: "Held" });
-  else if (c.availability === "not_released") chips.push({ tone: "neutral", text: "Not released yet" });
+  // A confidential detail is never released, so "Not released yet" would mislead.
+  else if (c.availability === "not_released" && !c.confidential) chips.push({ tone: "neutral", text: "Not released yet" });
   else if (c.availability === "full") chips.push({ tone: "neutral", text: "Full" });
   else if (c.availability === "open" && !c.mine) chips.push({ tone: "attention", text: openText(c) });
   if (c.watching) chips.push({ tone: "info", text: "Watching" });
@@ -33,7 +43,10 @@ function openText(c: JobCard): string {
   return `${plural(c.openSpots, "spot")} left`;
 }
 
-export type RowChip = { tone: "success" | "warning" | "danger" | "attention" | "info" | "neutral" | "coordinator"; text: string };
+export type RowChip = { tone: "success" | "warning" | "danger" | "attention" | "info" | "neutral" | "coordinator"; text: string; icon?: IconName };
+
+/** A confidential detail, wherever it is listed: staff-only purple with a lock, first among the chips. */
+export const CONFIDENTIAL_CHIP: RowChip = { tone: "coordinator", text: "Confidential", icon: "lock" };
 
 /** What a detail row shows, worked out on the server so the same row draws in server and client lists. */
 export type RowView = {
@@ -93,7 +106,7 @@ export function DetailRowBody({ row, extra, note }: Readonly<{ row: RowView; ext
       {row.chips.length > 0 || extra || row.address ? (
         <span className="flex flex-wrap items-center gap-1.5">
           {row.chips.map((c) => (
-            <Chip key={c.text} tone={c.tone}>
+            <Chip key={c.text} tone={c.tone} icon={c.icon}>
               {c.text}
             </Chip>
           ))}

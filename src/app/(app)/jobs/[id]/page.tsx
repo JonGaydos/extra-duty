@@ -127,7 +127,8 @@ function DetailView({ data, staff, manages, userId, now }: Readonly<{ data: NonN
   const canNote = mine !== null && ["signed_up", "billed", "paid"].includes(mine.status) && started;
   const positions = positionChoices(data);
   const flex = flexChoices(data);
-  const showWatch = !mine && (card.availability === "full" || card.availability === "not_released");
+  // A confidential detail is never released, so there is nothing to watch for.
+  const showWatch = !mine && !job.confidential && (card.availability === "full" || card.availability === "not_released");
   const safety = job.safety && (job.safety.notes?.trim() || job.safety.addresses.length > 0) ? job.safety : null;
 
   return (
@@ -154,7 +155,21 @@ function DetailView({ data, staff, manages, userId, now }: Readonly<{ data: NonN
                 warningText={settings.signupWarningText.trim() || "I have read the agency extra duty policy and will work this detail as scheduled."}
                 warningVersion={settings.signupWarningVersion}
                 flex={flex}
-                mine={mine ? { assignmentId: mine.assignmentId, label: mine.label, started, claimPositionId: data.claimPositionId } : null}
+                mine={
+                  mine
+                    ? {
+                        assignmentId: mine.assignmentId,
+                        label: mine.label,
+                        status: mine.status,
+                        started,
+                        claimPositionId: data.claimPositionId,
+                        offered: card.offered && !started,
+                        confidential: job.confidential,
+                        messageHref: `/messages/new?about=${job.id}`,
+                      }
+                    : null
+                }
+                ended={data.ended}
               />
             ) : (
               <p className="m-0 text-muted">This detail has no positions to sign up for.</p>
@@ -170,7 +185,7 @@ function DetailView({ data, staff, manages, userId, now }: Readonly<{ data: NonN
             columns={[
               { header: "Name", render: (r) => (r.isYou ? `${r.name} (you)` : r.name) },
               { header: "Position", render: (r) => r.position },
-              { header: "Status", render: (r) => <Chip tone={r.status === "backup" || r.status === "pending_short" ? "warning" : "info"}>{r.label}</Chip> },
+              { header: "Status", render: (r) => <Chip tone={r.offered || r.status === "backup" || r.status === "pending_short" ? "warning" : "info"}>{r.label}</Chip> },
               { header: "Times", render: (r) => timeRange(r.startAt, r.endAt) },
             ]}
             rows={roster}

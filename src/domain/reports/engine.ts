@@ -22,7 +22,7 @@ export type SavedSpec = Omit<ReportSpec, "from" | "to"> & { from?: Date; to?: Da
 
 const DATASET_NAMES = Object.keys(DATASETS) as [DatasetName, ...DatasetName[]];
 const GROUPS = [
-  "day", "week", "month", "year", "deputy", "vendor", "job_type", "location", "status", "responsible_party", "age_bucket", "action", "entity_type",
+  "day", "week", "month", "year", "deputy", "vendor", "job_type", "location", "status", "responsible_party", "age_bucket", "action", "entity_type", "confidential",
 ] as const satisfies readonly GroupBy[];
 const MEASURES = [
   "count", "billed_count", "hours", "billed_cents", "paid_cents", "outstanding_cents", "recipients", "cap_hours", "over_under_hours",
@@ -129,6 +129,7 @@ const DIMS: Record<GroupBy, Dim> = {
   age_bucket: (f) => same(f.ageDays === null ? "n/a" : ageBucket(f.ageDays)),
   action: (f) => same(nameOf(f.action, "none")),
   entity_type: (f) => same(nameOf(f.entityType, "none")),
+  confidential: (f) => same(f.confidential ? "Confidential" : "Not confidential"),
 };
 
 const sumBy = (facts: Fact[], pick: (f: Fact) => number) => facts.reduce((n, f) => n + pick(f), 0);
@@ -220,6 +221,7 @@ export const LABEL: Record<GroupBy | Measure, string> = {
   age_bucket: "Age (days)",
   action: "Action",
   entity_type: "Entity type",
+  confidential: "Confidential",
   count: "Count",
   hours: "Hours",
   billed_cents: "Billed",

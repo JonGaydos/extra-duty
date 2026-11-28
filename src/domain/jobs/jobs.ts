@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, getTableColumns, gt, gte, ilike, inArray, isNull, lt, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { assignments, auditLog, hiddenVendors, invoices, jobAttachments, jobPositions, jobs, jobTypes, positionTypes, qualifications, ranks, vendorLocations, users, vendorRestrictions, vendors } from "@/db/schema";
+import { assignments, auditLog, hiddenVendors, invoices, jobAttachments, jobPositions, jobs, jobTypes, positionTypes, qualifications, ranks, spotGiveaways, vendorLocations, users, vendorRestrictions, vendors } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { jobAudience, vendorAudience } from "../notifications/audiences";
 import { emit } from "../notifications/notify";
-import { assertCan, managesVendor } from "../auth/policy";
+import { assertCan, managesJob } from "../auth/policy";
+import { assertMaySeeJob, auditConfidential, CONFIDENTIAL_FIELDS, confidentialReason, confidentialVisible, isAssigned, recordConfidentialView, setConfidential } from "./confidential";
 import { jobVendorId } from "../auth/scope";
 import { NotFoundError, RuleViolation, ValidationError } from "../errors";
 import { cleanChangedContactName, cleanContactName } from "../contact-name";
@@ -19,6 +20,7 @@ import { type ContractStatus, jobContractStatus } from "./contract-status";
 import { outsideRange, rateRangeMessage, resolveRate } from "./rate";
 import { isJobLocked, openHold } from "../vendor-portal/holds";
 import { LATE_CANCEL_VOID_ACTION } from "../assignments/history";
+import { cleanReminderHours, cleanReminderNote } from "./reminder-choices";
 import { applySafety, loadSafety, type JobSafetyView, type SafetyInput } from "./safety";
 import { conflictsAt, overrideReason, ScheduleConflictError, type ConflictOverride, type ScheduleConflict } from "./schedule-conflicts";
 
@@ -62,6 +64,19 @@ export type JobInput = {
    * override, and refused when the conflicts are not the ones shown.
    */
   conflictOverride?: ConflictOverride | null;
+  /**
+   * Confidential (owner decision 2026-11-27): coordinators and admins only, with `confidentialReason`, on create and on
+   * a single detail's edit. Copies and series edits never change it.
+   */
+  confidential?: boolean;
+  confidentialReason?: string | null;
+  /**
+   * Reminder times before the start (owner request 2026-11-27): null or left out keeps the agency's, an empty list
+   * turns them off. On an edit, left out leaves them as they are.
+   */
+  reminderHours?: number[] | null;
+  /** Added to each reminder. */
+  reminderNote?: string | null;
 };
 
 export const JOBS_PAGE_SIZE = 50;
@@ -207,6 +222,9 @@ export async function createJobInSeries(actor: Actor, tx: Tx, input: JobInput, s
   // Only a single detail made by a coordinator or admin may carry an override; a series, copy or vendor request never does.
   const override = rangeOverride(actor, rate, settings, input.rateOverrideReason, seriesId === null && !opts.authorized && !opts.state);
   const positions = await normalizePositions(tx, input.positions ?? [], settings);
+  const confidential = input.confidential === true && !opts.state;
+  if (confidential) assertCan(actor, "job.confidential");
+  const confidentialWhy = confidential ? confidentialReason(input.confidentialReason) : null;
 
   const [row] = await tx
     .insert(jobs)
@@ -234,6 +252,9 @@ export async function createJobInSeries(actor: Actor, tx: Tx, input: JobInput, s
       requestedByUserId: opts.requestedByUserId ?? null,
       held: input.held,
       releaseAt: releaseAt(input.startAt, settings),
+      reminderHours: cleanReminderHours(input.reminderHours),
+      reminderNote: cleanReminderNote(input.reminderNote),
+      ...(confidential ? CONFIDENTIAL_FIELDS : {}),
     })
     .returning();
   await tx.insert(jobPositions).values(positions.map((p) => ({ jobId: row.id, ...p })));
@@ -242,6 +263,7 @@ export async function createJobInSeries(actor: Actor, tx: Tx, input: JobInput, s
   if (override) {
     await recordAudit(tx, { actor, action: "job.rate_override", entityType: "job", entityId: row.id, before: null, after: { rateCents: rate, ...override }, reason: override.rateOverrideReason });
   }
+  if (confidentialWhy) await auditConfidential(tx, actor, row.id, null, true, confidentialWhy);
   return row;
 }
 
@@ -354,7 +376,9 @@ function setPlainFields(set: JobSet, patch: Partial<JobInput>, before: Job): voi
   if (patch.notes !== undefined) set.notes = text(patch.notes);
   if (patch.contactName !== undefined) set.contactName = cleanChangedContactName(patch.contactName, before.contactName);
   if (patch.contactPhone !== undefined) set.contactPhone = cleanChangedPhone(patch.contactPhone, before.contactPhone);
-  if (patch.held !== undefined) set.held = patch.held;
+  if (patch.held !== undefined && !before.confidential) set.held = patch.held;
+  if (patch.reminderHours !== undefined) set.reminderHours = cleanReminderHours(patch.reminderHours);
+  if (patch.reminderNote !== undefined) set.reminderNote = cleanReminderNote(patch.reminderNote);
 }
 
 /** The time columns an edit sets: the times, the release date that follows the start, the flexible window and the ops plan due date. */
@@ -366,7 +390,7 @@ function setScheduleFields(set: JobSet, patch: Partial<JobInput>, before: Job, n
   }
   // A new start follows the month rule only while the detail is not yet released: a release that already
   // happened (on schedule or by Release now) is never taken back by a time edit.
-  const alreadyReleased = before.releaseAt !== null && before.releaseAt.getTime() <= Date.now();
+  const alreadyReleased = before.confidential || (before.releaseAt !== null && before.releaseAt.getTime() <= Date.now());
   if (patch.startAt !== undefined && patch.startAt.getTime() !== before.startAt.getTime() && !alreadyReleased) set.releaseAt = releaseAt(startAt, settings);
   if (patch.flex !== undefined) {
     set.flexEarliestStartAt = flex.earliestStartAt;
@@ -594,6 +618,9 @@ async function updateOne(
   await auditRate(actor, tx, before, after, rateChanged, Boolean(hasSignups));
   await alertChange(tx, before, after, changeDetails(before, after, rateChanged, positionsChanged, Boolean(collect)), collect);
   if (patch.safety) await applySafetyEdit(actor, tx, before, after, patch.safety, Boolean(hasSignups));
+  if (scope === "one" && patch.confidential !== undefined && patch.confidential !== after.confidential) {
+    after = await setConfidential(actor, tx, before.id, patch.confidential, patch.confidentialReason ?? "");
+  }
   return after;
 }
 
@@ -695,6 +722,11 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
   for (const a of lateRows) {
     await recordAudit(tx, { actor, action: "assignment.late_cancel", entityType: "assignment", entityId: a.id, before: { ...a, status: "signed_up" }, after: a, reason: why });
   }
+  // Offers to give a spot away end with the detail.
+  await tx
+    .update(spotGiveaways)
+    .set({ status: "ended", endedAt: now })
+    .where(and(eq(spotGiveaways.status, "open"), inArray(spotGiveaways.assignmentId, tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.jobId, id)))));
   // Everyone else holding a spot or a place in line is released: no pay without a late cancellation.
   const released = await tx
     .update(assignments)
@@ -715,7 +747,7 @@ export async function cancelJobUnchecked(actor: Actor, tx: Tx, id: string, reaso
     link: `/jobs/${id}`,
   });
   // Staff canceling tell the vendor's logins; a vendor canceling its own detail already knows. No reason is given.
-  if (actor.role === "coordinator" || actor.role === "admin" || managesVendor(actor, after.vendorId)) {
+  if (actor.role === "coordinator" || actor.role === "admin" || managesJob(actor, after)) {
     await emit(tx, { recipients: await vendorAudience(tx, after.vendorId), type: "job.canceled", title: "Detail canceled", body: `Detail #${after.number} on ${dayText(after.startAt)} was canceled.`, link: `/jobs/${id}` });
   }
   return after;
@@ -862,6 +894,7 @@ export async function holdJob(actor: Actor, tx: Tx, id: string, scope: "one" | "
   // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, scope)) {
     if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined detail cannot be held.");
+    if (before.confidential) throw new ValidationError("A confidential detail is never released, so it cannot be held.");
     if (before.held) {
       out.push(before);
       continue;
@@ -882,7 +915,7 @@ export async function releaseJob(actor: Actor, tx: Tx, id: string, opts: { scope
   const out: Job[] = [];
   // Sequential: each detail is saved and audited in order in this transaction.
   for (const before of await scopeTargets(tx, id, opts.scope)) {
-    if (before.state === "canceled" || before.state === "declined") throw new ValidationError("A canceled or declined detail cannot be released.");
+    assertReleasable(before);
     const set: Partial<typeof jobs.$inferInsert> = {};
     if (before.held) set.held = false;
     const early = opts.now && before.state !== "requested" && (!before.releaseAt || before.releaseAt.getTime() > at.getTime());
@@ -897,6 +930,12 @@ export async function releaseJob(actor: Actor, tx: Tx, id: string, opts: { scope
     out.push(after);
   }
   return out;
+}
+
+/** A canceled, declined or confidential detail is never released. */
+function assertReleasable(job: Job): void {
+  if (job.state === "canceled" || job.state === "declined") throw new ValidationError("A canceled or declined detail cannot be released.");
+  if (job.confidential) throw new ValidationError("A confidential detail is never released. A coordinator assigns people.");
 }
 
 /** Clears one detail's hold; kept for existing callers. */
@@ -922,14 +961,16 @@ export async function getJob(actor: Actor, tx: Tx, id: string): Promise<JobDetai
   const job = await getRow(tx, id);
   if (actor.role === "vendor" && actor.vendorId !== job.vendorId) throw new NotFoundError("Job not found.");
   // Personnel never see a vendor request before it is approved, or one that was declined, unless they manage the vendor.
-  if (actor.role === "personnel" && HIDDEN_FROM_PERSONNEL.includes(job.state) && !managesVendor(actor, job.vendorId)) throw new NotFoundError("Job not found.");
+  if (actor.role === "personnel" && HIDDEN_FROM_PERSONNEL.includes(job.state) && !managesJob(actor, job)) throw new NotFoundError("Job not found.");
+  await assertMaySeeJob(tx, actor, job);
   assertCan(actor, "job.read", { vendorId: job.vendorId });
   const positions = await tx.select().from(jobPositions).where(eq(jobPositions.jobId, id)).orderBy(asc(jobPositions.createdAt), asc(jobPositions.id));
   const attachments = await tx.select().from(jobAttachments).where(eq(jobAttachments.jobId, id)).orderBy(asc(jobAttachments.createdAt), asc(jobAttachments.id));
-  const staff = actor.role === "admin" || actor.role === "coordinator" || managesVendor(actor, job.vendorId);
+  const staff = actor.role === "admin" || actor.role === "coordinator" || managesJob(actor, job);
   const seesContracts = staff || actor.role === "vendor";
+  const assigned = !staff && actor.role === "personnel" && (await isAssigned(tx, actor.userId, job.id));
   return {
-    ...jobFieldsFor(actor, job),
+    ...jobFieldsFor(actor, job, { assigned }),
     positions,
     personnelTotal: positions.reduce((n, p) => n + p.count, 0),
     safety: await loadSafety(tx, id),
@@ -938,16 +979,25 @@ export async function getJob(actor: Actor, tx: Tx, id: string): Promise<JobDetai
   };
 }
 
+/** getJob for someone opening the detail (its page or the API): an open of a confidential detail is logged. */
+export async function openJob(actor: Actor, tx: Tx, id: string): Promise<JobDetail> {
+  const job = await getJob(actor, tx, id);
+  await recordConfidentialView(tx, actor, job);
+  return job;
+}
+
 /**
  * A job row as `actor` may see it. Staff see every field. Personnel and vendors never see an approved
  * out-of-range rate's reason, approver and time (owner decision: audit log and the staff page only) or the
  * late-cancel waiver's reason, and see why and by whom a detail was canceled only while it is canceled (a
- * declined request keeps its reason for the vendor). Billing reads the row itself, never this view. Every path
- * that hands job rows to non-staff goes through here.
+ * declined request keeps its reason for the vendor). The reminder note reaches only staff, the vendor's managers
+ * and the people assigned (`assigned`, known only on the single-detail read); vendors never get it. Billing reads
+ * the row itself, never this view. Every path that hands job rows to non-staff goes through here.
  */
-export function jobFieldsFor<T extends Job>(actor: Actor, job: T): T {
-  if (actor.role === "admin" || actor.role === "coordinator" || managesVendor(actor, job.vendorId)) return job;
-  const staffOnly = { rateOverrideReason: null, rateOverrideBy: null, rateOverrideAt: null, lateCancelWaivedReason: null };
+export function jobFieldsFor<T extends Job>(actor: Actor, job: T, opts: { assigned?: boolean } = {}): T {
+  if (actor.role === "admin" || actor.role === "coordinator" || managesJob(actor, job)) return job;
+  const reminderNote = opts.assigned && actor.role === "personnel" ? job.reminderNote : null;
+  const staffOnly = { rateOverrideReason: null, rateOverrideBy: null, rateOverrideAt: null, lateCancelWaivedReason: null, reminderNote };
   if (job.state === "canceled" || job.state === "declined") return { ...job, ...staffOnly };
   return { ...job, ...staffOnly, cancelReason: null, canceledAt: null, canceledByVendor: false };
 }
@@ -973,6 +1023,8 @@ export type JobFilter = {
   sort?: JobSort;
   /** Default `asc`. */
   direction?: "asc" | "desc";
+  /** Staff lists: only confidential details, or none. Anyone else sees only the confidential details they are on. */
+  confidential?: "only" | "hide";
 };
 
 /** Billable minutes at the job rate, in cents: the same arithmetic as `scheduledPayCents`, for ordering in SQL. */
@@ -1066,7 +1118,17 @@ function filterConds(actor: Actor, tx: Tx, filter: JobFilter): SQL[] {
   if (match) conds.push(match);
   const visible = actor.role === "personnel" && !filter.mine ? openListVisibility(tx, actor.userId) : undefined;
   if (visible) conds.push(theirVendors ? or(visible, theirVendors)! : visible);
+  conds.push(...confidentialConds(tx, actor, filter));
   return conds;
+}
+
+/** Confidential details: only those the actor may see, and for staff the list's own choice (only or hide). */
+function confidentialConds(tx: Tx, actor: Actor, filter: JobFilter): SQL[] {
+  const out: SQL[] = [];
+  const visible = confidentialVisible(tx, actor);
+  if (visible) out.push(visible);
+  if (filter.confidential) out.push(eq(jobs.confidential, filter.confidential === "only"));
+  return out;
 }
 
 /**

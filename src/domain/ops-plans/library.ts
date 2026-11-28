@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, ilike, lt, ne, or, sql } from "drizzle-orm";
+import { confidentialVisible } from "../jobs/confidential";
 import type { Tx } from "@/db/client";
 import { files, jobs, opsPlanVersions, opsPlans, users, vendors } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
@@ -77,6 +78,9 @@ export async function searchLibrary(actor: Actor, tx: Tx, filter: LibraryFilter,
   const text = filter.text?.trim();
   if ((location?.length ?? 0) > LIBRARY_TEXT_MAX || (text?.length ?? 0) > LIBRARY_TEXT_MAX) throw new ValidationError(`Search text can be at most ${LIBRARY_TEXT_MAX} characters.`);
   const { conds, query } = agreedPlans(tx, now);
+  // A confidential detail's plan is listed only for staff and the people assigned to it.
+  const visible = confidentialVisible(tx, actor);
+  if (visible) conds.push(visible);
   if (filter.vendorId) conds.push(eq(vendors.id, filter.vendorId));
   if (filter.year !== undefined) conds.push(eq(opsPlans.year, filter.year));
   if (location) conds.push(ilike(opsPlans.location, escapeLike(location)));

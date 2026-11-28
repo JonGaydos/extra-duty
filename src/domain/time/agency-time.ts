@@ -78,3 +78,10 @@ export function agencyDateOnly(value: unknown, edge: "start" | "end" = "start"):
   const next = new Date(Date.UTC(y, mo - 1, d + 1));
   return new Date(agencyInstant(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), 0, 0).getTime() - 1);
 }
+
+const STAMP = new Intl.DateTimeFormat("en-US", { timeZone: AGENCY_TZ, month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+
+/** A date and time in agency time with its zone written out, for exports and printed records: "Feb 2, 2035, 9:30 AM CST". */
+export function agencyStamp(at: Date): string {
+  return STAMP.format(at);
+}

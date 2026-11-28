@@ -25,28 +25,6 @@ import { AlertPrefs, CalendarLinkForm, ContactForm, ExceptionForm, GoalForm, Pus
 
 export const metadata: Metadata = { title: "Profile" };
 
-const ALERT_TYPES = [
-  { type: "spot.offered", label: "A backup spot is offered to you" },
-  { type: "spot.opened_first_come", label: "A spot opens for anyone" },
-  { type: "job.watch_opened", label: "A detail you watch opens" },
-  { type: "job.watch_released", label: "A detail you watch is released" },
-  { type: "job.changed", label: "A detail you are on changes" },
-  { type: "job.canceled", label: "A detail you are on is canceled" },
-  { type: "job.reactivated", label: "A canceled detail you were on is back on" },
-  { type: "job.safety_changed", label: "Officer safety information changes" },
-  { type: "assignment.assigned", label: "A coordinator assigns you" },
-  { type: "assignment.removed", label: "A coordinator removes you" },
-  { type: "signup.short_confirmed", label: "A shorter shift is confirmed" },
-  { type: "signup.short_declined", label: "A shorter shift is declined" },
-  { type: "billing.ready", label: "A detail is ready to bill" },
-  { type: "billing.unbilled_reminder", label: "Reminders about unbilled details" },
-  { type: "invoice.returned", label: "An invoice is sent back to you" },
-  { type: "invoice.vendor_paid", label: "A vendor reports paying you" },
-  { type: "payment_issue.waiting_on", label: "A payment issue needs you" },
-  { type: "ops_plan.due", label: "An ops plan is due" },
-  { type: "message.received", label: "You get a message" },
-];
-
 const DAY_MS = 86_400_000;
 
 type Schedule = Awaited<ReturnType<typeof getWorkSchedule>>;
@@ -320,7 +298,7 @@ export default async function ProfilePage() {
 
               <Card id="alerts">
                 <CardTitle>Alerts</CardTitle>
-                <AlertPrefs types={ALERT_TYPES} prefs={data.alerts.prefs} agencyOff={data.alerts.agencyOff} />
+                <AlertPrefs types={data.alerts.types} prefs={data.alerts.prefs} agencyOff={data.alerts.agencyOff} />
                 <div className="flex flex-col gap-2 border-t border-divider pt-3">
                   <h3 className="m-0 text-sm font-semibold">Quiet hours</h3>
                   <QuietHoursForm enabled={data.alerts.quietHours.enabled} start={data.alerts.quietHours.start} end={data.alerts.quietHours.end} />

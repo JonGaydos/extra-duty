@@ -5,6 +5,7 @@ import type { Actor } from "../actor";
 import { assertCan } from "../auth/policy";
 import { ForbiddenError, NotFoundError } from "../errors";
 import { formatInvoiceNumber } from "../invoices/invoices";
+import { CONFIDENTIAL_TITLE } from "../jobs/confidential";
 import { vendorNotConfirmed } from "../billing/payments";
 import { getSettings } from "../settings/settings";
 import type { Cents, Minutes } from "../types";
@@ -71,7 +72,7 @@ export async function vendorDetails(actor: Actor, tx: Tx, range: { from: Date; t
     .select({ job: jobs, locationName: vendorLocations.name })
     .from(jobs)
     .leftJoin(vendorLocations, eq(vendorLocations.id, jobs.locationId))
-    .where(and(eq(jobs.vendorId, vendorId), gte(jobs.startAt, range.from), lte(jobs.startAt, range.to)))
+    .where(and(eq(jobs.vendorId, vendorId), eq(jobs.confidential, false), gte(jobs.startAt, range.from), lte(jobs.startAt, range.to)))
     .orderBy(asc(jobs.startAt), asc(jobs.number));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.job.id);
@@ -129,7 +130,7 @@ function closedToVendor(job: { state: string; startAt: Date }, hold: boolean, no
 export async function vendorJobControls(actor: Actor, tx: Tx, jobId: string, now: Date = new Date()): Promise<VendorJobControls> {
   const vendorId = ownVendor(actor);
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, jobId));
-  if (job?.vendorId !== vendorId) throw new NotFoundError("Job not found.");
+  if (job?.vendorId !== vendorId || job.confidential) throw new NotFoundError("Job not found.");
   const s = await getSettings(tx);
   const posRows = await tx
     .select({ positionTypeId: jobPositions.positionTypeId, name: positionTypes.name, count: jobPositions.count })
@@ -287,7 +288,8 @@ export async function vendorInvoices(actor: Actor, tx: Tx): Promise<VendorInvoic
     status: inv.status,
     jobId: job.id,
     jobNumber: job.number,
-    jobTitle: job.title,
+    // The invoice itself is unchanged (it is the deputy's pay); the portal names a confidential detail only so.
+    jobTitle: job.confidential ? CONFIDENTIAL_TITLE : job.title,
     jobStartAt: job.startAt,
     payeeName,
     minutes: inv.minutes,

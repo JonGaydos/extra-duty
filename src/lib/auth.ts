@@ -23,7 +23,7 @@ import {
 } from "@/domain/auth/sign-in-policy";
 import { waitText } from "@/domain/auth/wait-text";
 import { getSettings, type AgencySettings } from "@/domain/settings/settings";
-import { simpleEmail } from "./email/format";
+import { buildEmail } from "@/domain/email-messages/store";
 import { ensureEmailSender } from "@/bootstrap/email";
 import { getEmailSender } from "./email/sender";
 import type { EmailSender } from "./email/types";
@@ -174,20 +174,20 @@ function signInPolicy(db: Db, security: AgencySettings["security"]): BetterAuthP
   };
 }
 
-function codeEmail(to: string, code: string, minutes: number) {
-  const msg = simpleEmail(to, "Your sign-in code", [
-    `Your Signal 90 sign-in code is ${code}.`,
-    `It expires in ${minutes} minutes. If you did not try to sign in, reset your password.`,
-  ]);
+/** The agency's name for the sign-in emails. */
+async function agencyName(db: Db): Promise<string> {
+  return (await db.transaction((tx) => getSettings(tx))).agency.name;
+}
+
+/** The sign-in code email, from the agency's "Sign-in code" message. */
+async function codeEmail(db: Db, to: string, code: string, minutes: number) {
+  const msg = await buildEmail(db, "auth.sign_in_code", to, { code, "code.minutes": String(minutes), "agency.name": await agencyName(db) });
   return { ...msg, auth: true as const };
 }
 
-function resetEmail(to: string, url: string) {
-  const msg = simpleEmail(to, "Reset your password", [
-    "Use this link to set a new Signal 90 password. It also unlocks an account locked for inactivity.",
-    url,
-    "The link expires in 1 hour. If you did not ask for this, ignore this email.",
-  ]);
+/** The password reset email, from the agency's "Password reset" message. */
+async function resetEmail(db: Db, to: string, url: string) {
+  const msg = await buildEmail(db, "auth.password_reset", to, { "reset.link": url, "agency.name": await agencyName(db) });
   return { ...msg, auth: true as const };
 }
 
@@ -217,7 +217,7 @@ export function createAuth(o: CreateAuthOptions) {
       // better-auth expects a promise: it resolves at once, and a throw while starting the send still rejects it.
       sendResetPassword: ({ user, url }) =>
         new Promise<void>((resolve) => {
-          o.emailSender.send(resetEmail(user.email, url)).catch((err: unknown) => {
+          resetEmail(db, user.email, url).then((msg) => o.emailSender.send(msg)).catch((err: unknown) => {
             console.error("password reset email failed:", err instanceof Error ? err.message : String(err));
           });
           resolve();
@@ -253,7 +253,7 @@ export function createAuth(o: CreateAuthOptions) {
           storeOTP: "hashed",
           // On staging the sender delivers it only to STAGING_EMAIL_ALLOWLIST; anything else goes to the outbox.
           sendOTP: async ({ user, otp }) => {
-            await o.emailSender.send(codeEmail(user.email, otp, security.emailCodeMinutes));
+            await o.emailSender.send(await codeEmail(db, user.email, otp, security.emailCodeMinutes));
           },
         },
       }),

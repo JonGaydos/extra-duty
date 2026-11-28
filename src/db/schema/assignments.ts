@@ -61,3 +61,41 @@ export const assignments = pgTable(
     index("assignments_position_idx").on(t.jobPositionId),
   ],
 );
+
+/**
+ * How a spot offer ended: taken over by someone else, withdrawn by the deputy, canceled by staff, or ended because
+ * the sign-up itself ended (removed, detail canceled) or the detail started with the deputy still on it.
+ */
+export const spotGiveawayStatus = pgEnum("spot_giveaway_status", ["open", "taken", "withdrawn", "canceled", "ended"]);
+
+/**
+ * A deputy giving their spot away (owner decision 2026-11-27). The sign-up stays signed_up, and the deputy stays
+ * responsible for it, until someone eligible takes the spot over. At most one open offer per sign-up.
+ */
+export const spotGiveaways = pgTable(
+  "spot_giveaways",
+  {
+    id: pk(),
+    assignmentId: text("assignment_id")
+      .notNull()
+      .references(() => assignments.id),
+    jobPositionId: text("job_position_id")
+      .notNull()
+      .references(() => jobPositions.id),
+    reason: text("reason").notNull(),
+    status: spotGiveawayStatus("status").notNull().default("open"),
+    /** The sign-up that replaced the deputy, when taken. */
+    takenByAssignmentId: text("taken_by_assignment_id").references(() => assignments.id),
+    endedAt: tstz("ended_at"),
+    endedBy: text("ended_by").references(() => users.id),
+    /** Set once the "still yours to work" reminder went out, inside the late window. */
+    remindedAt: tstz("reminded_at"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("spot_giveaways_open_uq")
+      .on(t.assignmentId)
+      .where(sql`${t.status} = 'open'`),
+    index("spot_giveaways_position_idx").on(t.jobPositionId),
+  ],
+);

@@ -146,6 +146,7 @@ export async function recommendationsFor(actor: Actor, tx: Tx, now: Date): Promi
       and(
         inArray(jobs.state, [...APPROVED_STATES]),
         eq(jobs.held, false),
+        eq(jobs.confidential, false),
         lte(jobs.releaseAt, now),
         gt(jobs.startAt, from),
         lte(jobs.startAt, to),

@@ -33,9 +33,23 @@ export const withPlace = (text: string, place: string | null) => (place ? `${tex
 /** Where an entry opens: the detail page everyone shares (staff find their controls on it). */
 export const entryHref = (e: CalEntry) => `/jobs/${e.number}`;
 
+export type EntryChip = { tone: (typeof TONE)[CalStatus] | "warning"; text: string; icon?: "lock" };
+
+/**
+ * The entry's status chips: Confidential (staff purple, lock) when it applies, the status word and Held. A
+ * confidential detail is never released, so Confidential stands in for "Not released" rather than beside it.
+ */
+export function entryChips(e: Pick<CalEntry, "status" | "confidential" | "held">): EntryChip[] {
+  const chips: EntryChip[] = [];
+  if (e.confidential) chips.push({ tone: "coordinator", text: "Confidential", icon: "lock" });
+  if (!(e.confidential && e.status === "not_released")) chips.push({ tone: TONE[e.status], text: STATUS_LABEL[e.status] });
+  if (e.held) chips.push({ tone: "warning", text: "Held" });
+  return chips;
+}
+
 /** What a screen reader hears after the entry's text. */
 function statusWords(e: CalEntry): string {
-  return [STATUS_LABEL[e.status], e.held ? "held" : null, e.mine ? "you are on it" : null].filter(Boolean).join(", ");
+  return [...entryChips(e).map((c) => c.text), e.mine ? "you are on it" : null].filter(Boolean).join(", ");
 }
 
 /** "7:00 AM Vendor name" in a month cell, with the title on hover. */
@@ -72,8 +86,11 @@ export function EntryRow({ e, manage = false }: Readonly<{ e: CalEntry; manage?:
           <span className="flex flex-wrap items-center justify-between gap-2">
             <span className={`font-semibold ${e.status === "canceled" ? "[text-decoration-line:underline_line-through]" : "underline"} decoration-current/50 decoration-1 underline-offset-3 group-hover:decoration-current group-hover:decoration-2`}>{e.vendorName}</span>
             <span className="flex flex-wrap gap-1.5">
-              <Chip tone={TONE[e.status]}>{STATUS_LABEL[e.status]}</Chip>
-              {e.held ? <Chip tone="warning">Held</Chip> : null}
+              {entryChips(e).map((c) => (
+                <Chip key={c.text} tone={c.tone} icon={c.icon}>
+                  {c.text}
+                </Chip>
+              ))}
               {e.mine ? <Chip tone="info">{MINE_LABEL[e.myStatus ?? "signed_up"] ?? "Yours"}</Chip> : null}
             </span>
           </span>

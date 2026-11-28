@@ -121,6 +121,7 @@ export async function unbilledRemindersTick(now: Date): Promise<number> {
           title: `${unbilled.length + waiting.length} ${unbilled.length + waiting.length === 1 ? "item needs" : "items need"} your attention`,
           body: lines.join("\n"),
           link: unbilled.length > 0 ? `/jobs/${unbilled[0].jobId}` : `/jobs/${waiting[0].jobId}`,
+          jobIds: [...new Set([...unbilled.map((u) => u.jobId), ...waiting.map((i) => i.jobId)])],
         },
         now,
       );

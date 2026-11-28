@@ -1,16 +1,16 @@
 import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { assignments, jobs, spotOffers, vendorRestrictions } from "@/db/schema";
+import { assignments, jobs, vendorRestrictions } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
 import { assignmentVendorId, positionVendorId } from "../auth/scope";
-import { evaluateSignup } from "../eligibility/eligibility";
+import { ASSIGNMENT_ONLY, evaluateSignup } from "../eligibility/eligibility";
 import { NotFoundError, RuleViolation, ValidationError, type CheckResult } from "../errors";
 import { getSettings } from "../settings/settings";
-import { expireOffer, leaveAssignment } from "./backups";
+import { endSurplusOffers, leaveAssignment } from "./backups";
 import { isRestricted } from "./restrictions";
-import { FULL_CHECK, buildContext, endOpenWatches, failing, insertAssignment, loadLocked, lockUser, settlePending, signedUpCount, type Assignment } from "./signup";
+import { FULL_CHECK, buildContext, endOpenWatches, failing, insertAssignment, loadLocked, lockUser, settlePending, signedUpCount, takeOverOffered, type Assignment } from "./signup";
 import { emit } from "../notifications/notify";
 
 
@@ -24,7 +24,7 @@ export async function assignPerson(
   tx: Tx,
   jobPositionId: string,
   userId: string,
-  opts: { overrideReason?: string; notify: boolean; now?: Date },
+  opts: { overrideReason?: string; notify: boolean; now?: Date; replaceGiveawayId?: string },
 ): Promise<Assignment> {
   assertCan(actor, "assignment.assign", { vendorId: await positionVendorId(tx, jobPositionId) });
   const now = opts.now ?? new Date();
@@ -36,9 +36,10 @@ export async function assignPerson(
 
   const free = position.count - (await signedUpCount(tx, position.id));
   const planned = { startAt: job.startAt, endAt: job.endAt };
+  // Assignment is how a confidential detail is staffed, so its "a coordinator assigns people" rule needs no override.
   const problems: CheckResult[] = failing(
     evaluateSignup(await buildContext(tx, { userId, job, position, free, planned, now, settings, includePending: true })),
-  );
+  ).filter((c) => !(c.check === "state" && c.message === ASSIGNMENT_ONLY));
   if (free <= 0) problems.push(FULL_CHECK);
   if (problems.some((c) => c.check === "vendor_restricted")) {
     throw new RuleViolation(problems, RESTRICTED_ABSOLUTE);
@@ -68,29 +69,8 @@ export async function assignPerson(
   });
   await endOpenWatches(tx, actor, job.id, now, userId);
   // Offers beyond the remaining free spots end, newest first; their backups are told.
-  const open = await tx
-    .select()
-    .from(spotOffers)
-    .where(and(eq(spotOffers.jobPositionId, position.id), eq(spotOffers.status, "open")))
-    .orderBy(asc(spotOffers.createdAt), asc(spotOffers.id));
-  const surplus = open.length - Math.max(free - 1, 0);
-  // Sequential: expiries and alerts written in this transaction.
-  for (const o of open.slice(open.length - Math.max(surplus, 0))) {
-    await expireOffer(tx, o, "expired");
-    const who = o.offeredToAssignmentId
-      ? await tx.select({ userId: assignments.userId }).from(assignments).where(eq(assignments.id, o.offeredToAssignmentId))
-      : await tx
-          .select({ userId: assignments.userId })
-          .from(assignments)
-          .where(and(eq(assignments.jobPositionId, position.id), eq(assignments.status, "backup")));
-    await emit(tx, {
-      recipients: who.map((w) => w.userId),
-      type: "spot.offer_ended",
-      title: `Spot no longer available: #${job.number} ${job.title}`,
-      body: `The spot for ${position.name} was filled by a coordinator.`,
-      link: `/jobs/${job.id}`,
-    });
-  }
+  await endSurplusOffers(tx, job, position, free - 1, `The spot for ${position.name} was filled by a coordinator.`);
+  await takeOverOffered(actor, tx, job, position, row, now, opts.replaceGiveawayId);
   if (opts.notify) {
     await emit(tx, { recipients: [userId],
       type: "assignment.assigned",

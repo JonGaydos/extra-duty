@@ -106,7 +106,8 @@ export async function managerOverview(actor: Actor, tx: Tx, now: Date = new Date
         })
         .from(jobs)
         .leftJoin(vendorLocations, eq(vendorLocations.id, jobs.locationId))
-        .where(and(inArray(jobs.vendorId, ids), gt(jobs.endAt, now), lte(jobs.startAt, until), inArray(jobs.state, ["requested", "scheduled", "active"])))
+        // Never a confidential detail: managers see one only when assigned, and then as a deputy (owner decision 2026-11-27).
+        .where(and(inArray(jobs.vendorId, ids), eq(jobs.confidential, false), gt(jobs.endAt, now), lte(jobs.startAt, until), inArray(jobs.state, ["requested", "scheduled", "active"])))
         .orderBy(asc(jobs.startAt), asc(jobs.number))
     : [];
   return {

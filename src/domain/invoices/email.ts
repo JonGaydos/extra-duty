@@ -11,7 +11,8 @@ import { queueInvoiceJob } from "@/jobs/boss";
 import { emailConfigProblem, REPLY_TO_PROBLEM, settingsProblemMessage, type SettingsProblem } from "@/lib/email/provider";
 import { outboxActive } from "@/lib/email/outbox";
 import { getEmailSender } from "@/lib/email/sender";
-import { invoiceEmail } from "@/lib/email/templates/invoice";
+import { invoiceEmailValues } from "@/lib/email/templates/invoice";
+import { buildEmail } from "@/domain/email-messages/store";
 import type { OutgoingEmail } from "@/lib/email/types";
 import { formatMoney, renderInvoicePdf } from "@/lib/pdf/invoice-pdf";
 import type { Storage } from "@/lib/storage";
@@ -129,20 +130,18 @@ export async function buildInvoiceMessage(tx: Tx, invoiceId: string, storage?: S
   const w9 = inv.attachW9 && !opts.noW9 ? await readW9ForInvoiceEmail(tx, invoiceId, storage, opts.w9ReadBy ?? inv.w9RequestedBy ?? undefined) : null;
   if (w9) attachments.push({ filename: `W-9 ${data.payee.name}.pdf`, content: w9.body, contentType: "application/pdf" });
   const withW9 = w9 !== null;
-  return {
-    ...invoiceEmail({
-      to: data.vendor.billingEmails,
-      replyTo: settings.billingReplyToEmail,
-      invoiceNumber: data.number,
-      jobNumber: data.job.number,
-      agencyName: data.agency.name,
-      payeeName: data.payee.name,
-      total: formatMoney(data.totalCents),
-      withW9,
-      revision: inv.revision,
-    }),
-    attachments,
-  };
+  const { key, values } = invoiceEmailValues({
+    invoiceNumber: data.number,
+    jobNumber: data.job.number,
+    agencyName: data.agency.name,
+    vendorName: data.vendor.name,
+    payeeName: data.payee.name,
+    total: formatMoney(data.totalCents),
+    withW9,
+    revision: inv.revision,
+  });
+  const msg = await buildEmail(tx, key, data.vendor.billingEmails, values);
+  return { ...msg, replyTo: settings.billingReplyToEmail, attachments };
 }
 
 async function markFailed(invoiceId: string, reason: string, summary: string): Promise<void> {

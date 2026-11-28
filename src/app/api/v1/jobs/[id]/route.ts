@@ -1,17 +1,20 @@
 import { NotFoundError } from "@/domain/errors";
 import { parseDetailNumber, visibleJobIdByNumber } from "@/domain/jobs/detail-number";
-import { getJob, updateJob } from "@/domain/jobs/jobs";
+import { openJob, updateJob } from "@/domain/jobs/jobs";
 import { apiHandler } from "@/lib/api/handler";
 import { routes } from "@/lib/api/registry";
 import { parseJobBody } from "../parse";
 
-/** `{id}` is the detail's id, or its number (`9`): a number the caller may not see is not found, like a missing one. */
+/**
+ * `{id}` is the detail's id, or its number (`9`): a number the caller may not see is not found, like a missing one.
+ * Opening a confidential detail is logged, as in the app.
+ */
 export const GET = apiHandler(routes["GET /jobs/{id}"], async ({ actor, params, run }) =>
   run(async (tx) => {
     const n = parseDetailNumber(params.id);
     const id = n === null ? params.id : await visibleJobIdByNumber(actor, tx, n);
     if (!id) throw new NotFoundError("Job not found.");
-    return getJob(actor, tx, id);
+    return openJob(actor, tx, id);
   }),
 );
 

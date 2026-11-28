@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { auditLabel } from "@/app/(app)/admin/_admin/audit-labels";
+import { auditLabel } from "@/domain/audit/labels";
 
 describe("audit labels", () => {
   test("known actions read plainly, others are built from the key", () => {

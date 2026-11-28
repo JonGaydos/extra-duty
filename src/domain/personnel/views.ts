@@ -1,4 +1,5 @@
 import { agencyTurnedOff } from "@/domain/notifications/agency";
+import { personalAlertTypes, type PersonalAlertType } from "@/domain/notifications/personal";
 import type { NotificationType } from "@/domain/notifications/types";
 import { and, asc, desc, eq, exists, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import type { Tx } from "@/db/client";
@@ -23,14 +24,16 @@ import {
   vendors,
 } from "@/db/schema";
 import type { Actor } from "../actor";
-import { assertCan, managesVendor } from "../auth/policy";
+import { assertCan, managesJob } from "../auth/policy";
 import { canReportNonPayment } from "../payment-issues/issues";
 import { responsibleDueAt, type Party } from "../billing/payments";
 import { loadUnbilled } from "../billing/lock";
 import { seasonFor } from "../caps/seasons";
 import type { AssignmentStatus } from "../eligibility/eligibility";
 import { canceledWithJob, departureRemovals, suspensionRemovals, type DetailEvent } from "../assignments/history";
-import { ForbiddenError } from "../errors";
+import { openOffersOf } from "../assignments/giveaway";
+import { ForbiddenError, NotFoundError } from "../errors";
+import { maySeeJobId } from "../jobs/confidential";
 import { formatInvoiceNumber } from "../invoices/invoices";
 import { JOBS_PAGE_SIZE, listJobs, type Job, type JobFilter } from "../jobs/jobs";
 import { scheduledPayCents } from "../planning/recommend";
@@ -48,7 +51,8 @@ const HOUR_MS = 3_600_000;
 const CANCELED_VISIBLE_DAYS = 30;
 
 /** `rateCents` is the position's own hourly rate: the detail's base rate plus its differential. */
-type CardPosition = { id: string; name: string; count: number; filled: number; backups: number; rateCents: Cents };
+/** `filled` leaves out spots their deputies offer to others; `offered` counts those (open to take over). */
+type CardPosition = { id: string; name: string; count: number; filled: number; offered: number; backups: number; rateCents: Cents };
 
 type Availability = "open" | "full" | "not_released" | "started" | "canceled";
 
@@ -77,12 +81,16 @@ export type JobCard = {
   releaseAt: Date | null;
   /** Held by a coordinator: off the open lists, no new sign-ups. */
   held: boolean;
+  /** Confidential: staff and the people assigned only (owner decision 2026-11-27). */
+  confidential: boolean;
   availability: Availability;
   positions: CardPosition[];
   openSpots: number;
   hasSafety: boolean;
   /** The person's own live assignment status on this job, if any. */
   mine: AssignmentStatus | null;
+  /** The person offers their spot to someone else and still holds it (owner decision 2026-11-27). */
+  offered: boolean;
   watching: boolean;
   typeId: string;
   /** The repeat series the detail belongs to, if any. */
@@ -127,9 +135,12 @@ export async function loadJobCards(actor: Actor, tx: Tx, rows: Job[], now: Date 
     .where(inArray(jobPositions.jobId, ids))
     .orderBy(asc(jobPositions.createdAt), asc(jobPositions.id));
   const people = await tx
-    .select({ jobId: assignments.jobId, positionId: assignments.jobPositionId, status: assignments.status, userId: assignments.userId })
+    .select({ id: assignments.id, jobId: assignments.jobId, positionId: assignments.jobPositionId, status: assignments.status, userId: assignments.userId })
     .from(assignments)
     .where(and(inArray(assignments.jobId, ids), inArray(assignments.status, ["signed_up", "backup", "pending_short", "billed", "paid", "late_canceled", "no_show"])));
+  // A spot its deputy offers counts as open to everyone else until the detail starts.
+  const startById = new Map(rows.map((j) => [j.id, j.startAt.getTime()]));
+  const offers = await openOffersOf(tx, people.filter((a) => a.status === "signed_up" && (startById.get(a.jobId) ?? 0) > now.getTime()).map((a) => a.id));
   const safetyRows = await tx.select({ jobId: jobSafety.jobId, notes: jobSafety.notes }).from(jobSafety).where(inArray(jobSafety.jobId, ids));
   const addrRows = await tx.select({ jobId: jobSafetyAddresses.jobId }).from(jobSafetyAddresses).where(inArray(jobSafetyAddresses.jobId, ids));
   const safe = new Set([...safetyRows.filter((s) => s.notes?.trim()).map((s) => s.jobId), ...addrRows.map((a) => a.jobId)]);
@@ -150,7 +161,8 @@ export async function loadJobCards(actor: Actor, tx: Tx, rows: Job[], now: Date 
           id: p.id,
           name: p.name,
           count: p.count,
-          filled: on.filter((a) => a.status !== "backup" && a.status !== "pending_short").length,
+          filled: on.filter((a) => a.status !== "backup" && a.status !== "pending_short" && !offers.has(a.id)).length,
+          offered: on.filter((a) => offers.has(a.id)).length,
           backups: on.filter((a) => a.status === "backup").length,
           rateCents: positionRateCents(job.rateCents, { rateDifferentialCents: p.differential }),
         };
@@ -189,11 +201,13 @@ export async function loadJobCards(actor: Actor, tx: Tx, rows: Job[], now: Date 
       released: isReleased,
       releaseAt: job.releaseAt,
       held: job.held,
+      confidential: job.confidential,
       availability,
       positions,
       openSpots,
       hasSafety: safe.has(job.id),
       mine: mineRow?.status ?? null,
+      offered: mineRow ? offers.has(mineRow.id) : false,
       watching: watched.has(job.id),
       typeId: job.typeId,
       seriesId: job.seriesId ?? null,
@@ -213,8 +227,8 @@ export type MyDetail = {
 };
 
 /**
- * Sign-ups the person is still responsible for working. A spot they offer to give away joins this list when that
- * rule exists: it stays theirs until someone takes it.
+ * Sign-ups the person is still responsible for working. A spot they offer to give away stays signed_up, so it stays
+ * on this list: it is theirs until someone takes it over (owner decision 2026-11-27).
  */
 export const WORKING_STATUSES: readonly AssignmentStatus[] = ["signed_up", "pending_short"];
 
@@ -236,6 +250,9 @@ const SUSPENSION_REMOVAL_TEXT = "Your sign-up was canceled.";
 /** A sign-up ended by a cancel that was later undone: the detail is open again, and the reasons are staff only. */
 const BACK_ON_TEXT = "This detail is back on. Sign up again if you still want it.";
 
+/** A signed-up spot its deputy offers to someone else: still theirs to work. */
+export const OFFERED_LABEL = "Offered";
+
 const STATUS_LABEL: Record<AssignmentStatus, string> = {
   pending_short: "Pending shorter",
   signed_up: "Signed up",
@@ -247,6 +264,13 @@ const STATUS_LABEL: Record<AssignmentStatus, string> = {
   billed: "Billed",
   paid: "Paid",
 };
+
+/** "Backup #2", "Offered" for a spot the person offers and still holds, else the status word. */
+function myLabel(a: typeof assignments.$inferSelect, card: JobCard): string {
+  if (a.status === "backup" && a.backupPosition) return `Backup #${a.backupPosition}`;
+  if (a.status === "signed_up" && card.offered) return OFFERED_LABEL;
+  return STATUS_LABEL[a.status];
+}
 
 /** The last instant a canceled or removed assignment stays listed: the end of the job's agency day plus 30 days. */
 function canceledVisibleUntil(jobStartAt: Date): Date {
@@ -301,7 +325,7 @@ export async function myDetails(actor: Actor, tx: Tx, now: Date = new Date(), ra
     return {
       assignmentId: a.id,
       status: a.status,
-      label: a.status === "backup" && a.backupPosition ? `Backup #${a.backupPosition}` : STATUS_LABEL[a.status],
+      label: myLabel(a, cards.get(job.id)!),
       reason,
       plannedStartAt: a.plannedStartAt ?? job.startAt,
       plannedEndAt: a.plannedEndAt ?? job.endAt,
@@ -380,12 +404,13 @@ export async function capSummary(actor: Actor, tx: Tx, now: Date = new Date()): 
   };
 }
 
-export type RosterRow = { assignmentId: string; name: string; position: string; status: AssignmentStatus; label: string; startAt: Date; endAt: Date; isYou: boolean };
+export type RosterRow = { assignmentId: string; name: string; position: string; status: AssignmentStatus; label: string; startAt: Date; endAt: Date; isYou: boolean; offered: boolean };
 
 /** Who holds a spot or a place in line on the job. Names and planned times only; no contact details. */
 export async function jobRoster(actor: Actor, tx: Tx, jobId: string): Promise<RosterRow[]> {
   if (actor.role === "vendor") throw new ForbiddenError();
   assertCan(actor, "job.read");
+  if (!(await maySeeJobId(tx, actor, jobId))) throw new NotFoundError("Job not found.");
   const rows = await tx
     .select({ a: assignments, name: users.name, position: positionTypes.name, jobStart: jobs.startAt, jobEnd: jobs.endAt })
     .from(assignments)
@@ -395,16 +420,25 @@ export async function jobRoster(actor: Actor, tx: Tx, jobId: string): Promise<Ro
     .innerJoin(jobs, eq(jobs.id, assignments.jobId))
     .where(and(eq(assignments.jobId, jobId), inArray(assignments.status, ["pending_short", "signed_up", "backup", "billed", "paid"])))
     .orderBy(asc(assignments.status), asc(assignments.backupPosition), asc(assignments.requestedAt));
-  return rows.map((r) => ({
-    assignmentId: r.a.id,
-    name: r.name,
-    position: r.position,
-    status: r.a.status,
-    label: r.a.status === "backup" && r.a.backupPosition ? `Backup #${r.a.backupPosition}` : STATUS_LABEL[r.a.status],
-    startAt: r.a.plannedStartAt ?? r.jobStart,
-    endAt: r.a.plannedEndAt ?? r.jobEnd,
-    isYou: r.a.userId === actor.userId,
-  }));
+  const now = Date.now();
+  const offers = await openOffersOf(tx, rows.filter((r) => r.a.status === "signed_up" && r.jobStart.getTime() > now).map((r) => r.a.id));
+  return rows.map((r) => {
+    const offered = offers.has(r.a.id);
+    let label = STATUS_LABEL[r.a.status];
+    if (r.a.status === "backup" && r.a.backupPosition) label = `Backup #${r.a.backupPosition}`;
+    else if (offered) label = OFFERED_LABEL;
+    return {
+      assignmentId: r.a.id,
+      name: r.name,
+      position: r.position,
+      status: r.a.status,
+      label,
+      startAt: r.a.plannedStartAt ?? r.jobStart,
+      endAt: r.a.plannedEndAt ?? r.jobEnd,
+      isYou: r.a.userId === actor.userId,
+      offered,
+    };
+  });
 }
 
 /** `event`: a cancel or reactivation of the detail, with who and why, for coordinators and admins only. */
@@ -433,10 +467,17 @@ const ASSIGNMENT_ACTIONS: Record<string, string> = {
   "assignment.claim": "took an opened spot",
   "assignment.short_confirmed": "had a shorter shift confirmed",
   "assignment.short_declined": "had a shorter shift declined",
+  "assignment.offer": "offered their spot to someone else",
+  "assignment.offer_withdraw": "withdrew their offer and kept the spot",
+  "assignment.offer_cancel": "kept the spot: a coordinator canceled the offer",
+  "assignment.taken_over": "gave their spot away",
 };
 /** The same, in the second person, where it differs: what the person reads about their own sign-up. */
 const YOUR_ASSIGNMENT_ACTIONS: Record<string, string> = {
   "assignment.cancel": "canceled your sign-up",
+  "assignment.offer": "offered your spot to someone else",
+  "assignment.offer_withdraw": "withdrew your offer and kept the spot",
+  "assignment.taken_over": "gave your spot away",
 };
 
 /**
@@ -447,6 +488,7 @@ const YOUR_ASSIGNMENT_ACTIONS: Record<string, string> = {
 export async function jobActivity(actor: Actor, tx: Tx, jobId: string, limit = 30): Promise<ActivityRow[]> {
   if (actor.role === "vendor") throw new ForbiddenError();
   assertCan(actor, "job.read");
+  if (!(await maySeeJobId(tx, actor, jobId))) throw new NotFoundError("Job not found.");
   const mine = tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.jobId, jobId));
   const rows = await tx
     .select({ id: auditLog.id, at: auditLog.at, action: auditLog.action, entityType: auditLog.entityType, entityId: auditLog.entityId, actorName: users.name, actorId: auditLog.actorUserId, reason: auditLog.reason })
@@ -467,9 +509,9 @@ export async function jobActivity(actor: Actor, tx: Tx, jobId: string, limit = 3
     : [];
   const ownerById = new Map(owners.map((o) => [o.id, o]));
   const coordinator = actor.role === "admin" || actor.role === "coordinator";
-  const [job] = coordinator ? [] : await tx.select({ state: jobs.state, vendorId: jobs.vendorId }).from(jobs).where(eq(jobs.id, jobId));
-  // A vendor manager sees their vendor's detail as staff do.
-  const staff = coordinator || managesVendor(actor, job?.vendorId);
+  const [job] = coordinator ? [] : await tx.select({ state: jobs.state, vendorId: jobs.vendorId, confidential: jobs.confidential }).from(jobs).where(eq(jobs.id, jobId));
+  // A vendor manager sees their vendor's detail as staff do, never a confidential one.
+  const staff = coordinator || managesJob(actor, job);
   // Once a detail is back on, personnel are not told who canceled or reactivated it.
   const anonymous = !staff && job?.state !== "canceled";
   return rows.map((r) => {
@@ -661,6 +703,8 @@ export async function messageDirectory(actor: Actor, tx: Tx): Promise<Array<{ id
 }
 
 export type AlertSettings = {
+  /** The types the person can receive and switch, in list order. */
+  types: PersonalAlertType[];
   prefs: Record<string, { email: boolean; push: boolean }>;
   quietHours: { enabled: boolean; start: string; end: string };
   pushDevices: number;
@@ -675,6 +719,7 @@ export async function alertSettings(actor: Actor, tx: Tx): Promise<AlertSettings
   const [q] = await tx.select().from(quietHours).where(eq(quietHours.userId, actor.userId));
   const devices = await tx.select({ id: pushSubscriptions.id }).from(pushSubscriptions).where(eq(pushSubscriptions.userId, actor.userId));
   return {
+    types: personalAlertTypes(actor),
     prefs: Object.fromEntries(rows.map((r) => [r.type, { email: r.email, push: r.push }])),
     quietHours: { enabled: q?.enabled ?? false, start: q?.startTime ?? "22:00", end: q?.endTime ?? "07:00" },
     pushDevices: devices.length,

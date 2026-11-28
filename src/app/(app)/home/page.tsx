@@ -3,6 +3,10 @@ import Link from "next/link";
 import { withTx } from "@/ui/shell/request";
 import { coordinatorTodo } from "@/domain/coordinator/views";
 import { unreadMessageCount } from "@/domain/messages/messages";
+import { pendingAcknowledgements } from "@/domain/messages/acknowledgements";
+import { ackBannerText } from "@/domain/messages/ack-text";
+import { ActionBanner } from "@/ui/components/ActionBanner";
+import { loadBillingBanner } from "@/domain/billing/banner";
 import { unreadAlertCount } from "@/domain/notifications/inbox";
 import { capSummary, loadJobCards, myDetails, myInvoices, toBill, upNextAndBackup, type CapUse } from "@/domain/personnel/views";
 import { goalProgress, recommendationsFor } from "@/domain/planning/recommend";
@@ -132,7 +136,10 @@ export default async function HomePage() {
     // Same window and query as the Details list with Open on, so "See all N" matches it.
     const open = (await filteredJobs(actor, tx, { ...parseFilters({}), open: true }, now)).cards;
     const recCards = await loadJobCards(actor, tx, recs, now);
-    return { todo, goal, recs: recCards, caps, bill, mine, invoices, unread, alerts, open };
+    const acks = await pendingAcknowledgements(actor, tx);
+    // Everyone who bills gets it, coordinators and admins included (same screens for everyone).
+    const billing = await loadBillingBanner(actor, tx, now);
+    return { acks, billing, todo, goal, recs: recCards, caps, bill, mine, invoices, unread, alerts, open };
   });
 
   // Only what the person still works; canceled and removed sign-ups are history, kept on Details and in alerts.
@@ -143,6 +150,7 @@ export default async function HomePage() {
   const first = shell.profile.name.split(/\s+/)[0];
   const goal = data.goal;
   const pct = (c: number) => (goal.goalCents ? Math.min(100, (c / goal.goalCents) * 100) : 0);
+  const ack = ackBannerText(data.acks);
   const monthName = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "long" }).format(now);
 
   return (
@@ -184,6 +192,18 @@ export default async function HomePage() {
           )}
         </div>
       </div>
+
+      {ack ? (
+        <ActionBanner tone="attention" icon="mail" title={ack.title} action={{ href: ack.href, label: "Open message" }} testId="ack-banner">
+          {ack.detail}
+        </ActionBanner>
+      ) : null}
+
+      {data.billing ? (
+        <ActionBanner tone={data.billing.tone} icon={data.billing.tone === "danger" ? "lock" : "receipt"} title={data.billing.title} action={data.billing.action} testId="billing-banner">
+          {data.billing.detail}
+        </ActionBanner>
+      ) : null}
 
       {data.todo ? <TodoCard count={todoCount(data.todo)} items={firstTodoItems(data.todo)} /> : null}
 

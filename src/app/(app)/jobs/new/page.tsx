@@ -7,7 +7,7 @@ import { getJob } from "@/domain/jobs/jobs";
 import { agencyDateParts, agencyDayKey } from "@/domain/time/agency-time";
 import { Icon } from "@/ui/icons";
 import { detailCreatorActor } from "../../manage/session";
-import type { DetailWire } from "../../coordinate/_coordinator/detail-input";
+import { reminderWire, type DetailWire } from "../../coordinate/_coordinator/detail-input";
 import { emptyDetail } from "../../coordinate/_coordinator/empty-detail";
 import { DetailForm } from "./DetailForm";
 
@@ -55,9 +55,14 @@ export default async function NewDetailPage({ searchParams }: Readonly<Props>) {
       contactName: source.contactName ?? "",
       contactPhone: source.contactPhone ?? "",
       held: source.held,
+      // A copy of a confidential detail starts confidential; the new detail needs its own reason.
+      confidential: source.confidential,
+      confidentialReason: "",
       flex: source.flexEarliestStartAt && source.flexLatestEndAt ? { earliest: hhmm(source.flexEarliestStartAt), latest: hhmm(source.flexLatestEndAt), allowShorter: source.flexAllowShorter } : null,
       safetyNotes: source.safety?.notes ?? "",
       safetyAddresses: source.safety?.addresses.map((a) => ({ address: a.address, description: a.description ?? "", lat: a.lat, lng: a.lng, source: a.source })) ?? [],
+      reminders: reminderWire(source.reminderHours),
+      reminderNote: source.reminderNote ?? "",
     };
   }
 
@@ -68,7 +73,7 @@ export default async function NewDetailPage({ searchParams }: Readonly<Props>) {
         Back to details
       </Link>
       <h1 className="m-0 text-2xl font-bold md:text-3xl">New detail</h1>
-      <DetailForm options={options} initial={initial} today={agencyDayKey(new Date())} fromJobId={source?.id} fromTitle={source ? `#${source.number} ${source.title}` : undefined} />
+      <DetailForm coordinator={actor.role === "coordinator" || actor.role === "admin"} options={options} initial={initial} today={agencyDayKey(new Date())} fromJobId={source?.id} fromTitle={source ? `#${source.number} ${source.title}` : undefined} />
     </div>
   );
 }

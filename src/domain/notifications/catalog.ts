@@ -56,6 +56,13 @@ const ALL = ["vendor", "personnel", "staff"] as const;
 
 export const CATALOG: Record<CatalogKey, CatalogEntry> = {
   // Details
+  "job.reminder": {
+    category: "Details",
+    label: "Detail reminder",
+    description: "A detail someone is on starts soon, at the reminder times set under Reminders and locks or on the detail.",
+    groups: P,
+    note: "People holding a spot they offered get it too. Backups do not.",
+  },
   "job.changed": { category: "Details", label: "Detail changed", description: "A detail someone is on or backing up changes, including its time or rate.", groups: P },
   "job.safety_changed": { category: "Details", label: "Officer safety changed", description: "Officer safety information on a detail someone is on changes.", groups: P },
   "job.canceled": {
@@ -76,6 +83,14 @@ export const CATALOG: Record<CatalogKey, CatalogEntry> = {
   "spot.offered": { category: "Sign-ups", label: "Backup spot offered", description: "A spot opens and is offered to backups, in turn or all at once.", groups: P },
   "spot.opened_first_come": { category: "Sign-ups", label: "Spot open to anyone", description: "A spot opens first come, first served close to the start.", groups: P },
   "spot.offer_ended": { category: "Sign-ups", label: "Spot offer ended", description: "A coordinator fills a spot that was being offered to backups.", groups: P },
+  "giveaway.taken_over": {
+    category: "Sign-ups",
+    label: "Spot taken over",
+    description: "Someone takes over a spot its deputy offered. Goes to both deputies, and to the vendor when vendors see who is assigned.",
+    groups: ["vendor", "personnel"],
+  },
+  "giveaway.reminder": { category: "Sign-ups", label: "Offered spot not taken", description: "Nobody has taken a spot the deputy offered by the late cancellation window. They are still expected to work it.", groups: P },
+  "giveaway.canceled": { category: "Sign-ups", label: "Spot offer canceled", description: "A coordinator cancels the deputy's offer to give their spot away. They stay on the detail.", groups: P },
   "job.watch_opened": { category: "Sign-ups", label: "Watched detail has a spot", description: "A spot opens on a detail the person is watching and they can take it.", groups: P },
   "job.watch_released": { category: "Sign-ups", label: "Watched detail released", description: "A detail the person is watching opens for sign-up.", groups: P },
   "assignment.assigned": { category: "Sign-ups", label: "Assigned by a coordinator", description: "A coordinator assigns the person to a detail.", groups: P, note: "Ignores personal choices and quiet hours." },
@@ -160,6 +175,12 @@ export const CATALOG: Record<CatalogKey, CatalogEntry> = {
     description: "Someone sends the person a message in the app.",
     groups: PS,
     note: "Messages from coordinators always arrive by email and push.",
+  },
+  "message.ack_reminder": {
+    category: "Messages",
+    label: "Acknowledgement reminder",
+    description: "Staff remind the people who have not yet acknowledged a message that requires it.",
+    groups: PS,
   },
   "user.suspended": {
     category: "Account",

@@ -14,7 +14,7 @@ import { EmptyState } from "@/ui/components/EmptyState";
 import { dollars } from "@/ui/components/PayLabel";
 import { Icon } from "@/ui/icons";
 import { loadShell } from "@/ui/shell/load-shell";
-import { clock, dateTime, dayLabel, hoursText, longDay, plural, prefixed, relativeDay, timeRange, whenText } from "../_personnel/format";
+import { clock, dateTime, dayLabel, hoursText, longDay, monthDay, plural, prefixed, relativeDay, timeRange, whenText } from "../_personnel/format";
 import { coordinatorActor } from "./_coordinator/session";
 import { manageHref, todoCount, todoLine } from "./_coordinator/todo";
 import { uploadedBy } from "../_shared/w9";
@@ -139,6 +139,44 @@ function AccessReviewSection({ review }: Readonly<{ review: NonNullable<Todo["ac
           Continue review
         </ButtonLink>
       </Card>
+    </CountSection>
+  );
+}
+
+/** Spots their deputies offered that nobody has taken inside the late cancellation window. */
+function OfferedSection({ t, now }: Readonly<{ t: Todo; now: Date }>) {
+  if (!t.offeredNotTaken.length) return null;
+  return (
+    <CountSection title="Offered spots not taken" count={t.offeredNotTaken.length}>
+      <Rows tone="warning">
+        {t.offeredNotTaken.map((o) => (
+          <Row
+            key={o.assignmentId}
+            title={`Offered spot not taken: ${o.name}, #${o.number}, ${monthDay(o.startAt)}`}
+            href={manageHref(o.jobId)}
+            meta={`${o.title}, ${relativeDay(o.startAt, now)} ${clock(o.startAt, true)}. Offered ${dateTime(o.offeredAt)}. ${o.name} is still expected to work it.`}
+          />
+        ))}
+      </Rows>
+    </CountSection>
+  );
+}
+
+/** Messages past their acknowledgement due date that some recipients have not acknowledged. */
+function OverdueAckSection({ t }: Readonly<{ t: Todo }>) {
+  if (!t.overdueAcks.length) return null;
+  return (
+    <CountSection title="Messages not acknowledged" count={t.overdueAcks.length}>
+      <Rows tone="warning">
+        {t.overdueAcks.map((m) => (
+          <Row
+            key={m.messageId}
+            title={`Message not acknowledged: ${m.subject}`}
+            href={`/messages/${m.messageId}#acknowledgements`}
+            meta={`Acknowledged ${m.acknowledged} of ${m.total}. Due ${monthDay(m.dueAt)}.`}
+          />
+        ))}
+      </Rows>
     </CountSection>
   );
 }
@@ -359,6 +397,10 @@ export default async function TodoPage() {
           </Rows>
         </CountSection>
       ) : null}
+
+      <OfferedSection t={t} now={now} />
+
+      <OverdueAckSection t={t} />
 
       {t.unfilled.length ? (
         <CountSection title="Unfilled, starting within 72 hours" count={t.unfilled.length}>

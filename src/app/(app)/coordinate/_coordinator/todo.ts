@@ -24,7 +24,9 @@ export function todoCount(t: CoordinatorTodo): number {
     t.ratesOutOfRange.length +
     t.sendInvoices.length +
     t.departed.length +
-    t.w9Reviews.length
+    t.w9Reviews.length +
+    t.offeredNotTaken.length +
+    t.overdueAcks.length
   );
 }
 
@@ -58,6 +60,7 @@ export function firstTodoItems(t: CoordinatorTodo, limit = 3): TodoItem[] {
     ...t.ratesOutOfRange.map((r) => ({ key: `rate-${r.jobId}`, text: `Rate outside the agency range: ${r.vendorName}, ${r.title}`, href: manageHref(r.jobId) })),
     ...t.w9Reviews.map((w) => ({ key: `w9-${w.w9Id}`, text: `W-9 to review: ${w.name}`, href: `/admin/users/${w.userId}#w9` })),
     ...t.departed.map((d) => ({ key: `dep-${d.assignmentId}`, text: `Left the agency, not billed: ${d.name}`, href: `/admin/users/${d.userId}` })),
+    ...t.overdueAcks.map((m) => ({ key: `ack-${m.messageId}`, text: `Message not acknowledged: ${m.subject}, ${m.acknowledged} of ${m.total}`, href: `/messages/${m.messageId}#acknowledgements` })),
     ...t.locks.map((l) => ({ key: `lock-${l.userId}`, text: `Sign-up lock: ${l.name}`, href: TODO })),
   ];
   return items.slice(0, limit);

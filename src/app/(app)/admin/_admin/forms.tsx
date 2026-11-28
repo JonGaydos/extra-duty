@@ -6,6 +6,7 @@ import { FormField, Input, Select, TextArea } from "@/ui/components/FormField";
 import { PhoneField } from "@/ui/components/PhoneField";
 import type { ActionResult } from "../../_personnel/result";
 import { useCoordAction } from "../../coordinate/_coordinator/status";
+import { REMINDER_CHOICES } from "@/domain/jobs/reminder-choices";
 import { WEEKDAYS, type Field, type GroupValues } from "./settings-groups";
 
 /** A labeled on/off switch (DESIGN: a button with role="switch" and a visible label). */
@@ -124,6 +125,13 @@ function fieldControl(f: Field, v: GroupValues[string], set: SetValue, options: 
 /** One field of a settings form: a switch, the reviewer checkboxes, or a labeled control. */
 function SettingField({ f, v, err, set, options }: Readonly<{ f: Field; v: GroupValues[string]; err: string | undefined; set: SetValue; options: Choices }>) {
   if (f.kind === "switch") return <Switch label={f.label} hint={f.hint} checked={v === true} onChange={(on) => set(f.key, on)} />;
+  if (f.kind === "hourChoices")
+    return (
+      <>
+        <CheckGroup legend={f.label} options={REMINDER_CHOICES.map((h) => ({ id: String(h), name: `${h} hours before` }))} value={Array.isArray(v) ? v : []} onChange={(ids) => set(f.key, ids)} error={err} />
+        {f.hint ? <p className="m-0 text-xs text-muted">{f.hint}</p> : null}
+      </>
+    );
   if (f.kind === "reviewers")
     return (
       <>
@@ -174,7 +182,7 @@ export function SettingsForm({
     >
       <div className="grid gap-x-5 gap-y-4 md:grid-cols-2">
         {fields.map((f) => {
-          const wide = f.kind === "textarea" || f.kind === "reviewers" || f.kind === "switch";
+          const wide = f.kind === "textarea" || f.kind === "reviewers" || f.kind === "switch" || f.kind === "hourChoices";
           return (
             <div key={f.key} className={wide ? "md:col-span-2" : undefined}>
               <SettingField f={f} v={values[f.key]} err={errors[f.key]} set={set} options={options} />

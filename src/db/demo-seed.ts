@@ -148,12 +148,12 @@ type Past =
   | "pending_review"
   | "ready_to_send"
   | "approved_unsent";
-type Future = "open" | "filled" | "backup" | "pending_short" | "flexible" | "officer_safety" | "vendor_on_hold" | "held" | "requested" | "reactivated" | "declined" | "active" | "ops_plan_due";
+type Future = "open" | "filled" | "backup" | "pending_short" | "flexible" | "officer_safety" | "vendor_on_hold" | "held" | "requested" | "reactivated" | "declined" | "active" | "ops_plan_due" | "confidential";
 
 const PAST_MONTH: Past[] = ["paid_two", "sent", "paid_on_spot_sent", "written_off", "payment_issue", "late_cancel", "no_show", "ops_plan_agreed", "canceled_early", "batched", "returned", "suspension_removal", "issue_resolved", "paid"];
 const CURRENT_PAST: Past[] = ["pending_review", "ready_to_send", "approved_unsent", "sent", "paid", "paid_on_spot_sent", "unbilled", "returned", "no_show", "late_cancel", "payment_issue", "batched"];
-const CURRENT_FUTURE: Future[] = ["open", "filled", "backup", "pending_short", "flexible", "officer_safety", "vendor_on_hold", "held", "requested", "reactivated", "declined", "active"];
-const FUTURE_MONTH: Future[] = ["open", "filled", "backup", "pending_short", "flexible", "officer_safety", "vendor_on_hold", "held", "open", "requested", "reactivated", "ops_plan_due", "filled", "open"];
+const CURRENT_FUTURE: Future[] = ["open", "filled", "backup", "pending_short", "flexible", "officer_safety", "vendor_on_hold", "held", "requested", "reactivated", "declined", "active", "confidential"];
+const FUTURE_MONTH: Future[] = ["open", "filled", "backup", "pending_short", "flexible", "officer_safety", "vendor_on_hold", "held", "open", "requested", "reactivated", "ops_plan_due", "filled", "open", "confidential"];
 
 export function buildDemoData(today: Date): DemoData {
   const d: DemoData = {
@@ -567,6 +567,16 @@ export function buildDemoData(today: Date): DemoData {
         d.audit.push({ action: "job.cancel", entityType: "job", entityId: b.job.id, actorUserId: coordinator2.id, at: canceledAt, reason: "Vendor asked to cancel", before: { state: "scheduled" }, after: { state: "canceled" } });
         d.audit.push({ action: "job.reactivate", entityType: "job", entityId: b.job.id, actorUserId: coordinator.id, at: new Date(canceledAt.getTime() + DAY), reason: "Vendor confirmed the event is back on", before: { state: "canceled" }, after: { state: "scheduled" } });
         return b;
+      }
+      case "confidential": {
+        // A dignitary visit: never released; the practice deputy is assigned so a deputy in training sees one.
+        const b = job(start, 6, { title: "Dignitary visit escort", positions: [["Deputy Sheriff", 2]], extra: { confidential: true, held: false, releaseAt: null } });
+        const markedAt = new Date(Math.min(b.job.createdAt!.getTime() + DAY, today.getTime() - DAY));
+        d.audit.push({ action: "job.confidential_on", entityType: "job", entityId: b.job.id, actorUserId: coordinator.id, at: markedAt, reason: "Protective detail for a visiting official", before: null, after: { confidential: true } });
+        assign(b, 0, "signed_up");
+        const mine = assign(b, 0, "signed_up", practiceDeputy);
+        d.audit.push({ action: "job.confidential_view", entityType: "job", entityId: b.job.id, actorUserId: coordinator.id, at: new Date(markedAt.getTime() + HOUR) });
+        return mine;
       }
       case "ops_plan_due": {
         const b = job(start, 6, { title: "Fireworks over the bay", positions: [["Incident Commander", 1], ["Deputy Sheriff", 2]], extra: { opsPlanRequired: true, opsPlanDueAt: new Date(start.getTime() - 3 * DAY) } });

@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, test } from "vitest";
 import { agencyChannelOn, agencyChannelsProblem, CATALOG, channelsFor, groupFor, RECIPIENT_GROUPS, type CatalogKey } from "@/domain/notifications/catalog";
 import { NOTIFICATION_TYPES } from "@/domain/notifications/types";
+import { isMessageKey } from "@/domain/email-messages/catalog";
 import { byText } from "@/lib/sort";
 
 const ROOT = join(__dirname, "../../..");
@@ -19,7 +20,9 @@ function files(dir: string): string[] {
  * Every place the app hands an email to a sender or the email queues, and the catalog entry it sends. The notify
  * path (inbox, email and push per type) is "notify"; the queue workers deliver what was queued elsewhere.
  */
-const SEND_SITES: Array<{ file: string; call: string; key: CatalogKey | "notify" | "queue worker" | "auth wrapper" }> = [
+const SEND_SITES: Array<{ file: string; call: string; key: CatalogKey | "notify" | "queue worker" | "auth wrapper" | "message test" }> = [
+  // Send me a test, on the Email messages editor: the draft, to the editor's own address.
+  { file: "src/domain/email-messages/store.ts", call: "getEmailSender().send(", key: "message test" },
   { file: "src/domain/auth/invites.ts", call: "queueEmail(", key: "auth.invite" },
   { file: "src/domain/invoices/batch.ts", call: "queueInvoiceBatchJob(", key: "invoice.delivery" },
   { file: "src/domain/invoices/batch.ts", call: "getEmailSender().send(", key: "invoice.delivery" },
@@ -56,7 +59,34 @@ describe("notification catalog", () => {
       }
     }
     expect(found.toSorted(byText)).toEqual(SEND_SITES.map((s) => `${s.file} ${s.call}`).sort(byText));
-    for (const s of SEND_SITES) if (!["notify", "queue worker", "auth wrapper"].includes(s.key)) expect(CATALOG[s.key as CatalogKey], s.key).toBeDefined();
+    for (const s of SEND_SITES) if (!["notify", "queue worker", "auth wrapper", "message test"].includes(s.key)) expect(CATALOG[s.key as CatalogKey], s.key).toBeDefined();
+  });
+
+  test("every email is built from an editable message, never written out in code", () => {
+    // Only the message renderer builds email bodies; the rest only pass them along (queue, outbox, mail adapters).
+    const CARRIERS = new Set([
+      "src/domain/email-messages/render.ts",
+      "src/domain/email-messages/store.ts",
+      "src/lib/email/alert-email.ts",
+      "src/lib/email/types.ts",
+      "src/lib/email/outbox.ts",
+      "src/lib/email/adapters.ts",
+      "src/jobs/boss.ts",
+      "src/db/schema/training.ts",
+    ]);
+    const builders = files(join(ROOT, "src"))
+      .filter((path) => path.endsWith(".ts") && /\bhtml\s*[:,]/.test(readFileSync(path, "utf8")))
+      .map((path) => relative(ROOT, path))
+      .filter((path) => !CARRIERS.has(path));
+    expect(builders).toEqual([]);
+    // Each place that sends builds its email from a message.
+    for (const site of new Set(SEND_SITES.filter((x) => x.key !== "queue worker" && x.key !== "auth wrapper").map((x) => x.file))) {
+      expect(readFileSync(join(ROOT, site), "utf8"), site).toMatch(/\b(buildEmail|alertEmail|vendorEmail|renderMessage)\(/);
+    }
+    // Every email-only entry and every alert type has a message to edit.
+    for (const [key, entry] of Object.entries(CATALOG)) if (!entry.unused && !entry.inAppOnly && key !== "invoice.delivery" && key !== "invoice.vendor_payment_reminder") expect(isMessageKey(key), key).toBe(true);
+    expect(isMessageKey("invoice.delivery") && isMessageKey("invoice.revised") && isMessageKey("invoice.batch") && isMessageKey("payment_issue.vendor")).toBe(true);
+    expect(readFileSync(join(ROOT, "src/domain/notifications/notify.ts"), "utf8")).toMatch(/renderMessage\(message/);
   });
 
   test("with nothing stored every switch is on", () => {

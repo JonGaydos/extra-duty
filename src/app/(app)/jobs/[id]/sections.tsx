@@ -37,7 +37,7 @@ export function FactsCard({ d, staff, showWatch }: Readonly<{ d: JobPageData; st
     <Card>
       <div className="flex flex-wrap items-center gap-1.5">
         {jobChips(card).map((c) => (
-          <Chip key={c.text} tone={c.tone}>
+          <Chip key={c.text} tone={c.tone} icon={c.icon}>
             {c.text}
           </Chip>
         ))}

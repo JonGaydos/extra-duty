@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LARGE_PRINT } from "@/domain/audit/labels";
 import { agencyDate } from "./dates";
 
 /**
@@ -31,6 +32,8 @@ export type RouteDef = {
   w9?: true;
   /** A file read: someone else's file answers 404, not 403, so ids cannot be probed. */
   hideForbidden?: true;
+  /** `{id}` may also be a detail number (`9`), which the route resolves itself. */
+  detailNumber?: true;
 };
 
 type Spec = Omit<RouteDef, "method" | "path">;
@@ -152,6 +155,7 @@ const vendorCreate = z
 const pin = z.object({ lat: z.number(), lng: z.number(), source: z.enum(["auto", "manual"]) });
 const locationBody = z.object({ name: text, address: z.string().nullable(), notes: optText, pin: pin.nullable().optional() }).partial().loose();
 const locationCreate = z.object({ name: text, address: z.string().nullable().default(null), notes: optText, pin: pin.nullable().optional() }).loose();
+const auditSelection = z.object({ query: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}), ids: ids.optional() });
 const audience = z.union([
   z.object({ kind: z.literal("all") }),
   z.object({ kind: z.literal("users"), userIds: ids }),
@@ -229,6 +233,7 @@ export const routes = define({
     tag: "Jobs",
     summary: "One detail",
     description: "`{id}` is the detail's id or its number, as shown in the app (`9` for Detail #9). A detail the caller may not see answers 404 either way.",
+    detailNumber: true,
     response: record("The detail with positions, safety and attachments."),
   },
   "PATCH /jobs/{id}": { tag: "Jobs", summary: "Change a detail", description: "`?scope=series` applies it to this and later details in the series.", query: z.object({ scope: z.enum(["one", "series"]).optional() }).loose(), body: jobBody, response: record("The detail.") },
@@ -379,12 +384,63 @@ export const routes = define({
 
   // Messages
   "GET /messages": { tag: "Messages", summary: "Inbox", query: z.object({ text: z.string().optional(), unreadOnly: bool.optional(), page: page.optional() }).loose(), response: anything("A page of the inbox.") },
-  "POST /messages": { tag: "Messages", summary: "Send a message", body: z.object({ audiences: z.array(audience), subject: text, body: text, jobId: text.optional(), replyToMessageId: text.optional() }), response: record("The message."), status: 201 },
+  "POST /messages": {
+    tag: "Messages",
+    summary: "Send a message",
+    description: "Coordinators and admins may add `ack` to ask every recipient to acknowledge it: an optional `dueOn` (YYYY-MM-DD, agency time) and `lockSignups`, which needs a due date.",
+    body: z.object({
+      audiences: z.array(audience),
+      subject: text,
+      body: text,
+      jobId: text.optional(),
+      replyToMessageId: text.optional(),
+      ack: z.object({ dueOn: z.string().nullable().optional(), lockSignups: z.boolean().optional() }).optional(),
+    }),
+    response: record("The message."),
+    status: 201,
+  },
+  "GET /messages/pending-acknowledgements": { tag: "Messages", summary: "Messages waiting for your acknowledgement", response: anything("Oldest first.") },
+  "POST /messages/{id}/acknowledge": { tag: "Messages", summary: "Acknowledge a message (final)", response: anything("The acknowledgement time.") },
+  "GET /messages/{id}/acknowledgements": {
+    tag: "Messages",
+    summary: "Who acknowledged a message",
+    description: "Coordinators and admins. `format=csv` downloads the list.",
+    query: z.object({ format: z.enum(["json", "csv"]).optional() }).loose(),
+    response: anything("Acknowledged N of M, with each person."),
+  },
+  "POST /messages/{id}/acknowledgements/remind": { tag: "Messages", summary: "Remind the recipients who have not acknowledged a message", response: anything("How many were reminded.") },
   "GET /messages/{id}": { tag: "Messages", summary: "One message", response: record("The message.") },
   "POST /messages/coordinators": { tag: "Messages", summary: "Message the coordinators about a detail", body: z.object({ jobId: text, body: text }), response: record("The message."), status: 201 },
   "POST /messages/hide": { tag: "Messages", summary: "Remove messages from the inbox", body: z.object({ ids }), response: ok },
   "POST /messages/read": { tag: "Messages", summary: "Mark messages read or unread", body: z.object({ ids, read: z.boolean().optional() }), response: ok },
   "GET /messages/sent": { tag: "Messages", summary: "Sent messages", query: z.object({ page: page.optional() }).loose(), response: anything("A page of sent messages.") },
+
+  // Audit log
+  "POST /audit/export": {
+    tag: "Audit",
+    summary: "Export audit log entries as CSV",
+    description:
+      "Coordinators and admins. `query` takes the audit log page's filters (by, about, group, detail, vendor, invoice, range, from, to, q, system, order); `ids` limits it to chosen entries. Streamed. Secrets and W-9 contents are never included. Audited.",
+    readOnly: true,
+    body: auditSelection,
+    response: file("text/csv", "The entries."),
+  },
+  "POST /audit/print": {
+    tag: "Audit",
+    summary: "Print an Audit Record PDF",
+    description: `The same selection as the export. Over ${LARGE_PRINT} entries it needs \`confirmLarge\`. The record is kept with its ID and SHA-256 integrity code for verification. Audited.`,
+    readOnly: true,
+    body: auditSelection.extend({ confirmLarge: z.boolean().optional() }),
+    response: file("application/pdf", "The Audit Record."),
+  },
+  "POST /audit/verify": {
+    tag: "Audit",
+    summary: "Check a printed Audit Record against the audit log",
+    description: "Admins. The record ID (AR-000012) and, optionally, the integrity code printed on it.",
+    readOnly: true,
+    body: z.object({ recordId: text, integrity: z.string().nullable().optional() }),
+    response: anything("Whether the record still matches."),
+  },
 
   // Ops plans
   "GET /ops-plans/versions/{id}/file": { tag: "Ops plans", summary: "Download an ops plan version", hideForbidden: true, response: file("application/octet-stream", "The ops plan.") },

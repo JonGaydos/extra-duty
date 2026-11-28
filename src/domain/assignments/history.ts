@@ -2,8 +2,13 @@ import { and, asc, desc, eq, inArray, like, or } from "drizzle-orm";
 import type { Tx } from "@/db/client";
 import { auditLog, users } from "@/db/schema";
 
-/** The audit action written when a person cancels their own sign-up (cancelSignup): "gave away" the spot. */
+/**
+ * The audit action written when a person canceled their own sign-up (cancelSignup, before 2026-11-27): "gave away"
+ * the spot. Those sign-ups stay canceled.
+ */
 export const GAVE_AWAY_ACTION = "assignment.cancel";
+/** The audit action written when someone takes over a spot its deputy offered (takeOverOffered): also "Gave away". */
+export const TAKEN_OVER_ACTION = "assignment.taken_over";
 
 /** The audit action written for each sign-up a job cancel ended (cancelJobUnchecked). */
 const JOB_CANCELED_ACTION = "assignment.job_canceled";
@@ -28,6 +33,7 @@ export const LEFT_THE_AGENCY = "Left the agency";
 /** Audit actions that end a sign-up, and the label each one shows on a detail's deputy list. */
 const ENDING: Record<string, string> = {
   [GAVE_AWAY_ACTION]: "Gave away",
+  [TAKEN_OVER_ACTION]: "Gave away",
   "assignment.remove": "Removed by coordinator",
   [SUSPENSION_REMOVE_ACTION]: REMOVED_BY_SUSPENSION,
   [DEPARTURE_REMOVE_ACTION]: LEFT_THE_AGENCY,

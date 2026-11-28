@@ -316,6 +316,25 @@ describe("batched invoice sending", () => {
     expect((await row(i2.id)).status).toBe("pending_review");
   });
 
+  test("a W-9 on file goes only with the invoice that asked for it, never by default", async () => {
+    const { db } = get();
+    const asked = await person("Rowan Asked W9");
+    const notAsked = await person("Sky Not Asked");
+    for (const p of [asked, notAsked]) {
+      await db.transaction((tx) => uploadW9(p, tx, W9_PDF, "w9.pdf"));
+      await approveCurrentW9(db, p.userId);
+    }
+    const d1 = await detail([asked]);
+    const d2 = await detail([notAsked]);
+    await bill(asked, d1.rows[0].id, d1.job, true);
+    await bill(notAsked, d2.rows[0].id, d2.job, false);
+    const r = await db.transaction((tx) => sendInvoiceBatch(fx.coord, tx, fx.vendorId, { attachW9ForAll: false, missingW9: "send", includeWaiting: false }, FRIDAY));
+    expect(r.sent).toBe(2);
+    await drain();
+    expect(mail.sent).toHaveLength(1);
+    expect(mail.sent[0].attachments!.map((a) => a.filename).filter((n) => n.startsWith("W-9"))).toEqual(["W-9 Rowan Asked W9.pdf"]);
+  });
+
   test("attach W-9s for every deputy: current W-9s go out, each read audited as the coordinator; a deputy with none is listed and can be held", async () => {
     const { db } = get();
     const withW9 = await person("Kai Has W9");

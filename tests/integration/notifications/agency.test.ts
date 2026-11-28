@@ -16,6 +16,7 @@ import { agencyNotificationSettings, agencyTurnedOff, saveAgencyNotifications } 
 import { decodeNotifyJob, emit, type NotifyJob } from "@/domain/notifications/notify";
 import { DEFAULT_CHANNELS, NOTIFICATION_TYPES } from "@/domain/notifications/types";
 import { alertSettings } from "@/domain/personnel/views";
+import { setPreference } from "@/domain/notifications/prefs";
 import { suspendUser } from "@/domain/users/suspension";
 import { vendorEmail } from "@/domain/payment-issues/issues";
 import { getSettings, updateSettings } from "@/domain/settings/settings";
@@ -222,6 +223,22 @@ describe("agency notification settings", () => {
     expect(off["job.changed"]).toEqual({ email: true, push: false });
   });
 
+  test("a vendor manager's own Alerts list has the vendor request alerts, under the staff switches, and their choice applies", async () => {
+    const m = await person("personnel");
+    const manager: Actor = { ...m.actor, managedVendorIds: [fx.vendorId] };
+    await save(admin, { "vendor.request_edited": { staff: { push: false } } });
+    const s = await get().db.transaction((tx) => alertSettings(manager, tx));
+    expect(s.types.map((t) => t.type)).toEqual(expect.arrayContaining(["vendor.request_submitted", "vendor.request_edited"]));
+    expect(s.agencyOff["vendor.request_edited"]).toEqual({ email: false, push: true });
+    const plain = await get().db.transaction((tx) => alertSettings(m.actor, tx));
+    expect(plain.types.map((t) => t.type)).not.toContain("vendor.request_submitted");
+
+    await get().db.transaction((tx) => setPreference(manager, tx, "vendor.request_submitted", { email: false, push: true }));
+    await run(ev("vendor.request_submitted", [m.row.id]));
+    await run(ev("vendor.request_edited", [m.row.id]));
+    expect((await queued()).get(m.row.id)).toEqual({ email: 1, push: 1 });
+  });
+
   test("the vendor payment-issue email follows the agency switch", async () => {
     const { db } = get();
     await db.update(vendors).set({ billingEmails: ["ap@ag-vendor.example"] }).where(eq(vendors.id, fx.vendorId));
@@ -230,12 +247,12 @@ describe("agency notification settings", () => {
     const [a] = await db.insert(assignments).values({ jobId: job.id, jobPositionId: positionId, userId: p.userId, status: "signed_up" }).returning();
     const [inv] = await db.insert(invoices).values({ assignmentId: a.id, vendorId: fx.vendorId, payeeUserId: p.userId, minutes: 240, rateCents: 7000, totalCents: 28000, status: "sent" }).returning();
     await save(admin, { "payment_issue.waiting_on": { vendor: { email: false } } });
-    expect(await db.transaction((tx) => vendorEmail(tx, inv, "payment_issue.waiting_on", "Subject", "Intro"))).toBe("off");
+    expect(await db.transaction((tx) => vendorEmail(tx, inv, "payment_issue.waiting_on"))).toBe("off");
     await save(admin, { "payment_issue.waiting_on": { vendor: { email: true } }, "invoice.vendor_payment_reminder": { vendor: { email: false } } });
-    expect(await db.transaction((tx) => vendorEmail(tx, inv, "invoice.vendor_payment_reminder", "Subject", "Intro"))).toBe("off");
-    expect(await db.transaction((tx) => vendorEmail(tx, inv, "payment_issue.waiting_on", "Subject", "Intro"))).toBe("sent");
+    expect(await db.transaction((tx) => vendorEmail(tx, inv, "invoice.vendor_payment_reminder"))).toBe("off");
+    expect(await db.transaction((tx) => vendorEmail(tx, inv, "payment_issue.waiting_on"))).toBe("sent");
     await drain();
-    expect(mail.sent.map((m) => m.subject)).toEqual(["Subject"]);
+    expect(mail.sent.map((m) => m.subject)).toEqual(["Payment issue: invoice ED-000001"]);
   });
 
   test("a suspension notice goes to the deputy's inbox only: never email or push, whatever the agency or the deputy chose", async () => {

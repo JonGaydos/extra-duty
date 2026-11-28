@@ -14,7 +14,8 @@ import { approvedW9s, attachableFrom, readW9ForInvoiceEmail } from "@/domain/w9/
 import { queueInvoiceBatchJob } from "@/jobs/boss";
 import { settingsProblemMessage } from "@/lib/email/provider";
 import { getEmailSender } from "@/lib/email/sender";
-import { invoiceBatchEmail } from "@/lib/email/templates/invoice-batch";
+import { invoiceBatchValues } from "@/lib/email/templates/invoice-batch";
+import { buildEmail } from "../email-messages/store";
 import type { OutgoingEmail } from "@/lib/email/types";
 import { renderBatchCoverPdf } from "@/lib/pdf/batch-cover-pdf";
 import { formatMoney, renderInvoicePdf } from "@/lib/pdf/invoice-pdf";
@@ -453,10 +454,8 @@ async function buildBatchMessage(tx: Tx, batchId: string, storage?: Storage): Pr
   // A paid invoice is listed but owes nothing: the total due counts only the unpaid ones.
   const total = rows.reduce((sum, r) => sum + (r.paid ? 0 : r.totalCents), 0);
   const paidCount = rows.filter((r) => r.paid).length;
-  return {
-    ...invoiceBatchEmail({ to: vendor.billingEmails, replyTo, agencyName: agency.name, vendorName: vendor.name, count: rows.length, total: formatMoney(total), paidCount, w9Names }),
-    attachments,
-  };
+  const msg = await buildEmail(tx, "invoice.batch", vendor.billingEmails, invoiceBatchValues({ agencyName: agency.name, vendorName: vendor.name, count: rows.length, total: formatMoney(total), paidCount, w9Names }));
+  return { ...msg, replyTo, attachments };
 }
 
 const DELIMITER = /[\s,;<>"']/;

@@ -34,11 +34,11 @@ test("walkthrough: request, approval, release on the 15th at 4:00 PM, sign-up, b
     await mail.waitFor({ to: agency.admin.email, subject: "Signal 90 test email", since });
   });
 
-  await test.step("the deputy uploads a W-9 in Profile", async () => {
+  await test.step("the deputy uploads a newer W-9 in Profile; it waits for review and the approved one stays on file", async () => {
     await deputy.goto("/profile");
-    await deputy.getByLabel("Upload your W-9").setInputFiles(pdf("W-9 Drew Fowler"));
+    await deputy.getByLabel("Replace your W-9").setInputFiles(pdf("W-9 Drew Fowler"));
     await deputy.getByRole("button", { name: "Upload W-9" }).click();
-    await expect(deputy.getByRole("status").filter({ hasText: "W-9 uploaded." })).toBeVisible();
+    await expect(deputy.getByRole("status").filter({ hasText: "W-9 uploaded. It waits for review." })).toBeVisible();
   });
 
   await test.step("the vendor requests the detail", async () => {

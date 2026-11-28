@@ -16,6 +16,19 @@ The agency's rules are settings, so changing one needs no programmer. Every chan
 
    ![Seasons and caps](../images/coordinator-admin/25-settings-2-desktop.webp)
 
+## Detail reminders
+
+**Management**, **Reminders and locks**, **Remind assigned people before a detail starts** sets when the people on a detail are reminded: any of 72, 48, 24 and 2 hours before the start (72 and 24 by default). Clear every box for no reminders. Each reminder goes by email and push, following the agency's switches for **Detail reminder** under **Notifications** and each person's own choices, and always to the in-app inbox.
+
+- The email has the detail number and title, the vendor, the date and time, the location with an **Open in Maps** link, the person's position and pay, the description, the reminder note, the officer safety notes, the site contact and a link to the detail.
+- It goes to everyone on the detail when the reminder time comes, a deputy who has offered their spot included. Backups do not get it. Someone assigned after a reminder went out gets only the later ones.
+- If the detail's time changes, the reminders still to come move with it. Canceled and held details get none.
+- A confidential detail's email and push say only "Reminder: you are assigned to a confidential detail on <date> at <time>." The app shows the full reminder.
+
+A detail can use its own times or none, and add a note. See [Creating a detail](02-creating-details.md). The reminder's wording is the **Detail reminder** message under **Email messages** on the same page. See [Email messages](36-email-messages.md). Changes to this setting are kept in the audit log.
+
+![Remind assigned people before a detail starts](../images/coordinator-admin/25-settings-3-desktop.webp)
+
 ## Invoice review
 
 **Management**, **Billing and invoices**, **Invoice review** decides which invoices wait for a coordinator:

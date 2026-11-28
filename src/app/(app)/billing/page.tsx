@@ -18,6 +18,7 @@ import { personnelActor } from "../_personnel/session";
 import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { InvoiceActions } from "./InvoiceActions";
 import { invoiceSentence } from "../_personnel/invoice-text";
+import { needsAttention } from "@/domain/billing/banner";
 
 export const metadata: Metadata = { title: "Billing" };
 
@@ -269,6 +270,10 @@ export default async function BillingPage({ searchParams }: Readonly<Props>) {
   }));
   const waiting = data.invoices.filter((i) => i.status === "sent" || i.status === "pending_review" || i.status === "ready_to_send" || i.status === "approved_unsent" || i.status === "returned");
   const paid = data.invoices.filter((i) => i.status === "paid" || i.status === "written_off");
+  // From Home's banner: only the invoices that wait on the person.
+  const needs = sp.needs === "1";
+  const attention = waiting.filter(needsAttention);
+  const waitingShown = needs ? attention : waiting;
   const asked = (Array.isArray(sp.tab) ? sp.tab[0] : sp.tab) as Tab | undefined;
   const tab = pickTab(asked, data.bill.length > 0 || data.upcoming.length > 0);
   const today = agencyDayKey(now);
@@ -300,7 +305,18 @@ export default async function BillingPage({ searchParams }: Readonly<Props>) {
 
       {tab === "bill" ? <ToBillList bill={data.bill} upcoming={data.upcoming} /> : null}
 
-      {tab === "waiting" || tab === "paid" ? <InvoiceList tab={tab} list={tab === "waiting" ? waiting : paid} now={now} methods={data.methods} today={today} /> : null}
+      {tab === "waiting" && needs ? (
+        <p className="m-0 flex flex-wrap items-center gap-x-3 text-sm" data-testid="needs-filter">
+          <span>
+            Showing the {attention.length === 1 ? "invoice that needs" : `${attention.length} invoices that need`} your attention.
+          </span>
+          <Link href="/billing?tab=waiting" className="inline-flex min-h-11 items-center font-semibold">
+            Show all waiting
+          </Link>
+        </p>
+      ) : null}
+
+      {tab === "waiting" || tab === "paid" ? <InvoiceList tab={tab} list={tab === "paid" ? paid : waitingShown} now={now} methods={data.methods} today={today} /> : null}
 
       {tab === "history" ? <HistoryTab userId={actor.userId} history={data.history} invoices={data.invoices} now={now} /> : null}
     </div>

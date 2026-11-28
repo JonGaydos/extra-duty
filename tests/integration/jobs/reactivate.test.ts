@@ -4,7 +4,7 @@ import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { assignments, auditLog, invoices, jobSeries, jobs, notifications, vendorUsers } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
-import { cancelSignup } from "@/domain/assignments/cancel";
+import { offerSpot } from "@/domain/assignments/giveaway";
 import { joinBackup, signUp } from "@/domain/assignments/signup";
 import { recommendationsFor } from "@/domain/planning/recommend";
 import { setEarningsGoal } from "@/domain/planning/preferences";
@@ -137,7 +137,8 @@ describe("reactivate a canceled detail", () => {
     const on = await s.f.person();
     const t0 = new Date(job.startAt.getTime() - 72 * HOUR);
     const mine = await s.f.run((tx) => signUp(early, tx, positionId, { warningVersion: 1, now: t0 }));
-    await s.f.run((tx) => cancelSignup(early, tx, mine.id, "Plans changed", t0));
+    await s.f.run((tx) => offerSpot(early, tx, mine.id, "Plans changed", t0));
+    // Taking the offered spot over replaces the deputy who offered it.
     await s.f.run((tx) => signUp(on, tx, positionId, { warningVersion: 1, now: t0 }));
     await s.f.run((tx) => cancelJob(s.f.coord, tx, job.id, REASON, { now: t0 }));
     await s.f.run((tx) => reactivateJob(s.f.coord, tx, job.id, WHY, t0));

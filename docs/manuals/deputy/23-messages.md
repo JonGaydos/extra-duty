@@ -23,3 +23,19 @@ Messages are for people inside the agency: deputies, coordinators and admins. Ve
 ## Reading and replying
 
 New messages show a dot in **Messages** and an alert, by push unless you change it in **Profile**, **Alerts**. Messages from coordinators always arrive by email and push. Open a message to read it, then choose **Reply**. Your reply goes to the sender, and you can add more people.
+
+## Messages you must acknowledge
+
+Coordinators and admins can send a message that requires your acknowledgement, such as a new policy.
+
+1. Until you acknowledge it, a banner at the top of **Home** reads "Important message from <sender>: <subject>. Read and acknowledge.", and a thin bar shows at the top of every other page. Neither can be closed. With several, the banner shows how many and opens the oldest first.
+
+   ![The acknowledgement banner on Home](../images/deputy/23-messages-2-phone.webp)
+
+2. Choose **Open message** (or the bar) and read the message to the end. **I have read and understand** stays unavailable until you reach the end, or straight away when the whole message fits on the screen.
+
+   ![Acknowledging a message](../images/deputy/23-messages-3-phone.webp)
+
+3. Choose **I have read and understand**. The time is recorded and cannot be undone, and the banner goes away.
+
+A message may have a due date. If the coordinator chose to lock sign-ups, you cannot sign up after the due date until you acknowledge it; the detail's rules say "Acknowledge the message "<subject>" to sign up again". A sent message is never changed: a correction arrives as a new message.

@@ -4,7 +4,6 @@ import { useTestDb } from "../../setup/test-db";
 import { useEmailQueue } from "../../setup/email-queue";
 import { assignments, auditLog, notifications, users, vendorUsers } from "@/db/schema";
 import type { Actor } from "@/domain/actor";
-import { cancelSignup } from "@/domain/assignments/cancel";
 import { removePerson } from "@/domain/assignments/coordinator";
 import { SUSPENSION_REMOVE_ACTION } from "@/domain/assignments/history";
 import { jobAdmin } from "@/domain/coordinator/views";
@@ -16,7 +15,7 @@ import { ACTIVITY_MEASURES } from "@/domain/reports/saved";
 import { suspendUser } from "@/domain/users/suspension";
 import { vendorDetails } from "@/domain/vendor-portal/views";
 import { agencyInstant } from "@/domain/time/agency-time";
-import { setupFixture } from "../assignments/helpers";
+import { legacyCancel, setupFixture } from "../assignments/helpers";
 import { makeUser } from "./helpers";
 
 const FROM = agencyInstant(2035, 1, 1, 0, 0);
@@ -55,7 +54,7 @@ describe("removals caused by a suspension", () => {
     // Lee also gives a sign-up away, so the cancellation total has something real in it.
     const other = await f.mkJob();
     const leeGave = (await db.insert(assignments).values({ jobId: other.job.id, jobPositionId: other.positionId, userId: lee.userId, status: "signed_up" }).returning())[0].id;
-    await f.run((tx) => cancelSignup(lee, tx, leeGave, "Family event"));
+    await legacyCancel(db, lee, leeGave, "Family event");
 
     // A removal written before suspension removals had their own audit action: assignment.remove with the
     // suspension's reason marker, the way Task 9 wrote it.

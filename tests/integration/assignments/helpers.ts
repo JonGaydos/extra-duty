@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { jobPositions, jobs, jobTypes, positionTypes, ranks, vendors } from "@/db/schema";
+import { assignments, auditLog, jobPositions, jobs, jobTypes, positionTypes, ranks, vendors } from "@/db/schema";
 import { seed } from "@/db/seed";
 import type { Actor } from "@/domain/actor";
 import { createJob, type JobInput } from "@/domain/jobs/jobs";
@@ -62,4 +62,14 @@ export async function setupFixture(db: Db, prefix: string) {
   };
 
   return { coord, vendorId: v.id, otherVendorId: v2.id, pos, rank, person, mkJob, run };
+}
+
+/**
+ * A sign-up its person canceled before giving a spot away replaced canceling (2026-11-27), as cancelSignup wrote it
+ * then: canceled at once, audited as assignment.cancel. Such sign-ups stay canceled and still count as Gave away.
+ */
+export async function legacyCancel(db: Db, actor: Actor, assignmentId: string, reason: string): Promise<void> {
+  const [before] = await db.select().from(assignments).where(eq(assignments.id, assignmentId));
+  const [after] = await db.update(assignments).set({ status: "canceled", backupPosition: null }).where(eq(assignments.id, assignmentId)).returning();
+  await db.insert(auditLog).values({ actorUserId: actor.userId, action: "assignment.cancel", entityType: "assignment", entityId: assignmentId, before, after, reason });
 }

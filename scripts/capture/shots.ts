@@ -213,7 +213,8 @@ deputy("11-signing-up", 3, B, async (page) => {
 deputy("12-canceling", 1, B, async (page) => {
   await first(page, "/home", "/jobs/");
   const r = region("Your sign-up")(page);
-  await r.getByLabel("Reason for canceling").fill("Family event that evening");
+  await r.getByRole("button", { name: "Give away this spot" }).click();
+  await r.getByLabel("Reason").fill("Family event that evening");
 }, { target: region("Your sign-up") });
 
 deputy(
@@ -380,6 +381,10 @@ coord("02-creating-details", 7, D, async (page, ctx) => {
   await signedUpDetail(page, ctx);
   await top(main(page).getByRole("button", { name: /^Make (copy|\d+ copies)$/ }).locator("xpath=ancestor::form[1]"));
 }, { stagingOnly: true });
+coord("02-creating-details", 8, D, async (page) => {
+  await page.goto("/jobs/new");
+  await main(page).getByLabel("Different times for this detail").check();
+}, { target: card("Reminders") });
 
 coord("03-position-rate-differentials", 1, D, visit("/admin/positions"));
 coord("03-position-rate-differentials", 2, D, async (page) => {
@@ -542,8 +547,14 @@ coord("24-users-and-ranks", 3, D, async (page, ctx) => {
 
 coord("25-settings", 1, D, visit("/admin"));
 coord("25-settings", 2, D, visit("/admin/seasons"));
+coord("25-settings", 3, D, visit("/admin/settings/reminders"));
 
 coord("26-agency-notification-settings", 1, D, visit("/admin/settings/notifications"));
+coord("36-email-messages", 1, D, async (page) => {
+  await page.goto("/admin/settings/reminders");
+  await top(main(page).getByRole("region", { name: "Email messages" }));
+});
+coord("36-email-messages", 2, D, visit("/admin/settings/reminders/email/job.reminder"));
 
 coord("28-training-mode", 1, D, async (page) => {
   await page.goto("/coordinate");
@@ -635,5 +646,71 @@ coord("34-vendor-managers", 1, D, async (page, ctx) => {
   await page.goto(`/admin/users/${deputyId}`);
   await top(main(page).locator("#managed-vendors"));
 }, { stagingOnly: true, after: stopManaging, target: (page) => main(page).locator("#managed-vendors") });
+/** The demo's upcoming confidential detail (the practice deputy is assigned to it). */
+const confidentialDetail = (ctx: ShotCtx) => one<{ number: number }>(ctx, "select number from jobs where confidential and state = 'scheduled' and start_at > now() order by start_at limit 1");
+deputy("25-confidential-details", 1, P, async (page, ctx) => {
+  await page.goto(`/jobs/${(await confidentialDetail(ctx)).number}`);
+}, { stagingOnly: true });
+coord("35-confidential-details", 1, D, async (page, ctx) => {
+  await page.goto(`/jobs/${(await confidentialDetail(ctx)).number}?tab=manage`);
+}, { stagingOnly: true, target: card("Manage") });
+coord("35-confidential-details", 2, D, async (page, ctx) => {
+  await page.goto(`/jobs/${(await confidentialDetail(ctx)).number}?tab=manage`);
+  await top(region("Who opened it")(page));
+}, { stagingOnly: true, target: region("Who opened it") });
+
+// Messages that require acknowledgement (owner decision 2026-11-27): a coordinator's message to the practice deputy,
+// waiting for the deputy's acknowledgement, for these shots only; `after` removes it again.
+const ACK_SUBJECT = "Updated radio procedures";
+async function ackMessage(ctx: ShotCtx): Promise<string> {
+  const sender = await one<{ id: string }>(ctx, `select id from users where email = '${PRACTICE_USER_EMAILS.coordinator}'`);
+  const to = await ctx.query!<{ id: string }>(`select id from users where active and role = 'personnel' order by (email = $1)::int desc, name limit 6`, [DEPUTY]);
+  const [m] = await ctx.query!<{ id: string }>(
+    `insert into messages (id, sender_user_id, subject, body, recipient_count, requires_ack, ack_due_at, ack_locks_signups, sent_at)
+     values (gen_random_uuid()::text, $1, $2, $3, $4, true, now() + interval '5 days', true, now() - interval '1 day') returning id`,
+    [sender.id, ACK_SUBJECT, "Starting next week, every detail uses the new radio channel plan.\n\nCheck in on the detail channel at the start of your shift and again when you clear.\n\nRead the attached plan before your next detail.", to.length],
+  );
+  for (const [i, u] of to.entries()) {
+    await ctx.query!(`insert into message_recipients (id, message_id, user_id, acknowledged_at) values (gen_random_uuid()::text, $1, $2, $3)`, [m.id, u.id, i % 2 === 1 ? new Date() : null]);
+  }
+  return m.id;
+}
+const removeAckMessage = async (ctx: ShotCtx) => {
+  await ctx.query?.(`delete from message_recipients where message_id in (select id from messages where subject = $1)`, [ACK_SUBJECT]);
+  await ctx.query?.(`delete from messages where subject = $1`, [ACK_SUBJECT]);
+};
+deputy("23-messages", 2, B, async (page, ctx) => {
+  await ackMessage(ctx);
+  await page.goto("/home");
+  await main(page).getByTestId("ack-banner").waitFor();
+}, { stagingOnly: true, after: removeAckMessage });
+deputy("23-messages", 3, P, async (page, ctx) => {
+  await page.goto(`/messages/${await ackMessage(ctx)}`);
+  await top(main(page).getByTestId("ack-panel"));
+}, { stagingOnly: true, after: removeAckMessage });
+coord("33-messages", 2, D, async (page) => {
+  await page.goto("/messages/new");
+  await main(page).getByRole("checkbox", { name: "Require acknowledgement" }).check();
+  await main(page).getByRole("checkbox", { name: /^Lock sign-ups/ }).waitFor();
+}, { target: (page) => main(page).getByRole("checkbox", { name: "Require acknowledgement" }).locator("xpath=ancestor::section[1]") });
+coord("33-messages", 3, D, async (page, ctx) => {
+  await page.goto(`/messages/${await ackMessage(ctx)}#acknowledgements`);
+  await top(main(page).getByTestId("ack-tracking"));
+}, { stagingOnly: true, after: removeAckMessage, target: (page) => main(page).getByTestId("ack-tracking") });
+
+// The audit log (owner decision 2026-11-27): filters on the desktop, one entry on a phone, and an admin's check of a record.
+coord("37-audit-log", 1, D, async (page) => {
+  await page.goto("/admin/audit?range=30d");
+  await main(page).getByTestId("audit-entry").first().waitFor();
+  await main(page).getByRole("button", { name: /^Select all \d/ }).click();
+});
+coord("37-audit-log", 2, P, async (page) => {
+  await page.goto("/admin/audit");
+  await page.goto((await main(page).getByTestId("audit-entry").first().getByRole("link").first().getAttribute("href"))!);
+});
+admin("37-audit-log", 3, D, async (page) => {
+  await page.goto("/admin/audit/verify");
+  await main(page).getByLabel("Record ID").fill("AR-000001");
+});
 
 export const SHOTS: Shot[] = shots;

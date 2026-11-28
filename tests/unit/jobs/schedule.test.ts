@@ -8,7 +8,7 @@ const names = (cron: string) => SCHEDULE.filter((t) => t.cron === cron).map((t) 
 
 describe("job schedule", () => {
   test("every minute: short confirmations, backup offers, watch releases, billing alerts", () => {
-    expect(names("* * * * *")).toEqual(["backup-offer", "billing-ready", "confirm-pending-short", "watch-release"]);
+    expect(names("* * * * *")).toEqual(["backup-offer", "billing-ready", "confirm-pending-short", "detail-reminders", "giveaway-reminders", "watch-release"]);
   });
 
   test("daily at 3:20 AM: calendar feeds", () => {
@@ -49,7 +49,7 @@ describe("job schedule", () => {
   test("every entry runs in agency time and names are unique", () => {
     expect(SCHEDULE.every((t) => t.tz === "America/Chicago")).toBe(true);
     expect(new Set(SCHEDULE.map((t) => t.name)).size).toBe(SCHEDULE.length);
-    expect(SCHEDULE).toHaveLength(16);
+    expect(SCHEDULE).toHaveLength(18);
   });
 
   test("a failing tick is logged and does not throw, so the others still run", async () => {

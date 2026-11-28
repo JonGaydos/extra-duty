@@ -1,9 +1,6 @@
-import { simpleEmail } from "../format";
-import type { OutgoingEmail } from "../types";
+import type { PlaceholderValues } from "@/domain/email-messages/placeholders";
 
 export type InvoiceBatchEmailFields = {
-  to: string[];
-  replyTo: string;
   agencyName: string;
   vendorName: string;
   count: number;
@@ -21,17 +18,15 @@ function paidSentence(paidCount: number): string {
   return `${paidCount} of them ${one ? "is" : "are"} already paid and marked Paid; nothing is due on ${one ? "it" : "them"}.`;
 }
 
-/** One email per vendor batch: the cover summary and every invoice PDF are attached. */
-export function invoiceBatchEmail(f: InvoiceBatchEmailFields): OutgoingEmail {
-  const noun = f.count === 1 ? "invoice" : "invoices";
-  const paidNote = f.paidCount ? ` ${paidSentence(f.paidCount)}` : "";
-  const unpaid = f.paidCount ? "unpaid " : "";
-  const paragraphs = [
-    `${f.agencyName} is sending ${f.count} ${noun} to ${f.vendorName}.`,
-    `Total due: ${f.total}.${paidNote} A summary and each invoice are attached as PDFs. Pay each ${unpaid}invoice to the payee named on it.`,
-    ...f.w9Names.map((n) => `W-9 for ${n} is attached.`),
-    `Reply to this message with any billing questions.`,
-  ];
-  const msg = simpleEmail(f.to[0], `${f.count} ${noun} from ${f.agencyName}`, paragraphs);
-  return { ...msg, to: f.to, replyTo: f.replyTo };
+/** The placeholder values of a vendor batch's cover email (the "Invoice batch cover email" message). */
+export function invoiceBatchValues(f: InvoiceBatchEmailFields): PlaceholderValues {
+  return {
+    "agency.name": f.agencyName,
+    "vendor.name": f.vendorName,
+    "batch.count": `${f.count} ${f.count === 1 ? "invoice" : "invoices"}`,
+    "invoice.amount": f.total,
+    "batch.paidNote": f.paidCount ? paidSentence(f.paidCount) : "",
+    "batch.payWord": f.paidCount ? "unpaid invoice" : "invoice",
+    "batch.w9Lines": f.w9Names.map((n) => `W-9 for ${n} is attached.`).join("\n\n"),
+  };
 }

@@ -29,6 +29,8 @@ import {
 } from "@/db/schema";
 import type { Actor } from "../actor";
 import { detailEvents, signupHistory, type DetailEvent, type HistoryEntry } from "../assignments/history";
+import { overdueAcknowledgements, type OverdueAck } from "../messages/acknowledgements";
+import { giveawayHistory, offeredNotTaken, openOffersOf, type GiveawayLine, type OfferedNotTaken } from "../assignments/giveaway";
 import { assertCan, isVendorManager } from "../auth/policy";
 import { jobVendorId } from "../auth/scope";
 import { lockedPeople } from "../billing/lock";
@@ -97,6 +99,10 @@ export type CoordinatorTodo = {
   departed: Array<DepartureUnbilled & { name: string }>;
   /** Latest W-9s waiting for staff review. */
   w9Reviews: PendingW9[];
+  /** Spots offered to others that nobody has taken inside the late cancellation window. */
+  offeredNotTaken: OfferedNotTaken[];
+  /** Messages past their acknowledgement due date that some recipients have not acknowledged. */
+  overdueAcks: OverdueAck[];
 };
 
 export type RateRow = { jobId: string; title: string; vendorName: string; startAt: Date; rateCents: Cents };
@@ -382,6 +388,8 @@ export async function coordinatorTodo(actor: Actor, tx: Tx, now: Date = new Date
     sendInvoices: await dueInvoiceBatches(tx, settings, now),
     departed: isStaff(actor) ? await departedUnbilled(tx, now) : [],
     w9Reviews: await pendingW9Reviews(tx),
+    offeredNotTaken: await offeredNotTaken(tx, now),
+    overdueAcks: await overdueAcknowledgements(tx, now),
   };
 }
 
@@ -701,6 +709,10 @@ type JobRosterAdminRow = {
   isIncidentCommander: boolean;
   overrideReason: string | null;
   removalReason: string | null;
+  /** The deputy offers this spot to someone else and still holds it: since when. */
+  offeredAt: Date | null;
+  /** The sign-up's offers and how each ended, oldest first. */
+  offerLines: GiveawayLine[];
 } & HistoryEntry;
 
 export type JobAdmin = {
@@ -756,6 +768,9 @@ export async function jobAdmin(actor: Actor, tx: Tx, jobId: string): Promise<Job
   const holding: readonly string[] = HOLDING_STATUSES;
   // Every row, in sign-up order: a canceled row stays with how it ended; a later sign-up is its own row.
   const history = await signupHistory(tx, people.map(({ a }) => a));
+  const offerLines = await giveawayHistory(tx, people.map(({ a }) => a.id));
+  // An offer still open once the detail started has ended: the deputy works it.
+  const offered = row.job.startAt.getTime() > Date.now() ? await openOffersOf(tx, people.filter(({ a }) => a.status === "signed_up").map(({ a }) => a.id)) : new Map<string, Date>();
   const span = { startAt: row.job.startAt, endAt: row.job.endAt };
   const positionPay = (p: { rateDifferentialCents: Cents }) => scheduledPayCents({ ...row.job, rateCents: positionRateCents(row.job.rateCents, p) }, row.vendorMin, settings, span);
   const series = row.job.seriesId
@@ -798,6 +813,8 @@ export async function jobAdmin(actor: Actor, tx: Tx, jobId: string): Promise<Job
       isIncidentCommander: a.isIncidentCommander,
       overrideReason: a.overrideReason,
       removalReason: a.removalReason,
+      offeredAt: offered.get(a.id) ?? null,
+      offerLines: offerLines.get(a.id) ?? [],
     })),
     events: await detailEvents(tx, jobId),
     seriesCount: series.length,
@@ -924,6 +941,8 @@ export type DetailFormOptions = {
   weekStartsOn: number;
   /** Release instant (ISO) for details in each month ("YYYY-MM"), from last month through two years out. */
   releaseByMonth: Record<string, string>;
+  /** The agency's reminder times, which a detail keeps unless it sets its own. */
+  reminderHours: number[];
 };
 
 /**
@@ -969,5 +988,6 @@ export async function detailFormOptions(actor: Actor, tx: Tx, now: Date = new Da
     hourRoundingMinutes: s.hourRoundingMinutes,
     weekStartsOn: s.weekStartsOn,
     releaseByMonth,
+    reminderHours: s.detailReminderHours,
   };
 }

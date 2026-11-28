@@ -7,6 +7,7 @@ import { DomainError } from "@/domain/errors";
 import { getMessage, linkableDetails } from "@/domain/messages/messages";
 import { messageDirectory } from "@/domain/personnel/views";
 import { getSettings } from "@/domain/settings/settings";
+import { agencyDayKey } from "@/domain/time/agency-time";
 import { Icon } from "@/ui/icons";
 import { dayLabel } from "../../_personnel/format";
 import { personnelActor } from "../../_personnel/session";
@@ -16,7 +17,10 @@ export const metadata: Metadata = { title: "New message" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-/** Writing a message or a reply. `jobId` starts it addressed to that job's roster. */
+/**
+ * Writing a message or a reply. `jobId` starts it addressed to that job's roster; `about` only picks the detail in
+ * About a detail and leaves the recipients to the writer.
+ */
 export default async function NewMessagePage({ searchParams }: Readonly<Props>) {
   const actor = await personnelActor();
   const sp = await searchParams;
@@ -56,7 +60,7 @@ export default async function NewMessagePage({ searchParams }: Readonly<Props>) 
         Back to messages
       </Link>
       <h1 className="m-0 text-2xl font-bold md:text-3xl">{data.reply ? "Reply" : "New message"}</h1>
-      <Compose people={data.people} ranks={data.ranks} jobs={data.jobs} canMessageAll={data.canMessageAll} everyoneCount={data.everyoneCount} initialJobId={one(sp.jobId)} reply={data.reply} />
+      <Compose people={data.people} ranks={data.ranks} jobs={data.jobs} canMessageAll={data.canMessageAll} everyoneCount={data.everyoneCount} initialJobId={one(sp.jobId)} initialAboutId={one(sp.about)} reply={data.reply} staff={actor.role === "coordinator" || actor.role === "admin"} today={agencyDayKey(now)} />
     </div>
   );
 }

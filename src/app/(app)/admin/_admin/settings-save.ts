@@ -53,6 +53,8 @@ function convert(f: Field, v: unknown): unknown {
       return v === true;
     case "reviewers":
       return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    case "hourChoices":
+      return Array.isArray(v) ? v.map(Number) : [];
     case "positionType":
       return s || null;
     default:

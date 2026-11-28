@@ -68,7 +68,7 @@ describe("evaluateSignup", () => {
     const r = evaluateSignup(ctx());
     expect(r.canSignUp).toBe(true);
     expect(r.canBackup).toBe(false);
-    expect(r.checks).toHaveLength(14);
+    expect(r.checks).toHaveLength(15);
     expect(r.checks.every((c) => c.ok && c.message === "")).toBe(true);
   });
 
@@ -160,7 +160,8 @@ describe("evaluateSignup", () => {
     const clear = evaluateSignup(ctx());
     expect(clear.checks.map((c) => c.check)).toContain("suspended");
     expect(shownChecks(clear.checks).map((c) => c.check)).not.toContain("suspended");
-    expect(shownChecks(clear.checks)).toHaveLength(clear.checks.length - 1);
+    // The passing message acknowledgement check is left out too.
+    expect(shownChecks(clear.checks)).toHaveLength(clear.checks.length - 2);
     const suspended = evaluateSignup(ctx({ person: { ...ctx().person, suspendedUntil: agencyInstant(2026, 12, 4, 12, 0) } }));
     expect(suspended.canSignUp).toBe(false);
     expect(shownChecks(suspended.checks).filter((c) => c.check === "suspended")).toEqual([{ check: "suspended", ok: false, message: "Suspended until Dec 4, 2026" }]);
@@ -220,5 +221,17 @@ describe("evaluateSignup", () => {
     }
     const canceled = evaluateSignup(ctx({ personAssignments: [{ jobId: "j1", jobNumber: 70000, startAt: start, endAt: end, status: "canceled" }] }));
     expect(canceled.canSignUp).toBe(true);
+  });
+});
+
+describe("evaluateSignup: message acknowledgement lock", () => {
+  it("blocks with the lock's plain message, and is shown only while it locks", () => {
+    const locked = ctx({ ackLock: { locked: true, message: 'Acknowledge the message "Radio policy" to sign up again' } });
+    expect(failing(locked)).toEqual([{ check: "message_ack", ok: false, message: 'Acknowledge the message "Radio policy" to sign up again' }]);
+    expect(evaluateSignup(locked).canSignUp).toBe(false);
+    const open = evaluateSignup(ctx({ ackLock: { locked: false, message: "" } }));
+    expect(open.canSignUp).toBe(true);
+    expect(shownChecks(open.checks).some((c) => c.check === "message_ack")).toBe(false);
+    expect(shownChecks(evaluateSignup(locked).checks).some((c) => c.check === "message_ack")).toBe(true);
   });
 });

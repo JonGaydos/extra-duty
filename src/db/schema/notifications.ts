@@ -72,6 +72,14 @@ export const messages = pgTable("messages", {
   recipientCount: integer("recipient_count").notNull().default(0),
   jobId: text("job_id").references(() => jobs.id),
   replyToMessageId: text("reply_to_message_id").references((): AnyPgColumn => messages.id),
+  /** Staff asked every recipient to acknowledge it (owner decision 2026-11-27). A sent message is never edited. */
+  requiresAck: boolean("requires_ack").notNull().default(false),
+  /** The acknowledgement due date: the end of that agency day. */
+  ackDueAt: tstz("ack_due_at"),
+  /** After the due date, a recipient who has not acknowledged it cannot sign up. */
+  ackLocksSignups: boolean("ack_locks_signups").notNull().default(false),
+  /** When staff last reminded the recipients who had not acknowledged it. */
+  ackRemindedAt: tstz("ack_reminded_at"),
   ...timestamps,
 });
 
@@ -88,6 +96,8 @@ export const messageRecipients = pgTable(
     readAt: tstz("read_at"),
     /** Set when the recipient removes the message from their own inbox. */
     hiddenAt: tstz("hidden_at"),
+    /** When the recipient acknowledged a message that requires it. Final: never cleared. */
+    acknowledgedAt: tstz("acknowledged_at"),
     ...timestamps,
   },
   (t) => [index("message_recipients_user_idx").on(t.userId), index("message_recipients_message_idx").on(t.messageId)],

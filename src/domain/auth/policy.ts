@@ -21,6 +21,8 @@ const RULES = {
   "job.update": { min: "coordinator", managerScoped: true },
   "job.cancel": { min: "coordinator", managerScoped: true },
   "job.reactivate": { min: "coordinator", managerScoped: true },
+  /** Mark a detail Confidential or not (owner decision 2026-11-27): never a vendor manager. */
+  "job.confidential": { min: "coordinator" },
   "job.signup": { min: "personnel" },
   "job.backup": { min: "personnel" },
   "job.watch": { min: "personnel" },
@@ -72,6 +74,8 @@ const RULES = {
   "profile.updateOwn": { min: "personnel", ownerScoped: true },
   "message.send": { min: "personnel" },
   "message.sendAll": { min: "personnel" },
+  /** Asking recipients to acknowledge a message, tracking it and reminding them (owner decision 2026-11-27). */
+  "message.requireAck": { min: "coordinator" },
   "opsPlan.submit": { min: "personnel" },
   "deputyNote.submit": { min: "personnel" },
   "deputyNote.manage": { min: "coordinator" },
@@ -99,6 +103,14 @@ function vendorMatches(actor: Actor, ctx?: PolicyContext): boolean {
 /** True when the actor is a deputy who manages this vendor. Coordinators and admins manage every vendor already. */
 export function managesVendor(actor: Actor, vendorId: string | null | undefined): boolean {
   return actor.role === "personnel" && !!vendorId && (actor.managedVendorIds ?? []).includes(vendorId);
+}
+
+/**
+ * True when the actor manages this detail's vendor and may act on the detail as staff. Never for a confidential
+ * detail: a vendor manager sees one only when assigned, and then as a deputy (owner decision 2026-11-27).
+ */
+export function managesJob(actor: Actor, job: { vendorId: string; confidential: boolean } | null | undefined): boolean {
+  return !!job && !job.confidential && managesVendor(actor, job.vendorId);
 }
 
 /** A deputy who manages at least one vendor. */

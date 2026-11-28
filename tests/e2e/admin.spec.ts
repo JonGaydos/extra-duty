@@ -270,16 +270,21 @@ test("an access review starts, takes decisions and reports them", async ({ page,
   }
 });
 
-test("the audit log filters by record type", async ({ page, context }) => {
+test("the audit log filters by action type, and a record's own history still opens by type", async ({ page, context }) => {
   await signInAs(context, "coordinator");
   await page.setViewportSize(DESKTOP);
   await page.goto("/admin/audit");
-  await page.getByLabel("Record type").selectOption("season");
-  await page.getByRole("button", { name: "Filter" }).click();
-  await expect(page).toHaveURL(/type=season/);
-  const table = page.getByRole("table");
-  await expect(table.getByRole("row").nth(1)).toContainText("season.update");
-  for (const cell of await table.locator("tbody tr td:nth-child(4)").allInnerTexts()) expect(cell).toMatch(/^season/);
+  await page.locator("summary").filter({ hasText: "Action type" }).click();
+  await page.getByRole("checkbox", { name: "Settings", exact: true }).check();
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/group=settings/);
+  await expect(page.getByTestId("audit-entry").first()).toBeVisible();
+  // A record's history (the links from an entry) still filters by record type.
+  await rows(`insert into audit_log (id, action, entity_type, entity_id, after) values (gen_random_uuid()::text, 'season.update', 'season', 'e2e-season', '{"weekCapMinutes":2640}')`);
+  await page.goto("/admin/audit?type=season");
+  const entries = page.getByTestId("audit-entry");
+  await expect(entries.first()).toContainText("Season changed");
+  for (const t of await entries.getByRole("link").allInnerTexts()) expect(t).toMatch(/^Season/);
 });
 
 /** A tiny SMTP server that keeps every message it receives. */

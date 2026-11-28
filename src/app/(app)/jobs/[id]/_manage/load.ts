@@ -4,7 +4,8 @@ import { detailFormOptions, jobAdmin, rateOverrideOf, staffDirectory } from "@/d
 import { deputyNotesForJob } from "@/domain/deputy-notes/deputy-notes";
 import { NotFoundError } from "@/domain/errors";
 import { loadJobStatus } from "@/domain/jobs/status";
-import { getJob, reactivationPreview } from "@/domain/jobs/jobs";
+import { openJob, reactivationPreview } from "@/domain/jobs/jobs";
+import { confidentialViews, seesAllConfidential } from "@/domain/jobs/confidential";
 import { eligibleReviewers, getJobOpsPlan } from "@/domain/ops-plans/ops-plans";
 import { jobActivity } from "@/domain/personnel/views";
 import { getSettings } from "@/domain/settings/settings";
@@ -15,7 +16,8 @@ export async function loadDetail(actor: Actor, id: string, now: Date) {
   return withTx(async (tx) => {
     let job;
     try {
-      job = await getJob(actor, tx, id);
+      // Every open of a confidential detail is logged, staff included.
+      job = await openJob(actor, tx, id);
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;
@@ -42,6 +44,7 @@ export async function loadDetail(actor: Actor, id: string, now: Date) {
       // A canceled detail can come back until it ends.
       reactivation: job.state === "canceled" && now.getTime() < job.endAt.getTime() ? await reactivationPreview(actor, tx, id) : null,
       status: await loadJobStatus(tx, id, now),
+      views: job.confidential && seesAllConfidential(actor) ? await confidentialViews(actor, tx, id, 50) : [],
     };
   });
 }

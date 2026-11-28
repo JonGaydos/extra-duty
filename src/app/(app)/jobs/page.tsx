@@ -21,7 +21,7 @@ import { SelectableDetails, type SelectableItem } from "../coordinate/_coordinat
 import { scheduleNoteFor } from "../_personnel/filters";
 import { hoursText, plural, whenText } from "../_personnel/format";
 import { HideVendorButton } from "../_personnel/HideVendorButton";
-import { cardRow, DetailRowBody, RowList, type RowChip } from "../_personnel/JobRow";
+import { CONFIDENTIAL_CHIP, cardRow, DetailRowBody, RowList, type RowChip } from "../_personnel/JobRow";
 import { personnelActor } from "../_personnel/session";
 import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { activeCount, filterParams, resolveFilters } from "../_shared/detail-filters";
@@ -74,9 +74,9 @@ const STATE: Record<string, RowChip> = {
 /** A request, canceled or past detail (staff views), in the same row look. */
 function entryRow(e: CalEntry, now: Date): SelectableItem {
   const open = e.needed - e.filled;
-  const chips: RowChip[] = [STATE[e.state] ?? (open > 0 ? { tone: "attention", text: `${open} open` } : { tone: "neutral", text: "Filled" })];
+  const chips: RowChip[] = [...(e.confidential ? [CONFIDENTIAL_CHIP] : []), STATE[e.state] ?? (open > 0 ? { tone: "attention", text: `${open} open` } : { tone: "neutral", text: "Filled" })];
   if (e.held) chips.push({ tone: "warning", text: "Held" });
-  else if (e.status === "not_released") chips.push({ tone: "info", text: "Not released" });
+  else if (e.status === "not_released" && !e.confidential) chips.push({ tone: "info", text: "Not released" });
   if (e.seriesId) chips.push({ tone: "neutral", text: "Series" });
   const where = e.locationName ? `, ${e.locationName}` : "";
   return {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { inArray } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
 import { withTx } from "@/ui/shell/request";
 import { jobs } from "@/db/schema";
 import { listInbox, listSent, unreadMessageCount } from "@/domain/messages/messages";
@@ -13,6 +13,7 @@ import { clock, monthDay } from "../_personnel/format";
 import { personnelActor } from "../_personnel/session";
 import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { MessageList, type MessageRowView } from "./MessageList";
+import { confidentialVisible } from "@/domain/jobs/confidential";
 
 export const metadata: Metadata = { title: "Messages" };
 
@@ -43,7 +44,7 @@ export default async function MessagesPage({ searchParams }: Readonly<Props>) {
     const sent = tab === "sent" ? await listSent(actor, tx, { page: 1 }) : [];
     const unread = await unreadMessageCount(actor, tx);
     const jobIds = [...new Set([...inbox, ...sent].map((m) => m.jobId).filter((v): v is string => v !== null))];
-    const numbers = jobIds.length ? await tx.select({ id: jobs.id, number: jobs.number }).from(jobs).where(inArray(jobs.id, jobIds)) : [];
+    const numbers = jobIds.length ? await tx.select({ id: jobs.id, number: jobs.number }).from(jobs).where(and(inArray(jobs.id, jobIds), confidentialVisible(tx, actor))) : [];
     return { inbox, sent, unread, numbers: new Map(numbers.map((n) => [n.id, n.number])) };
   });
   const tag = (jobId: string | null) => (jobId && data.numbers.has(jobId) ? `Detail #${data.numbers.get(jobId)}` : null);

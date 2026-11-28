@@ -24,6 +24,7 @@ import {
   AttachContract,
   CancelDetail,
   ChangeDecision,
+  ConfidentialControl,
   CopyDetail,
   EditDetail,
   HoldRelease,
@@ -76,6 +77,7 @@ const released = (job: Job, now: Date) => !!job.releaseAt && job.releaseAt.getTi
 
 /** When the detail opens for sign-up, or why it does not. */
 export function releaseStatusText(job: Job, now: Date): string {
+  if (job.confidential) return "Confidential: never released. A coordinator assigns people.";
   if (job.held) return "Held: off the open lists and no new sign-ups. People already on it keep their spots.";
   if (job.state === "requested" || !job.releaseAt) return "After approval";
   return released(job, now) ? `Open for sign-up since ${dateTime(job.releaseAt)}` : `Opens ${dateTime(job.releaseAt)}`;
@@ -90,7 +92,7 @@ function StateChip({ c }: Readonly<{ c: DetailContext }>) {
   if (job.state === "canceled") return <Chip tone="danger">Canceled</Chip>;
   if (ended) return <Chip tone={ended.tone}>{ended.text}</Chip>;
   if (c.started) return <Chip>Started</Chip>;
-  if (job.held) return null;
+  if (job.held || job.confidential) return null;
   return released(job, c.now) ? <Chip tone="success">Released</Chip> : <Chip tone="info">Not released</Chip>;
 }
 
@@ -101,6 +103,11 @@ export function DetailHeader({ c }: Readonly<{ c: DetailContext }>) {
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap gap-1.5">
         <Chip>Detail #{job.number}</Chip>
+        {job.confidential ? (
+          <Chip tone="coordinator" icon="lock">
+            Confidential
+          </Chip>
+        ) : null}
         <StateChip c={c} />
         {job.held ? <Chip tone="warning">Held</Chip> : null}
         {admin.locked ? <Chip tone="danger">Locked: vendor on payment hold</Chip> : null}
@@ -158,7 +165,8 @@ export function ManageCard({ c }: Readonly<{ c: DetailContext }>) {
       {!closed ? (
         <EditDetail jobId={job.id} initial={c.initial} date={agencyDayKey(job.startAt)} options={c.d.options} seriesLater={admin.laterInSeries} started={started} approved={!!c.d.rateOverride} />
       ) : null}
-      {!closed && job.state !== "requested" && !started ? (
+      {live && c.coordinator && !started ? <ConfidentialControl jobId={job.id} on={job.confidential} /> : null}
+      {!closed && job.state !== "requested" && !started && !job.confidential ? (
         <HoldRelease jobId={job.id} held={job.held} opensLater={!!job.releaseAt && job.releaseAt.getTime() > c.now.getTime()} seriesLater={admin.laterInSeries} status={c.releaseStatus} />
       ) : null}
       {live && c.coordinator ? <DetailInvoiceHold jobId={job.id} current={job.waitForAllDeputies} agency={c.d.agencyWait} /> : null}
@@ -297,7 +305,7 @@ export function SafetyCard({ c }: Readonly<{ c: DetailContext }>) {
 /** A roster row's chip: struck through when ended, warning while waiting, success when paid. */
 function rosterTone(r: RosterRow): "neutral" | "warning" | "success" | "info" {
   if (!r.active) return "neutral";
-  if (r.status === "backup" || r.status === "pending_short") return "warning";
+  if (r.offeredAt || r.status === "backup" || r.status === "pending_short") return "warning";
   return r.status === "paid" ? "success" : "info";
 }
 
@@ -325,11 +333,19 @@ function HistoryRow({ r, c, canNameIc }: Readonly<{ r: RosterRow; c: DetailConte
             {r.label}
             {r.active && r.backupPosition ? ` #${r.backupPosition}` : ""}
           </Chip>
+          {r.offeredAt ? <Chip tone="warning">Offered</Chip> : null}
         </span>
         <span className="text-sm text-muted">
           {r.position}
           {r.overrideReason ? `. Override: ${r.overrideReason}` : ""}
         </span>
+        {r.offerLines.length ? (
+          <ul className="m-0 flex max-w-[70ch] list-none flex-col p-0 text-sm text-muted" aria-label={`Offers by ${r.name}`}>
+            {r.offerLines.map((l) => (
+              <li key={`${l.at.getTime()}-${l.text}`}>{l.text}</li>
+            ))}
+          </ul>
+        ) : null}
         {r.ended ? (
           <span className="max-w-[70ch] text-sm text-muted">
             {r.ended.by ? `By ${r.ended.by}, ` : ""}
@@ -338,7 +354,7 @@ function HistoryRow({ r, c, canNameIc }: Readonly<{ r: RosterRow; c: DetailConte
           </span>
         ) : null}
       </span>
-      {!c.closed && r.active ? <RosterRowActions assignmentId={r.assignmentId} jobId={c.d.job.id} userId={r.userId} name={r.name} status={r.status} started={c.started} canNameIc={canNameIc} coordinator={c.coordinator} /> : null}
+      {!c.closed && r.active ? <RosterRowActions assignmentId={r.assignmentId} jobId={c.d.job.id} userId={r.userId} name={r.name} status={r.status} started={c.started} canNameIc={canNameIc} coordinator={c.coordinator} offered={r.offeredAt !== null} people={c.d.people} /> : null}
     </li>
   );
 }
@@ -577,5 +593,33 @@ export function CopyAndRepeat({ c }: Readonly<{ c: DetailContext }>) {
         </Card>
       ) : null}
     </div>
+  );
+}
+
+/** Who opened a confidential detail and when, newest first (coordinators and admins), so staff can review access. */
+export function ViewLogCard({ c }: Readonly<{ c: DetailContext }>) {
+  const { job, views } = c.d;
+  if (!job.confidential || !c.coordinator) return null;
+  return (
+    <Card aria-labelledby="view-log-title">
+      <h2 id="view-log-title" className="m-0 text-title font-semibold md:text-base">
+        Who opened it
+      </h2>
+      <p className="m-0 text-sm text-muted">Every open of a confidential detail is logged, in the app and through the API.</p>
+      {views.length ? (
+        <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
+          {views.map((v) => (
+            <li key={v.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2 text-sm">
+              <span className="font-medium">{v.name ?? "Someone"}</span>
+              <span className="text-muted" data-numeric>
+                {dateTime(v.at)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="m-0 text-sm text-muted">Nobody has opened it yet.</p>
+      )}
+    </Card>
   );
 }

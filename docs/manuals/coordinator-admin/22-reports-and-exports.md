@@ -7,4 +7,4 @@
 
    ![Reports](../images/coordinator-admin/22-reports-and-exports-1-desktop.webp)
 
-Dates and months are grouped in Central time.
+Dates and months are grouped in Central time. Reports on details, sign-ups and invoices include confidential details; **Group by** **Confidential** sets them apart.

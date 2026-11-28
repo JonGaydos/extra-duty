@@ -57,9 +57,9 @@ for (const [role, viewport] of [
       await expect(page.getByText(/Not verified|Found on the map|Did you mean/).first()).toBeVisible();
       await page.getByRole("button", { name: "Save contact details" }).click();
       await expect.poll(async () => (await one<{ a: string | null }>("select mailing_address as a from users where id = $1", [me.id])).a).toBe("PO Box 77, Gulf Haven, FL 32400");
-      await page.getByLabel("Upload your W-9").setInputFiles(pdf(`W-9 ${me.name}`));
+      await page.getByLabel("Replace your W-9").setInputFiles(pdf(`W-9 ${me.name}`));
       await page.getByRole("button", { name: "Upload W-9" }).click();
-      await expect(page.getByRole("status").filter({ hasText: "W-9 uploaded." })).toBeVisible();
+      await expect(page.getByRole("status").filter({ hasText: "W-9 uploaded. It waits for review." })).toBeVisible();
       await page.getByRole("button", { name: "Save schedule" }).click();
       await expect(page.getByRole("status").filter({ hasText: /Schedule (saved|turned off)\./ })).toBeVisible();
       await page.getByLabel("Monthly earnings goal").fill("1500");

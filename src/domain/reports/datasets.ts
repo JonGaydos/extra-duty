@@ -23,7 +23,7 @@ import {
   vendorLocations,
   vendors,
 } from "@/db/schema";
-import { DEPARTURE_REMOVE_ACTION, GAVE_AWAY_ACTION, SUSPENSION_REMOVAL_REASON, SUSPENSION_REMOVE_ACTION } from "@/domain/assignments/history";
+import { DEPARTURE_REMOVE_ACTION, GAVE_AWAY_ACTION, SUSPENSION_REMOVAL_REASON, SUSPENSION_REMOVE_ACTION, TAKEN_OVER_ACTION } from "@/domain/assignments/history";
 import { seasonFor } from "@/domain/caps/seasons";
 import { minutesBetween } from "@/domain/time/agency-time";
 import { closedPaidAtMs, fromMs, isBilled, paidDate } from "./earnings";
@@ -58,7 +58,8 @@ export type GroupBy =
   | "responsible_party"
   | "age_bucket"
   | "action"
-  | "entity_type";
+  | "entity_type"
+  | "confidential";
 
 /** Added to the five base measures: `recipients` (messages), `billed_count` (invoices that count as billed) and the monthly cap pair (assignments, grouped by month). */
 export type Measure =
@@ -107,6 +108,8 @@ export type Fact = {
   vendorId: string | null;
   vendorName: string | null;
   typeId: string | null;
+  /** The detail is confidential (owner decision 2026-11-27): staff reports include it, marked. */
+  confidential: boolean;
   typeName: string | null;
   locationId: string | null;
   locationName: string | null;
@@ -145,6 +148,7 @@ const blank: Fact = {
   vendorId: null,
   vendorName: null,
   typeId: null,
+  confidential: false,
   typeName: null,
   locationId: null,
   locationName: null,
@@ -177,7 +181,7 @@ export type Dataset = {
 };
 
 const TIME: GroupBy[] = ["day", "week", "month", "year"];
-const JOB_DIMS: GroupBy[] = ["vendor", "job_type", "location"];
+const JOB_DIMS: GroupBy[] = ["vendor", "job_type", "location", "confidential"];
 const ALL_FILTERS: FilterName[] = ["userIds", "vendorIds", "typeIds", "locationIds", "statuses"];
 const DAY_MS = 86_400_000;
 
@@ -239,7 +243,7 @@ const assignmentRows = (statuses: readonly string[] | undefined) => async (tx: T
       userName,
       vendorId: job.vendorId,
       vendorName,
-      typeId: job.typeId,
+      typeId: job.typeId, confidential: job.confidential,
       typeName,
       locationId: job.locationId,
       locationName,
@@ -288,7 +292,7 @@ async function invoiceRows(tx: Tx, spec: ReportSpec, where: (SQL | undefined)[],
         userName,
         vendorId: inv.vendorId,
         vendorName,
-        typeId: job.typeId,
+        typeId: job.typeId, confidential: job.confidential,
         typeName,
         locationId: job.locationId,
         locationName,
@@ -344,7 +348,7 @@ export const DATASETS: Record<DatasetName, Dataset> = {
           at: job.startAt,
           vendorId: job.vendorId,
           vendorName,
-          typeId: job.typeId,
+          typeId: job.typeId, confidential: job.confidential,
           typeName,
           locationId: job.locationId,
           locationName,
@@ -483,7 +487,7 @@ export const DATASETS: Record<DatasetName, Dataset> = {
           .orderBy(asc(jobs.createdAt), asc(jobs.id))
           .limit(MAX_ROWS + 1);
         for (const { job, userName, vendorName, typeName, locationName } of rows) {
-          out.push(fact({ at: job.createdAt, userId: job.requestedByUserId, userName, vendorId: job.vendorId, vendorName, typeId: job.typeId, typeName, locationId: job.locationId, locationName, status: job.state }));
+          out.push(fact({ at: job.createdAt, userId: job.requestedByUserId, userName, vendorId: job.vendorId, vendorName, typeId: job.typeId, confidential: job.confidential, typeName, locationId: job.locationId, locationName, status: job.state }));
         }
       }
       if (wanted.length === 0 || changeStatuses.length > 0) {
@@ -499,7 +503,7 @@ export const DATASETS: Record<DatasetName, Dataset> = {
           .orderBy(asc(jobChangeRequests.createdAt), asc(jobChangeRequests.id))
           .limit(MAX_ROWS + 1);
         for (const { req, job, userName, vendorName, typeName, locationName } of rows) {
-          out.push(fact({ at: req.createdAt, userId: req.requestedBy, userName, vendorId: job.vendorId, vendorName, typeId: job.typeId, typeName, locationId: job.locationId, locationName, status: `change_${req.status}` }));
+          out.push(fact({ at: req.createdAt, userId: req.requestedBy, userName, vendorId: job.vendorId, vendorName, typeId: job.typeId, confidential: job.confidential, typeName, locationId: job.locationId, locationName, status: `change_${req.status}` }));
         }
       }
       return out;
@@ -654,7 +658,7 @@ async function activityFacts(tx: Tx, spec: ReportSpec): Promise<Fact[]> {
     when ${assignments.status} = 'removed' then case when exists (select 1 from audit_log al where al.entity_type = 'assignment' and al.entity_id = ${assignments.id}
       and (al.action = ${SUSPENSION_REMOVE_ACTION} or (al.action = 'assignment.remove' and al.reason like ${`${SUSPENSION_REMOVAL_REASON}: %`} and ${assignments.removalReason} = ${SUSPENSION_REMOVAL_REASON})))
       then 'suspension_removed' else 'removed' end
-    when ${assignments.status} = 'canceled' then case when exists (select 1 from audit_log al where al.entity_type = 'assignment' and al.entity_id = ${assignments.id} and al.action = ${GAVE_AWAY_ACTION}) then 'gave_away' else 'canceled' end
+    when ${assignments.status} = 'canceled' then case when exists (select 1 from audit_log al where al.entity_type = 'assignment' and al.entity_id = ${assignments.id} and al.action in (${GAVE_AWAY_ACTION}, ${TAKEN_OVER_ACTION})) then 'gave_away' else 'canceled' end
     else 'open' end`;
   const rows = await tx
     .select({ a: assignments, job: jobs, userName: users.name, kind, invStatus: invoices.status, invTotal: invoices.totalCents })

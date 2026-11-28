@@ -20,7 +20,13 @@ type Props = {
   /** How many people Everyone reaches (active, not vendors, not the sender). */
   everyoneCount: number;
   initialJobId: string;
+  /** A detail for About a detail only, with no recipients chosen. */
+  initialAboutId?: string;
   reply: { id: string; subject: string; to: string } | null;
+  /** Coordinators and admins: may require acknowledgement. */
+  staff?: boolean;
+  /** Today in agency time (YYYY-MM-DD), the earliest due date. */
+  today?: string;
 };
 
 
@@ -125,6 +131,44 @@ function SendToChoice({ mode, everyoneCount, onEveryone, onChoose }: Readonly<{ 
   );
 }
 
+type Ack = { on: boolean; dueOn: string; lock: boolean };
+
+/**
+ * Staff only: "Require acknowledgement", an optional due date, and the sign-up lock after it (off by default, needs a
+ * due date). Sent messages cannot be edited, so a correction goes out as a new message.
+ */
+function AckChoice({ ack, setAck, today }: Readonly<{ ack: Ack; setAck: (a: Ack) => void; today?: string }>) {
+  return (
+    <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
+      <legend className="sr-only">Acknowledgement</legend>
+      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-body">
+        <input type="checkbox" checked={ack.on} onChange={(e) => setAck({ ...ack, on: e.target.checked })} className="size-4.5 shrink-0 accent-accent" />
+        <span>Require acknowledgement</span>
+      </label>
+      {ack.on ? (
+        <div className="flex flex-col gap-3 border-t border-divider pt-3">
+          <p className="m-0 text-sm text-muted">
+            Each person sees it at the top of every page until they press I have read and understand. Messages cannot be edited after sending; send a correction as a new message.
+          </p>
+          <FormField label="Due date" hint="Optional. Overdue messages show on To-do.">
+            <Input type="date" value={ack.dueOn} min={today} onChange={(e) => setAck({ ...ack, dueOn: e.target.value, lock: e.target.value ? ack.lock : false })} className="md:w-56" />
+          </FormField>
+          <label className={`flex min-h-11 items-center gap-2.5 text-body ${ack.dueOn ? "cursor-pointer" : "text-muted"}`}>
+            <input
+              type="checkbox"
+              checked={ack.lock}
+              disabled={!ack.dueOn}
+              onChange={(e) => setAck({ ...ack, lock: e.target.checked })}
+              className="size-4.5 shrink-0 accent-accent"
+            />
+            <span>Lock sign-ups if not acknowledged by the due date</span>
+          </label>
+        </div>
+      ) : null}
+    </fieldset>
+  );
+}
+
 /**
  * New message. "Send to" is Everyone or Choose recipients, never both: choosing Everyone replaces the chips, with Undo
  * to bring them back. Recipients are people by name, a rank, a detail's roster or the coordinators; vendors are never
@@ -141,9 +185,10 @@ export function Compose(p: Readonly<Props>) {
   const [query, setQuery] = useState("");
   const [rankId, setRankId] = useState(p.ranks[0]?.id ?? "");
   const [rosterJob, setRosterJob] = useState(p.jobs[0]?.id ?? "");
-  const [jobLink, setJobLink] = useState(p.jobs.some((j) => j.id === p.initialJobId) ? p.initialJobId : "");
+  const [jobLink, setJobLink] = useState(() => [p.initialAboutId, p.initialJobId].find((id) => id && p.jobs.some((j) => j.id === id)) ?? "");
   const [subject, setSubject] = useState(replySubject(p.reply));
   const [body, setBody] = useState("");
+  const [ack, setAck] = useState<Ack>({ on: false, dueOn: "", lock: false });
   const { run, busy, result } = useAction();
   const picks = to.picks;
 
@@ -182,7 +227,15 @@ export function Compose(p: Readonly<Props>) {
       onSubmit={(e) => {
         e.preventDefault();
         run(
-          () => sendMessageAction({ audiences: audiencesFor(to), subject, body, jobId: jobLink || undefined, replyToMessageId: p.reply?.id }),
+          () =>
+            sendMessageAction({
+              audiences: audiencesFor(to),
+              subject,
+              body,
+              jobId: jobLink || undefined,
+              replyToMessageId: p.reply?.id,
+              ack: p.staff && ack.on ? { dueOn: ack.dueOn || null, lockSignups: ack.lock } : undefined,
+            }),
           (r) => router.push(r.value ? `/messages/${r.value}` : "/messages?tab=sent"),
           false,
         );
@@ -269,6 +322,11 @@ export function Compose(p: Readonly<Props>) {
           <TextArea value={body} onChange={(e) => setBody(e.target.value)} maxLength={10000} required className="min-h-36" />
         </FormField>
       </Card>
+      {p.staff ? (
+        <Card>
+          <AckChoice ack={ack} setAck={setAck} today={p.today} />
+        </Card>
+      ) : null}
       <ActionStatus result={result} />
       <Button type="submit" size="lg" busy={busy} disabled={!canSend} className="md:w-fit">
         Send message

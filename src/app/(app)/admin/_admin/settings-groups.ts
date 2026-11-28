@@ -7,7 +7,7 @@ import { scalarText } from "@/lib/text";
  * with the agency settings schema, so a field's limits live in one place.
  */
 
-type FieldKind = "int" | "float" | "hours" | "dollars" | "dollarsOptional" | "phone" | "text" | "textarea" | "email" | "time" | "select" | "weekday" | "date" | "switch" | "reviewers" | "positionType";
+type FieldKind = "int" | "float" | "hours" | "dollars" | "dollarsOptional" | "phone" | "text" | "textarea" | "email" | "time" | "select" | "weekday" | "date" | "switch" | "reviewers" | "positionType" | "hourChoices";
 
 export type Field = {
   key: string;
@@ -113,7 +113,7 @@ export const GROUPS = {
       { key: "waitForAllDeputies", label: "Hold a detail's invoices until every deputy has billed", kind: "switch", hint: "Applies to batched sends. A detail can turn it off, and a coordinator can still send early with a reason." },
       { key: "invoiceNumberPrefix", label: "Invoice number prefix", kind: "text" },
       { key: "billingReplyToEmail", label: "Billing reply-to address", kind: "email", hint: "Vendors' replies to invoice emails go here." },
-      { key: "lateVendorCancelHours", label: "Late cancellation window (hours)", kind: "int", hint: "A vendor that cancels inside this window still pays." },
+      { key: "lateVendorCancelHours", label: "Late cancellation window (hours)", kind: "int", hint: "A vendor that cancels inside this window still pays. A spot a deputy offered that nobody has taken by then goes on To-do, and the deputy is reminded." },
       {
         key: "lateCancelPayBasis",
         label: "Late cancellation pays",
@@ -131,10 +131,16 @@ export const GROUPS = {
   reminders: {
     slug: "reminders",
     title: "Reminders and locks",
-    intro: "Reminders about unbilled and unpaid work, and the locks that stop sign-up until it is handled.",
+    intro: "Reminders before details and about unbilled and unpaid work, the locks that stop sign-up until it is handled, and the words of every email.",
     save: "Save reminder settings",
     saved: "Reminder settings saved.",
     fields: [
+      {
+        key: "detailReminderHours",
+        label: "Remind assigned people before a detail starts",
+        kind: "hourChoices",
+        hint: "By email, push and in the app, with the description and any reminder note. A detail can use its own times or none. Clear every box for no reminders.",
+      },
       {
         key: "unbilledReminderFrequency",
         label: "Unbilled details reminder",
@@ -283,6 +289,7 @@ export function groupValues(group: Group, s: AgencySettings): GroupValues {
     const v = getPath(s, f.key);
     if (f.kind === "switch") out[f.key] = v === true;
     else if (f.kind === "reviewers") out[f.key] = Array.isArray(v) ? (v as string[]) : [];
+    else if (f.kind === "hourChoices") out[f.key] = Array.isArray(v) ? v.map(String) : [];
     else out[f.key] = fieldText(f, v);
   }
   return out;

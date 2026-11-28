@@ -4,7 +4,7 @@ import { claimablePositionId } from "@/domain/assignments/backups";
 import { eligibilityByPosition, type JobEligibility } from "@/domain/assignments/signup";
 import { deputyNotesForJob } from "@/domain/deputy-notes/deputy-notes";
 import { NotFoundError } from "@/domain/errors";
-import { getJob } from "@/domain/jobs/jobs";
+import { openJob } from "@/domain/jobs/jobs";
 import { getJobOpsPlan } from "@/domain/ops-plans/ops-plans";
 import { capSummary, jobActivity, jobRoster, loadJobCards, myDetails } from "@/domain/personnel/views";
 import { getSettings } from "@/domain/settings/settings";
@@ -14,7 +14,8 @@ export async function loadJobPage(actor: Actor, id: string, now: Date) {
   return withTx(async (tx) => {
     let job;
     try {
-      job = await getJob(actor, tx, id);
+      // Every open of a confidential detail is logged.
+      job = await openJob(actor, tx, id);
     } catch (e) {
       if (e instanceof NotFoundError) return null;
       throw e;
@@ -28,8 +29,12 @@ export async function loadJobPage(actor: Actor, id: string, now: Date) {
     }
     const caps = await capSummary(actor, tx, now);
     const settings = await getSettings(tx);
-    const mine = (await myDetails(actor, tx, now)).find((d) => d.job.id === id && !["canceled", "removed"].includes(d.status)) ?? null;
+    // One row per detail: the live sign-up when there is one, else the last one that ended (taken over, removed).
+    const own = (await myDetails(actor, tx, now)).find((d) => d.job.id === id) ?? null;
+    const gone = own !== null && ["canceled", "removed"].includes(own.status);
+    const mine = gone ? null : own;
     return {
+      ended: gone ? { status: own.status, reason: own.reason } : null,
       claimPositionId: mine?.status === "backup" ? await claimablePositionId(tx, mine.assignmentId, now) : null,
       job,
       card,

@@ -19,6 +19,9 @@ import { trainingConfigured } from "@/db/client";
 import { appEnvFromProcess } from "@/lib/env";
 import { PRACTICE_ROLE_LABELS } from "@/domain/training/mode";
 import { TrainingBanner } from "@/ui/shell/TrainingSwitch";
+import { AckBar } from "@/ui/shell/AckBar";
+import { pendingAcknowledgements } from "@/domain/messages/acknowledgements";
+import { ackBannerText } from "@/domain/messages/ack-text";
 import { backToLiveAction, switchToTrainingAction } from "@/ui/shell/training-actions";
 
 /**
@@ -38,12 +41,15 @@ export default async function AppLayout({ children }: Readonly<{ children: React
   const cookieTheme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const nav = navFor(actor.role, { outbox: mode === "training" || appEnvFromProcess() === "staging", manager: isVendorManager(actor) });
   const staff = actor.role === "coordinator" || actor.role === "admin";
-  const { unreadAlerts, settings, logo } = await withTx(async (tx) => ({
+  const { unreadAlerts, settings, logo, acks } = await withTx(async (tx) => ({
     unreadAlerts: await unreadAlertCount(actor, tx),
+    // Messages waiting for this person's acknowledgement: a thin bar on every page until each is acknowledged.
+    acks: await pendingAcknowledgements(actor, tx),
     settings: await getSettings(tx),
     // A logo that cannot be read leaves the header as text.
     logo: await agencyLogoInfo(tx).catch(() => null),
   }));
+  const ack = ackBannerText(acks);
   const mapConfig = { tileUrl: settings.mapTileUrl, attribution: settings.mapAttribution, center: settings.mapDefaultCenter };
 
   return (
@@ -71,6 +77,7 @@ export default async function AppLayout({ children }: Readonly<{ children: React
             switchMode={canSwitch ? switchToTrainingAction : undefined}
           />
           {staff ? <PhoneHeader home={nav.home} unreadAlerts={unreadAlerts} logo={logo} /> : null}
+          {ack ? <AckBar text={ack.title} href={ack.href} /> : null}
           <main
             id="main"
             className="relative mx-auto w-full max-w-310 px-5 pt-5 pb-7 max-md:min-h-0 max-md:flex-1 max-md:overflow-y-auto max-md:overscroll-contain md:px-6 md:pt-6.5 md:pb-12"

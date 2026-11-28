@@ -173,9 +173,10 @@ function checkScopes(def: RouteDef, p: Principal): void {
   if (missing.length) throw new KeyScopeError(`This API key does not have the ${missing.join(" and ")} scope.`);
 }
 
-/** A malformed id in the path is answered as not found, before any read. */
-function assertWellFormedIds(params: Record<string, string>): void {
+/** A malformed id in the path is answered as not found, before any read. A detail number passes where the route takes one. */
+function assertWellFormedIds(params: Record<string, string>, detailNumber: boolean): void {
   for (const [name, value] of Object.entries(params)) {
+    if (detailNumber && name === "id" && /^\d{1,9}$/.test(value)) continue;
     if ((name === "id" || name.endsWith("Id")) && isMalformedId(value)) throw new NotFoundError();
   }
 }
@@ -204,7 +205,7 @@ export function apiHandler<D extends RouteDef>(def: D, fn: (ctx: HandlerContext<
       const principal = def.public ? null : await authenticate(req, new URL(req.url).pathname);
       if (!principal && !def.public) throw new UnauthenticatedError();
       if (principal) checkScopes(def, principal);
-      assertWellFormedIds(params);
+      assertWellFormedIds(params, def.detailNumber === true);
       const query = parse(def.query, Object.fromEntries(new URL(req.url).searchParams));
       const body = def.body ? parse(def.body, await readJson(req)) : undefined;
       const ctx = { req, params, body, query, actor: principal?.actor ?? null, principal, run: getTx(principal) } as HandlerContext<D>;

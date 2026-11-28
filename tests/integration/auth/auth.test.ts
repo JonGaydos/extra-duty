@@ -430,6 +430,7 @@ describe("authentication", () => {
         const [u] = await db.insert(users).values({ name: "stage3", email: "stage3@example.test", rankId: deputyRankId }).returning();
         await db.transaction((tx) => createInvite(coordinator, tx, u.id));
         await drain();
+        await vi.waitFor(async () => expect(await outboxTo(email)).toHaveLength(2));
         expect(mailTo(email)).toHaveLength(sentBefore);
         expect(mailTo("stage3@example.test")).toHaveLength(0);
         expect((await outboxTo(email)).map((m) => m.subject).sort(byText)).toEqual(["Reset your password", "Your sign-in code"]);
@@ -527,6 +528,8 @@ describe("authentication", () => {
       const answer = a.api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } });
       const raced = await Promise.race([answer.then(() => "answered"), new Promise((r) => setTimeout(() => r("waiting"), 2_000))]);
       expect(raced).toBe("answered");
+      // The email is built from the agency's message after the answer, then handed to the sender.
+      await vi.waitFor(() => expect(release).toBeTypeOf("function"));
       release();
       await vi.waitFor(() => expect(sent).toEqual([email]));
     });
@@ -551,6 +554,8 @@ describe("authentication", () => {
 
       // Self-service unlock: the UI requests the reset link for the same email.
       await auth.api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } });
+      // The reset email goes out after the answer (it never makes the answer wait).
+      await vi.waitFor(() => expect(lastMailTo(email)?.subject).toBe("Reset your password"));
       const resetMail = lastMailTo(email)!;
       const m = /\/api\/auth\/reset-password\/([A-Za-z0-9_-]+)\?callbackURL=/.exec(resetMail.text);
       expect(m).not.toBeNull();

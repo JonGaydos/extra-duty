@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { assignments, jobPositions, jobs, jobWatches, spotOffers } from "@/db/schema";
+import { assignments, jobPositions, jobs, jobWatches, spotGiveaways, spotOffers } from "@/db/schema";
 import type { Actor } from "../actor";
 import { recordAudit } from "../audit/audit";
 import { assertCan } from "../auth/policy";
@@ -24,6 +24,7 @@ import {
   settlePending,
   signUp,
   signedUpCount,
+  takeOverOffered,
   type Assignment,
   type Job,
   type PositionInfo,
@@ -157,6 +158,29 @@ async function openOffers(tx: Tx, positionId: string): Promise<SpotOffer[]> {
 }
 
 /**
+ * Ends the position's open offers beyond `free` (the spots now free), newest first, and tells their backups why
+ * with `body`. Used when a coordinator fills a spot or a deputy keeps the spot they offered.
+ */
+export async function endSurplusOffers(tx: Tx, job: Job, position: PositionInfo, free: number, body: string): Promise<void> {
+  const open = await openOffers(tx, position.id);
+  const surplus = open.length - Math.max(free, 0);
+  // Sequential: expiries and alerts written in this transaction.
+  for (const o of open.slice(open.length - Math.max(surplus, 0))) {
+    await expireOffer(tx, o, "expired");
+    const who = o.offeredToAssignmentId
+      ? await tx.select({ userId: assignments.userId }).from(assignments).where(eq(assignments.id, o.offeredToAssignmentId))
+      : await backupsOf(tx, position.id);
+    await emit(tx, {
+      recipients: who.map((w) => w.userId),
+      type: "spot.offer_ended",
+      title: `Spot no longer available: #${job.number} ${job.title}`,
+      body,
+      link: `/jobs/${job.id}`,
+    });
+  }
+}
+
+/**
  * Hands one freed spot on: inside the first-come window, or in everyone mode, or with no backup to offer it to,
  * it opens to everyone (alerting backups only in the first-come case, and eligible watchers). Otherwise it gets
  * its own offer. `after` skips backups at or before that list position (sequential chain); `skipOffers` reopens to
@@ -206,7 +230,7 @@ async function advanceOffer(tx: Tx, job: Job, position: PositionInfo, offer: Spo
  * the next backup who holds no offer (sequential), to all backups (all_backups), or opened to everyone. Does
  * nothing when the job is closed or started, or when open offers already hold every free spot.
  */
-async function openSpot(tx: Tx, jobPositionId: string, now: Date): Promise<void> {
+export async function openSpot(tx: Tx, jobPositionId: string, now: Date): Promise<void> {
   const job = await jobOfPosition(tx, jobPositionId);
   if (!openForSignup(job, now)) return;
   const position = await loadPosition(tx, jobPositionId);
@@ -256,13 +280,19 @@ export async function leaveAssignment(actor: Actor, tx: Tx, assignmentId: string
   const [before] = await tx.select().from(assignments).where(eq(assignments.id, assignmentId));
   if (!(LEAVABLE as readonly string[]).includes(before.status)) throw new ValidationError("This sign-up is no longer active.");
   o.guard?.(before, job);
+  // A spot its deputy offered is already free for others: it ends with the sign-up and frees nothing new.
+  const offered = await tx
+    .update(spotGiveaways)
+    .set({ status: "ended", endedAt: o.now, endedBy: actor.userId })
+    .where(and(eq(spotGiveaways.assignmentId, assignmentId), eq(spotGiveaways.status, "open")))
+    .returning();
   const [after] = await tx
     .update(assignments)
     .set({ status: o.status, backupPosition: null, removalReason: o.removalReason ?? before.removalReason, updatedAt: o.now })
     .where(eq(assignments.id, assignmentId))
     .returning();
-  await recordAudit(tx, { actor, action: o.auditAction, entityType: "assignment", entityId: assignmentId, before, after, reason: o.reason });
-  await afterLeave(tx, before, o.now);
+  await recordAudit(tx, { actor, action: o.auditAction, entityType: "assignment", entityId: assignmentId, before, after: offered.length ? { ...after, giveaway: offered[0] } : after, reason: o.reason });
+  if (offered.length === 0) await afterLeave(tx, before, o.now);
   if (before.status === "backup") await renumberBackups(tx, before.jobPositionId);
   if (o.notifyBody) {
     await emit(tx, { recipients: [before.userId], type: "assignment.removed", mandatory: true, title: o.notifyTitle ?? "You were removed from a detail", body: o.notifyBody, link: `/jobs/${job.id}` });
@@ -295,7 +325,7 @@ export async function claimSpot(actor: Actor, tx: Tx, jobPositionId: string, inp
   assertCan(actor, "job.signup");
   const now = input.now ?? new Date();
   await lockUser(tx, actor.userId);
-  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId);
+  const { position, job } = await loadLocked(tx, jobPositionId, input.jobId, actor);
   const [mine] = await tx
     .select()
     .from(assignments)
@@ -346,6 +376,7 @@ export async function claimSpot(actor: Actor, tx: Tx, jobPositionId: string, inp
   if (used) {
     await expireOffer(tx, used, "accepted");
   }
+  await takeOverOffered(actor, tx, job, position, after, now);
   return after;
 }
 

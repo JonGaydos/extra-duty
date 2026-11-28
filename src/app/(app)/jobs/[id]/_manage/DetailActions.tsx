@@ -10,6 +10,8 @@ import { Notice } from "@/ui/components/Notice";
 import {
   approveRequestAction,
   assignAction,
+  assignReplacementAction,
+  cancelOfferAction,
   cancelDetailAction,
   copyDetailAction,
   decideChangeAction,
@@ -23,6 +25,7 @@ import {
   repeatDetailAction,
   reviewOpsPlanAction,
   saveSafetyAction,
+  setConfidentialAction,
   updateDetailAction,
   waiveLateCancelAction,
 } from "../../../coordinate/_coordinator/actions";
@@ -31,6 +34,7 @@ import { SafetyAddressFields, safetyRows, safetyWire, type SafetyAddressWire } f
 import type { DetailWire } from "../../../coordinate/_coordinator/detail-input";
 import { RateRangeNotice, typedCents } from "../../../coordinate/_coordinator/RateRangeNotice";
 import { useCoordAction } from "../../../coordinate/_coordinator/status";
+import { ReminderFields } from "../../../coordinate/_coordinator/ReminderFields";
 import { SiteContactFields } from "../../../coordinate/_coordinator/SiteContactFields";
 import { ConflictOverride, PositionsEditor } from "../../../coordinate/_coordinator/EditPanel";
 import { clearsConflicts, useConflictGuard } from "../../../coordinate/_coordinator/conflict-guard";
@@ -251,6 +255,7 @@ export function EditDetail({ jobId, initial, date, options, seriesLater, started
         <label className="flex min-h-11 items-center gap-2">
           <input type="checkbox" checked={d.opsPlanRequired} onChange={(e) => set("opsPlanRequired", e.target.checked)} className={check} />Ops plan required
         </label>
+        <ReminderFields value={d.reminders ?? { mode: "agency", hours: [] }} note={d.reminderNote ?? ""} agencyHours={options.reminderHours} onChange={(v) => set("reminders", v)} onNote={(v) => set("reminderNote", v)} />
         <ConflictOverride {...guard.props} idPrefix="edit" />
         <div className="flex flex-wrap gap-2">
           <Button type="submit" busy={busy} disabled={guard.conflicts.length > 0 && guard.confirmed && !guard.override}>
@@ -383,13 +388,82 @@ export function AssignForm({ positions, people }: Readonly<{ positions: Array<{ 
   );
 }
 
-/** Remove, no-show and Incident Commander for one roster row. A vendor manager (`coordinator` false) can only remove. */
-export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc, coordinator = true }: Readonly<{ assignmentId: string; jobId: string; userId: string; name: string; status: string; started: boolean; canNameIc: boolean; coordinator?: boolean }>) {
-  const [mode, setMode] = useState<"remove" | "noshow" | null>(null);
+/** Who replaces an offered spot, with the override the assign rules may ask for. */
+function ReplacementForm({ assignmentId, name, people, onBack }: Readonly<{ assignmentId: string; name: string; people: Person[]; onBack: () => void }>) {
+  const [userId, setUserId] = useState("");
+  const [override, setOverride] = useState("");
+  const { run, busy, error } = useCoordAction();
+  const checks = error && !error.ok ? (error.checks ?? []) : [];
+  return (
+    <form
+      className="flex min-w-60 flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(() => assignReplacementAction({ assignmentId, userId, overrideReason: override }));
+      }}
+    >
+      <FormField label={`Who replaces ${name}`}>
+        <Select value={userId} onChange={(e) => setUserId(e.target.value)} required>
+          <option value="">Choose a person</option>
+          {people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+      {checks.length ? (
+        <>
+          <Notice tone="danger" as="div">
+            <strong className="font-semibold">This placement breaks these rules:</strong>
+            <ul className="m-0 mt-1 list-disc pl-5">
+              {checks.map((c) => (
+                <li key={`${c.check}-${c.message}`}>{c.message}</li>
+              ))}
+            </ul>
+          </Notice>
+          <FormField label="Override reason" hint="Required to assign anyway. Kept in the audit log with the rules it overrides.">
+            <Input value={override} onChange={(e) => setOverride(e.target.value)} maxLength={500} required />
+          </FormField>
+        </>
+      ) : null}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" busy={busy}>
+          Assign replacement
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={onBack}>
+          Back
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+type RosterRowProps = {
+  assignmentId: string;
+  jobId: string;
+  userId: string;
+  name: string;
+  status: string;
+  started: boolean;
+  canNameIc: boolean;
+  coordinator?: boolean;
+  /** The deputy offers this spot to someone else: staff may cancel the offer or assign a replacement. */
+  offered?: boolean;
+  people?: Person[];
+};
+
+/**
+ * Remove, no-show and Incident Commander for one roster row, plus Cancel the offer and Assign a replacement on a
+ * spot its deputy offers. A vendor manager (`coordinator` false) can remove, cancel offers and assign replacements.
+ */
+export function RosterRowActions({ assignmentId, jobId, userId, name, status, started, canNameIc, coordinator = true, offered = false, people = [] }: Readonly<RosterRowProps>) {
+  const [mode, setMode] = useState<"remove" | "noshow" | "replace" | null>(null);
   const [text, setText] = useState("");
   const { run, busy } = useCoordAction();
   const active = status === "signed_up" || status === "backup" || status === "pending_short";
   if (!active) return null;
+  if (mode === "replace") return <ReplacementForm assignmentId={assignmentId} name={name} people={people.filter((p) => p.id !== userId)} onBack={() => setMode(null)} />;
   if (mode)
     return (
       <form
@@ -414,6 +488,16 @@ export function RosterRowActions({ assignmentId, jobId, userId, name, status, st
     );
   return (
     <div className="flex flex-wrap gap-1.5">
+      {offered && !started ? (
+        <>
+          <Button size="sm" variant="secondary" onClick={() => setMode("replace")} aria-label={`Assign a replacement, ${name}`}>
+            Assign a replacement
+          </Button>
+          <Button size="sm" variant="secondary" busy={busy} onClick={() => run(() => cancelOfferAction({ assignmentId }))} aria-label={`Cancel the offer, ${name}`}>
+            Cancel the offer
+          </Button>
+        </>
+      ) : null}
       <Button size="sm" variant="secondary" onClick={() => setMode("remove")} aria-label={`Remove, ${name}`}>
         Remove
       </Button>
@@ -619,6 +703,49 @@ export function HoldRelease({ jobId, held, opensLater, seriesLater, status }: Re
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Confidential on or off (coordinators and admins). A switch opens the reason field; saving is audited. On: only staff
+ * and the people assigned see the detail, and its backups and watches end. Off: it releases on the normal schedule.
+ */
+export function ConfidentialControl({ jobId, on }: Readonly<{ jobId: string; on: boolean }>) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const { run, busy } = useCoordAction();
+  const label = on ? "Make it not confidential" : "Make it confidential";
+  return (
+    <div className="flex flex-col gap-2.5 border-t border-divider pt-3">
+      <p className="m-0 text-sm text-muted">
+        {on ? "Confidential: only coordinators, admins and the people assigned can see it." : "Confidential hides it from everyone but coordinators, admins and the people you assign. For example VIP or dignitary protection."}
+      </p>
+      {open ? (
+        <form
+          className="flex flex-col gap-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => setConfidentialAction({ jobId, on: !on, reason }));
+          }}
+        >
+          <FormField label={on ? "Reason for making it not confidential" : "Reason for making it confidential"} hint={on ? "It will release on the normal schedule. Saved in the audit log." : "Backups and watches on it end. Saved in the audit log."}>
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={500} />
+          </FormField>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="secondary" busy={busy}>
+              {label}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+              Keep as is
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="secondary" className="w-fit" onClick={() => setOpen(true)}>
+          {label}
+        </Button>
+      )}
     </div>
   );
 }

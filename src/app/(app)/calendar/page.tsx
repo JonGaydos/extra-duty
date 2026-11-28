@@ -21,7 +21,7 @@ import { PageTitle, TabLinks } from "../_personnel/TabLinks";
 import { activeCount, filterParams, resolveFilters } from "../_shared/detail-filters";
 import { FilterPanel } from "../_shared/FilterPanel";
 import { SelectableDetails, type SelectableItem } from "../coordinate/_coordinator/SelectableDetails";
-import { CompactEntry, EntryRow, Legend, TONE, entryHref, withPlace } from "./entries";
+import { CompactEntry, EntryRow, Legend, entryChips, entryHref, withPlace } from "./entries";
 import { FeedCard } from "./FeedCard";
 
 export const metadata: Metadata = { title: "Calendar" };
@@ -105,8 +105,6 @@ function viewRange(view: View, days: Ymd[], today: string, now: Date): DetailRan
 const STEP: Record<View, { d: number; m: number }> = { day: { d: 1, m: 0 }, week: { d: 7, m: 0 }, month: { d: 0, m: 1 }, list: { d: 0, m: 1 } };
 
 const EMPTY_TITLE: Record<View, string> = { day: "No details this day", week: "No details this week", month: "No details in the next 60 days", list: "No details in the next 60 days" };
-
-const STATUS_TEXT: Record<CalEntry["status"], string> = { open: "Open", filled: "Filled", not_released: "Not released", past: "Past", canceled: "Canceled", requested: "Vendor request" };
 
 function viewTitle(view: View, focus: Ymd, days: Ymd[]): string {
   if (view === "day") return longDay(start(focus));
@@ -230,7 +228,7 @@ function StaffList({ entries, edit, now }: Readonly<{ entries: CalEntry[]; edit:
           address: e.address,
           lat: e.lat,
           lng: e.lng,
-          chips: [{ tone: TONE[e.status], text: STATUS_TEXT[e.status] }, ...(e.held ? [{ tone: "warning" as const, text: "Held" }] : [])],
+          chips: entryChips(e),
           blocked: editBlockReason(e, now),
         }),
       )}

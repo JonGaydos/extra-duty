@@ -6,6 +6,7 @@ import { assertCan } from "@/domain/auth/policy";
 import { NotFoundError } from "@/domain/errors";
 import { agencyDateParts } from "@/domain/time/agency-time";
 import type { Cents, Minutes } from "@/domain/types";
+import { CONFIDENTIAL_TITLE } from "@/domain/jobs/confidential";
 
 export type Totals = { details: number; minutes: Minutes; billedCents: Cents; paidCents: Cents };
 
@@ -74,7 +75,8 @@ export async function loadUserInvoices(actor: Actor, tx: Tx, userId: string, ext
       minutes: inv.minutes,
       totalCents: inv.totalCents,
       jobNumber: job.number,
-      jobTitle: job.title,
+      // Earnings and tax summaries leave the app (print, export): a confidential detail is named only "Confidential detail".
+      jobTitle: job.confidential ? CONFIDENTIAL_TITLE : job.title,
       jobStartAt: job.startAt,
       vendorId: inv.vendorId,
       vendorName,
